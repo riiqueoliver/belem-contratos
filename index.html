@@ -3424,6 +3424,7 @@
       const [editingContractNumber,setEditingContractNumber]= useState(null);
       const [selectedMonth, setSelectedMonth] = useState(currentMonth);
       const [showForm,      setShowForm]      = useState(false);
+      const [savingContract, setSavingContract] = useState(false);
       const [showContacts,  setShowContacts]  = useState(false);
       const [toasts,        setToasts]        = useState([]);
       const [form, setForm] = useState({
@@ -3870,24 +3871,40 @@
 
       async function handleAdd(e) {
         e.preventDefault();
-        const cn = form.contractNumber;
-        await db.collection('contractMeta').doc(cn).set({
-          object:           form.object,
-          modality:         form.modality,
-          contractorName:   form.contractorName,
-          contractorCnpj:   form.contractorCnpj,
-          globalValue:      parseFloat(form.globalValue) || 0,
-          startDate:        form.startDate,
-          endDate:          form.endDate,
-          manager:          form.manager,
-          fiscalPrimary:    form.fiscalPrimary,
-          fiscalSubstitute: form.fiscalSubstitute,
-          unit:             form.unit,
-          situation:        form.situation || 'ativo',
-        });
-        setForm({ contractNumber:'', processNumber:'', object:'', modality:'', contractorName:'', contractorCnpj:'', globalValue:'', startDate:'', endDate:'', manager:'', fiscalPrimary:'', fiscalSubstitute:'', client:'', unit:'', situation:'ativo' });
-        setShowForm(false);
-        addToast(`✅ Contrato ${cn} cadastrado. Adicione as parcelas manualmente.`);
+        const cn = form.contractNumber.trim();
+        // Validações manuais
+        if (!cn) { addToast('⚠️ Informe o número do contrato.'); return; }
+        if (!form.processNumber.trim()) { addToast('⚠️ Informe o processo administrativo.'); return; }
+        if (!form.startDate) { addToast('⚠️ Informe a data de início da vigência.'); return; }
+        // Firestore não aceita '/' no ID de documento
+        const safeCn = cn.replace(/\//g, '-');
+        setSavingContract(true);
+        try {
+          await db.collection('contractMeta').doc(safeCn).set({
+            object:           form.object,
+            modality:         form.modality,
+            contractorName:   form.contractorName,
+            contractorCnpj:   form.contractorCnpj,
+            globalValue:      parseFloat(form.globalValue) || 0,
+            startDate:        form.startDate,
+            endDate:          form.endDate,
+            manager:          form.manager,
+            fiscalPrimary:    form.fiscalPrimary,
+            fiscalSubstitute: form.fiscalSubstitute,
+            unit:             form.unit,
+            client:           form.client,
+            situation:        form.situation || 'ativo',
+            processNumber:    form.processNumber,
+          });
+          setForm({ contractNumber:'', processNumber:'', object:'', modality:'', contractorName:'', contractorCnpj:'', globalValue:'', startDate:'', endDate:'', manager:'', fiscalPrimary:'', fiscalSubstitute:'', client:'', unit:'', situation:'ativo' });
+          setShowForm(false);
+          addToast(`✅ Contrato ${safeCn} cadastrado. Adicione as parcelas manualmente.`);
+        } catch(err) {
+          console.error('Erro ao salvar contrato:', err);
+          addToast('❌ Erro ao salvar contrato: ' + (err.message || 'verifique sua conexão e tente novamente.'));
+        } finally {
+          setSavingContract(false);
+        }
       }
 
       async function handleAdvance(id) {
@@ -4230,11 +4247,13 @@
                   </div>
 
                   <div className="flex justify-end gap-3 pt-1">
-                    <button type="submit"
-                            className="text-white py-2.5 px-6 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 flex items-center gap-2"
+                    <button type="submit" disabled={savingContract}
+                            className="text-white py-2.5 px-6 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 flex items-center gap-2 disabled:opacity-60"
                             style={{background: BLUE}}>
-                      <Send className="w-4 h-4" />
-                      Salvar Contrato
+                      {savingContract
+                        ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Salvando…</>
+                        : <><Send className="w-4 h-4" />Salvar Contrato</>
+                      }
                     </button>
                   </div>
                 </form>
