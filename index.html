@@ -1188,15 +1188,132 @@
     }
 
     /* ═══════════════════════════════════════════════════════
+       MODAL DE SOLICITAÇÃO DE CADASTRO
+    ═══════════════════════════════════════════════════════ */
+    function RegisterModal({ onClose, onSubmit }) {
+      const [form, setForm] = useState({ name:'', funcional:'', phone:'', email:'', password:'', confirm:'' });
+      const [error, setError] = useState('');
+      const [done, setDone]   = useState(false);
+      const [loading, setLoading] = useState(false);
+
+      function set(k, v) { setForm(f => ({...f, [k]: v})); setError(''); }
+
+      async function handleSubmit(e) {
+        e.preventDefault();
+        if (!form.name.trim())     { setError('Informe seu nome completo.'); return; }
+        if (!form.funcional.trim()){ setError('Informe seu funcional/matrícula.'); return; }
+        if (!form.email.trim())    { setError('Informe seu e-mail institucional.'); return; }
+        if (form.password.length < 4) { setError('A senha deve ter pelo menos 4 caracteres.'); return; }
+        if (form.password !== form.confirm) { setError('As senhas não coincidem.'); return; }
+        setLoading(true);
+        try {
+          await onSubmit({
+            name:      form.name.trim(),
+            funcional: form.funcional.trim(),
+            phone:     form.phone.trim(),
+            email:     form.email.trim(),
+            password:  form.password,
+          });
+          setDone(true);
+        } catch(e) {
+          setError(e.message || 'Erro ao enviar solicitação.');
+        }
+        setLoading(false);
+      }
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 flex items-center justify-between" style={{background: BLUE}}>
+              <div>
+                <h2 className="text-white font-bold text-base">Solicitação de Cadastro</h2>
+                <p className="text-blue-200 text-xs mt-0.5">Preencha os dados para solicitar acesso ao sistema</p>
+              </div>
+              <button onClick={onClose} className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {done ? (
+              <div className="px-6 py-10 text-center space-y-3">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto" style={{background:'#dcfce7'}}>
+                  <CheckCircle className="w-7 h-7" style={{color:'#166534'}} />
+                </div>
+                <p className="font-bold text-gray-800 text-base">Solicitação enviada!</p>
+                <p className="text-sm text-gray-500">Aguarde a aprovação de um administrador.<br/>Você será avisado pelo seu gestor quando o acesso for liberado.</p>
+                <button onClick={onClose} className="mt-2 text-white py-2.5 px-8 rounded-xl font-bold text-sm hover:opacity-90"
+                        style={{background: BLUE}}>Fechar</button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="px-6 py-5 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Nome Completo <span className="text-red-500">*</span></label>
+                    <input value={form.name} onChange={e => set('name', e.target.value)} required
+                           placeholder="Seu nome completo"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Funcional / Matrícula <span className="text-red-500">*</span></label>
+                    <input value={form.funcional} onChange={e => set('funcional', e.target.value)} required
+                           placeholder="Ex: 123456"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Telefone</label>
+                    <input value={form.phone} onChange={e => set('phone', e.target.value)}
+                           placeholder="(91) 99999-9999"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">E-mail Institucional <span className="text-red-500">*</span></label>
+                    <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required
+                           placeholder="seuemail@cinbesa.com.br"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Senha <span className="text-red-500">*</span></label>
+                    <input type="password" value={form.password} onChange={e => set('password', e.target.value)} required
+                           placeholder="Mínimo 4 caracteres"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Confirmar Senha <span className="text-red-500">*</span></label>
+                    <input type="password" value={form.confirm} onChange={e => set('confirm', e.target.value)} required
+                           placeholder="Repita a senha"
+                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={onClose}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={loading}
+                          className="flex-1 text-white py-2.5 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90"
+                          style={{background: BLUE}}>
+                    {loading ? 'Enviando...' : 'Solicitar Acesso'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
        TELA DE LOGIN
     ═══════════════════════════════════════════════════════ */
-    function LoginScreen({ users, onLogin, onUpdateUser }) {
+    function LoginScreen({ users, onLogin, onUpdateUser, onRegister }) {
       const [username,   setUsername]   = useState('');
       const [password,   setPassword]   = useState('');
       const [error,      setError]      = useState('');
       const [loading,    setLoading]    = useState(false);
-      const [showPass,   setShowPass]   = useState(false);
-      const [showForgot, setShowForgot] = useState(false);
+      const [showPass,     setShowPass]     = useState(false);
+      const [showForgot,   setShowForgot]   = useState(false);
+      const [showRegister, setShowRegister] = useState(false);
 
       function handleSubmit(e) {
         e.preventDefault();
@@ -1241,16 +1358,21 @@
                       style={{background: BLUE}}>
                 {loading ? 'Verificando...' : 'Entrar'}
               </button>
-              <div className="text-center pt-1">
+              <div className="flex items-center justify-between pt-1">
                 <button type="button" onClick={() => setShowForgot(true)}
                         className="text-xs font-semibold hover:underline transition-colors"
                         style={{color: BLUE}}>
                   Esqueci a senha
                 </button>
+                <button type="button" onClick={() => setShowRegister(true)}
+                        className="text-xs font-semibold hover:underline transition-colors text-gray-500 hover:text-gray-700">
+                  Solicitar Cadastro
+                </button>
               </div>
             </form>
             <p className="text-center text-xs text-gray-400 pb-5">Belém Digital · Prefeitura Municipal de Belém</p>
-            {showForgot && <ForgotPasswordModal users={users} onUpdateUser={onUpdateUser} onClose={() => setShowForgot(false)} />}
+            {showForgot    && <ForgotPasswordModal users={users} onUpdateUser={onUpdateUser} onClose={() => setShowForgot(false)} />}
+            {showRegister  && <RegisterModal onClose={() => setShowRegister(false)} onSubmit={onRegister} />}
           </div>
         </div>
       );
@@ -2896,7 +3018,7 @@
     /* ═══════════════════════════════════════════════════════
        PAINEL ADMIN
     ═══════════════════════════════════════════════════════ */
-    function AdminDashboard({ open, onClose, contracts, contractMeta }) {
+    function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser }) {
       const [filter, setFilter] = useState('');
 
       const today = new Date(); today.setHours(12,0,0,0);
@@ -3018,6 +3140,56 @@
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+            {/* ── SOLICITAÇÕES DE CADASTRO PENDENTES ── */}
+            {pendingUsers && pendingUsers.length > 0 && (
+              <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 flex items-center gap-3" style={{background:'#fffbeb'}}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-amber-100">
+                    <UserCircle className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-bold text-amber-800">Solicitações de Cadastro Pendentes</h3>
+                    <p className="text-xs text-amber-600">{pendingUsers.length} solicitaç{pendingUsers.length === 1 ? 'ão aguarda' : 'ões aguardam'} aprovação</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {pendingUsers.map(p => (
+                    <div key={p.id} className="px-5 py-4 flex items-start gap-4">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold"
+                           style={{background: BLUE}}>
+                        {(p.name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-800">{p.name}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                          {p.funcional && <span className="text-xs text-gray-500">Funcional: <strong>{p.funcional}</strong></span>}
+                          {p.email     && <span className="text-xs text-gray-500">{p.email}</span>}
+                          {p.phone     && <span className="text-xs text-gray-500">{p.phone}</span>}
+                        </div>
+                        {p.createdAt && (
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            Solicitado em {new Date(p.createdAt).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0 mt-0.5">
+                        <button onClick={() => onApproveUser(p)}
+                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90 transition-opacity"
+                                style={{background:'#166534', backgroundColor:'#16a34a'}}>
+                          <CheckCircle className="w-3.5 h-3.5" /> Aprovar
+                        </button>
+                        <button onClick={() => { if(confirm(`Recusar e excluir a solicitação de ${p.name}?`)) onRejectUser(p); }}
+                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90 transition-opacity bg-red-500">
+                          <X className="w-3.5 h-3.5" /> Recusar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {kpis.map(({ label, value, color, bg, Icon, text }) => (
@@ -3157,6 +3329,7 @@
       const [contractMeta,      setContractMeta]      = useState({});
       const [contractAdditives, setContractAdditives] = useState({});
       const [pdfStorage,        setPdfStorage]        = useState({});
+      const [pendingUsers,      setPendingUsers]      = useState([]);
       const [dbReady,           setDbReady]           = useState(false);
       // ── Somente local ──
       const [apiKey,        setApiKey]        = useState(() => localStorage.getItem('belem-api-key') || '');
@@ -3191,7 +3364,7 @@
         const loaded = new Set();
         function markLoaded(name) {
           loaded.add(name);
-          if (['users','contracts','contractMeta','contractAdditives','contacts','pdfs'].every(k => loaded.has(k)))
+          if (['users','contracts','contractMeta','contractAdditives','contacts','pdfs','pendingUsers'].every(k => loaded.has(k)))
             setDbReady(true);
         }
         async function init() {
@@ -3236,6 +3409,10 @@
           db.collection('pdfs').onSnapshot(snap => {
             const p = {}; snap.forEach(d => { p[d.id] = d.data().data || d.data().url; });
             setPdfStorage(p); markLoaded('pdfs');
+          }),
+          db.collection('pendingUsers').onSnapshot(snap => {
+            setPendingUsers(snap.docs.map(d => d.data()));
+            markLoaded('pendingUsers');
           }),
         ];
         return () => unsubs.forEach(u => u());
@@ -3324,6 +3501,40 @@
       async function handleUpdateUser(updated) {
         await db.collection('users').doc(String(updated.id)).set(updated);
         setCurrentUser(updated);
+      }
+      async function handleRegister(data) {
+        // Gera username: nome em minúsculas, sem acentos, sem espaços
+        const username = data.name.toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]/g, '');
+        // Verifica duplicidade
+        const dup = users.find(u => u.username === username || u.email === data.email);
+        if (dup) throw new Error('Já existe um usuário com esse nome ou e-mail.');
+        const dupPending = pendingUsers.find(u => u.email === data.email);
+        if (dupPending) throw new Error('Já existe uma solicitação pendente com esse e-mail.');
+        const id = Date.now();
+        await db.collection('pendingUsers').doc(String(id)).set({
+          id, username, ...data, createdAt: new Date().toISOString()
+        });
+      }
+      async function handleApproveUser(pending) {
+        const newId = Date.now();
+        await db.collection('users').doc(String(newId)).set({
+          id:        newId,
+          username:  pending.username,
+          password:  pending.password,
+          name:      pending.name,
+          funcional: pending.funcional || '',
+          phone:     pending.phone     || '',
+          email:     pending.email     || '',
+          role:      'user',
+        });
+        await db.collection('pendingUsers').doc(String(pending.id)).delete();
+        addToast(`✅ Usuário ${pending.name} aprovado com sucesso.`);
+      }
+      async function handleRejectUser(pending) {
+        await db.collection('pendingUsers').doc(String(pending.id)).delete();
+        addToast(`🗑️ Solicitação de ${pending.name} recusada e removida.`);
       }
       async function handleDeleteContract(contractNumber) {
         if (!confirm(`Excluir o contrato ${contractNumber} e todas as suas parcelas? Esta ação não pode ser desfeita.`)) return;
@@ -3448,7 +3659,7 @@
       );
 
       // Redireciona para login se não autenticado
-      if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onUpdateUser={handleUpdateUser} />;
+      if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onUpdateUser={handleUpdateUser} onRegister={handleRegister} />;
 
       function saveApiKey(key) {
         const k = key.trim();
@@ -3672,7 +3883,10 @@
 
           {/* Admin Dashboard */}
           <AdminDashboard open={showAdmin} onClose={() => setShowAdmin(false)}
-                          contracts={contracts} contractMeta={contractMeta} />
+                          contracts={contracts} contractMeta={contractMeta}
+                          pendingUsers={pendingUsers}
+                          onApproveUser={handleApproveUser}
+                          onRejectUser={handleRejectUser} />
 
           {/* Header */}
           <header className="shadow-xl sticky top-0 z-40" style={{background: BLUE}}>
@@ -3706,9 +3920,15 @@
                 </button>
                 {ADMIN_USERNAMES.has(currentUser.username) && (
                   <button onClick={() => setShowAdmin(true)} title="Painel Administrativo"
-                          className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/10 transition-colors border border-white/20">
+                          className="relative flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/10 transition-colors border border-white/20">
                     <LayoutDashboard className="w-4 h-4" />
                     <span className="hidden sm:inline">Admin</span>
+                    {pendingUsers.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center text-white"
+                            style={{background:'#ef4444'}}>
+                        {pendingUsers.length}
+                      </span>
+                    )}
                   </button>
                 )}
                 <button onClick={() => setShowContractsList(true)}
@@ -3979,18 +4199,12 @@
                 {/* ── BANNER DE BOAS-VINDAS ── */}
                 <div className="rounded-2xl overflow-hidden shadow-sm border border-blue-100"
                      style={{background: `linear-gradient(135deg, ${BLUE} 0%, #1e40af 100%)`}}>
-                  <div className="px-6 py-5 flex items-center gap-5">
-                    <img src="belemdigital-logo.png" alt="Belém Digital"
-                         style={{height:56, width:'auto', objectFit:'contain', flexShrink:0}}
-                         onError={e => e.currentTarget.style.display='none'} />
-                    <div className="h-10 w-px bg-white/20 flex-shrink-0" />
-                    <div>
-                      <p className="text-white/70 text-xs font-medium uppercase tracking-widest">Bem-vindo,</p>
-                      <p className="text-white font-bold text-lg leading-tight">
-                        {(currentUser.name || currentUser.username).split(' ')[0]}
-                      </p>
-                      <p className="text-blue-200 text-xs mt-0.5">Sistema de Gestão de Contratos</p>
-                    </div>
+                  <div className="px-6 py-5">
+                    <p className="text-white/70 text-xs font-medium uppercase tracking-widest">Bem-vindo,</p>
+                    <p className="text-white font-bold text-xl leading-tight mt-0.5">
+                      {currentUser.name || currentUser.username}
+                    </p>
+                    <p className="text-blue-200 text-xs mt-1">Sistema de Gestão de Contratos · Belém Digital</p>
                   </div>
                 </div>
 
