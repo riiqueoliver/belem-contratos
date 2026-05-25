@@ -3976,6 +3976,24 @@
               />
             ) : (
               <>
+                {/* ── BANNER DE BOAS-VINDAS ── */}
+                <div className="rounded-2xl overflow-hidden shadow-sm border border-blue-100"
+                     style={{background: `linear-gradient(135deg, ${BLUE} 0%, #1e40af 100%)`}}>
+                  <div className="px-6 py-5 flex items-center gap-5">
+                    <img src="belemdigital-logo.png" alt="Belém Digital"
+                         style={{height:56, width:'auto', objectFit:'contain', flexShrink:0}}
+                         onError={e => e.currentTarget.style.display='none'} />
+                    <div className="h-10 w-px bg-white/20 flex-shrink-0" />
+                    <div>
+                      <p className="text-white/70 text-xs font-medium uppercase tracking-widest">Bem-vindo,</p>
+                      <p className="text-white font-bold text-lg leading-tight">
+                        {(currentUser.name || currentUser.username).split(' ')[0]}
+                      </p>
+                      <p className="text-blue-200 text-xs mt-0.5">Sistema de Gestão de Contratos</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* ── KPIs GLOBAIS ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
