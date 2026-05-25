@@ -2845,6 +2845,13 @@
                                 <span className="font-bold text-gray-700">R$ {c.billingValue}</span>
                               </span>
                             )}
+                            {c.gdoc && (
+                              <span className="flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5" style={{color:'#7c3aed'}} />
+                                <span className="text-gray-400">Gdoc:</span>
+                                <span className="font-semibold" style={{color:'#7c3aed'}}>{c.gdoc}</span>
+                              </span>
+                            )}
                             {c.client && (
                               <span className="flex items-center gap-1.5">
                                 <Building2 className="w-3.5 h-3.5 text-gray-400" />
