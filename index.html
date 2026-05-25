@@ -2623,23 +2623,9 @@
                              onChange={e => setAddForm(f => ({...f, nfNumber: e.target.value}))}
                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white placeholder-gray-300" />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                        Nº Gdoc de Cobrança
-                      </label>
-                      <div className="flex items-stretch">
-                        <input type="text" placeholder="2025.01.000123"
-                               value={addForm.gdoc}
-                               onChange={e => setAddForm(f => ({...f, gdoc: e.target.value}))}
-                               className="min-w-0 w-full border border-gray-200 rounded-l-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white placeholder-gray-300" />
-                        <span className="px-2 py-2 text-xs font-semibold text-gray-500 bg-gray-100 border border-l-0 border-gray-200 rounded-r-xl whitespace-nowrap flex items-center flex-shrink-0">
-                          /{addForm.refMonth ? addForm.refMonth.split('-')[0] : new Date().getFullYear()}/BÉLEMDIGITAL
-                        </span>
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Row 2: Valor */}
+                  {/* Row 2: Valor + Gdoc */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
@@ -2652,6 +2638,20 @@
                                onChange={e => setAddForm(f => ({...f, billingValue: maskBRL(e.target.value)}))}
                                onBlur={e => setAddForm(f => ({...f, billingValue: formatBRL(e.target.value)}))}
                                className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white placeholder-gray-300" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                        Nº Gdoc de Cobrança
+                      </label>
+                      <div className="flex items-stretch">
+                        <input type="text" placeholder="2025.01.000123"
+                               value={addForm.gdoc}
+                               onChange={e => setAddForm(f => ({...f, gdoc: e.target.value}))}
+                               className="min-w-0 w-full border border-gray-200 rounded-l-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white placeholder-gray-300" />
+                        <span className="px-2 py-2 text-xs font-semibold text-gray-500 bg-gray-100 border border-l-0 border-gray-200 rounded-r-xl whitespace-nowrap flex items-center flex-shrink-0">
+                          /{addForm.refMonth ? addForm.refMonth.split('-')[0] : new Date().getFullYear()}/BÉLEMDIGITAL
+                        </span>
                       </div>
                     </div>
                   </div>
