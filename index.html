@@ -10,6 +10,9 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     *, *::before, *::after { font-family: 'Inter', sans-serif; box-sizing: border-box; }
@@ -44,6 +47,18 @@
        Para limpar tudo, use o botão "Resetar dados" no rodapé,
        ou execute no console: localStorage.clear()
     ═══════════════════════════════════════════════════════ */
+    /* ─── Firebase ───────────────────────────────────────────── */
+    firebase.initializeApp({
+      apiKey:            "AIzaSyAiGdqFzw3xeW9SBMcT_LwAAS7bY29k-9k",
+      authDomain:        "belem-contratos.firebaseapp.com",
+      projectId:         "belem-contratos",
+      storageBucket:     "belem-contratos.firebasestorage.app",
+      messagingSenderId: "563523674774",
+      appId:             "1:563523674774:web:485baaa903e5ed48d318b7"
+    });
+    const db      = firebase.firestore();
+    const storage = firebase.storage();
+
     const STORAGE_KEYS = {
       contracts:    'belem-contratos-v2',
       contacts:     'belem-contatos-v1',
@@ -833,7 +848,7 @@
     }
 
     /* ── Drawer de contatos ── */
-    function ContactsDrawer({ open, onClose, contacts, setContacts }) {
+    function ContactsDrawer({ open, onClose, contacts, onSaveContact, onDeleteContact }) {
       const [editing, setEditing] = useState(null);
       const [showForm, setShowForm] = useState(false);
       const [form, setForm] = useState({ name:'', role:'', email:'', whatsapp:'', steps:[] });
@@ -851,15 +866,15 @@
       function save(e) {
         e.preventDefault();
         if (editing) {
-          setContacts(prev => prev.map(c => c.id === editing ? { ...c, ...form } : c));
+          onSaveContact({ ...contacts.find(c => c.id === editing), ...form });
         } else {
-          setContacts(prev => [{ id: Date.now(), ...form }, ...prev]);
+          onSaveContact({ id: Date.now(), ...form });
         }
         setShowForm(false);
         setEditing(null);
       }
       function remove(id) {
-        if (confirm('Remover este contato?')) setContacts(prev => prev.filter(c => c.id !== id));
+        if (confirm('Remover este contato?')) onDeleteContact(id);
       }
       function toggleStep(stepId) {
         setForm(f => f.steps.includes(stepId)
@@ -1621,17 +1636,21 @@
     /* ═══════════════════════════════════════════════════════
        VISUALIZADOR DE PDF (modal overlay com iframe)
     ═══════════════════════════════════════════════════════ */
-    function PdfViewer({ open, base64Data, title, onClose }) {
+    function PdfViewer({ open, pdfSrc, title, onClose }) {
       const urlRef = useRef(null);
-      const [blobUrl, setBlobUrl] = useState(null);
+      const [viewUrl, setViewUrl] = useState(null);
 
-      // Cria/revoga blob URL somente quando base64Data muda
+      // Se pdfSrc é uma URL HTTP, usa diretamente; caso contrário converte base64 → blob URL
       useEffect(() => {
         if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; }
-        if (!base64Data) { setBlobUrl(null); return; }
+        if (!pdfSrc) { setViewUrl(null); return; }
+        if (pdfSrc.startsWith('http')) {
+          setViewUrl(pdfSrc);
+          return;
+        }
         try {
-          const comma = base64Data.indexOf(',');
-          const b64   = comma >= 0 ? base64Data.slice(comma + 1) : base64Data;
+          const comma = pdfSrc.indexOf(',');
+          const b64   = comma >= 0 ? pdfSrc.slice(comma + 1) : pdfSrc;
           const bin   = atob(b64);
           const ab    = new ArrayBuffer(bin.length);
           const ia    = new Uint8Array(ab);
@@ -1639,15 +1658,15 @@
           const blob  = new Blob([ab], { type: 'application/pdf' });
           const url   = URL.createObjectURL(blob);
           urlRef.current = url;
-          setBlobUrl(url);
+          setViewUrl(url);
         } catch(e) {
           console.error('PdfViewer:', e);
-          setBlobUrl(null);
+          setViewUrl(null);
         }
         return () => { if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; } };
-      }, [base64Data]);
+      }, [pdfSrc]);
 
-      function openNewTab() { if (blobUrl) window.open(blobUrl, '_blank'); }
+      function openNewTab() { if (viewUrl) window.open(viewUrl, '_blank'); }
 
       if (!open) return null;
       return (
@@ -1666,8 +1685,8 @@
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">
                 ↗ Nova aba
               </button>
-              {blobUrl && (
-                <a href={blobUrl} download="nota-fiscal.pdf"
+              {viewUrl && (
+                <a href={viewUrl} download="nota-fiscal.pdf"
                    title="Baixar PDF"
                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">
                   <Download className="w-3.5 h-3.5" /> Baixar
@@ -1681,7 +1700,7 @@
           </div>
 
           {/* ── Área do PDF — sem overlay, sem spinner bloqueante ── */}
-          {blobUrl ? (
+          {viewUrl ? (
             <div style={{flex:1, position:'relative', overflow:'hidden', background:'#525659'}}>
               {/*
                 Usamos <iframe> com position:absolute para garantir 100% de altura.
@@ -1689,7 +1708,7 @@
                 O browser mostra o seu próprio indicador de carregamento nativamente.
               */}
               <iframe
-                src={blobUrl}
+                src={viewUrl}
                 title="Nota Fiscal PDF"
                 style={{
                   position: 'absolute',
@@ -1796,7 +1815,7 @@
       // ── hooks (todos antes de qualquer return) ──
       const [editMode,    setEditMode]    = useState(false);
       const [editForm,    setEditForm]    = useState(buildForm);
-      const [pdfViewer,   setPdfViewer]   = useState({ open:false, base64:null, title:'' });
+      const [pdfViewer,   setPdfViewer]   = useState({ open:false, src:null, title:'' });
       const [openIdx,     setOpenIdx]     = useState(null);
       const [nfEditing,   setNfEditing]   = useState(null);
       const [nfDraft,     setNfDraft]     = useState('');
@@ -1819,7 +1838,7 @@
       const [showDeletePanel,  setShowDeletePanel]  = useState(false);
       const [selectedToDelete, setSelectedToDelete] = useState(new Set());
       // ── termos aditivos ──
-      const emptyTaForm = () => ({ id: null, number: '', date: '', object: '', pdfBase64: null, pdfFileName: '' });
+      const emptyTaForm = () => ({ id: null, number: '', date: '', object: '', pdfBase64: null, pdfFileName: '', pdfUrl: null });
       const [showTaForm,    setShowTaForm]    = useState(false);
       const [taForm,        setTaForm]        = useState(emptyTaForm);
       const [taFormLoading, setTaFormLoading] = useState(false);
@@ -1883,7 +1902,7 @@
       }
 
       function handleEditTa(ta) {
-        setTaForm({ ...ta });
+        setTaForm({ ...ta, pdfBase64: null }); // pdfUrl preservado, pdfBase64 limpo para nova seleção
         setShowTaForm(true);
       }
 
@@ -1951,8 +1970,8 @@
 
       return (
         <>
-          <PdfViewer open={pdfViewer.open} base64Data={pdfViewer.base64} title={pdfViewer.title}
-                     onClose={() => setPdfViewer({ open:false, base64:null, title:'' })} />
+          <PdfViewer open={pdfViewer.open} pdfSrc={pdfViewer.src} title={pdfViewer.title}
+                     onClose={() => setPdfViewer({ open:false, src:null, title:'' })} />
 
           {/* ══ Drawer: Excluir Parcelas ══ */}
           {showDeletePanel && (
@@ -2305,11 +2324,16 @@
                         <input type="file" accept="application/pdf" className="hidden"
                                onChange={e => handleTaFormPdf(e.target.files?.[0])} />
                       </label>
-                      {taForm.pdfBase64 && (
-                        <button type="button" onClick={() => setTaForm(f => ({...f, pdfBase64:null, pdfFileName:''}))}
+                      {(taForm.pdfBase64 || taForm.pdfUrl) && (
+                        <button type="button" onClick={() => setTaForm(f => ({...f, pdfBase64:null, pdfFileName:'', pdfUrl:null}))}
                                 className="text-[10px] text-red-400 hover:text-red-600 mt-1 flex items-center gap-1">
                           <X className="w-3 h-3" /> Remover PDF
                         </button>
+                      )}
+                      {taForm.pdfUrl && !taForm.pdfBase64 && (
+                        <p className="text-[10px] text-green-600 mt-1 flex items-center gap-1">
+                          <Paperclip className="w-3 h-3" /> PDF já anexado
+                        </p>
                       )}
                     </div>
                   </div>
@@ -2357,7 +2381,7 @@
                             {new Date(ta.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
-                        {ta.pdfBase64 && (
+                        {(ta.pdfUrl || ta.pdfBase64) && (
                           <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
                             <Paperclip className="w-2.5 h-2.5" /> PDF anexado
                           </span>
@@ -2366,8 +2390,8 @@
                       {ta.object && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{ta.object}</p>}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {ta.pdfBase64 && (
-                        <button onClick={() => setPdfViewer({ open:true, base64: ta.pdfBase64, title: `TA ${ta.number} — ${contractNumber}` })}
+                      {(ta.pdfUrl || ta.pdfBase64) && (
+                        <button onClick={() => setPdfViewer({ open:true, src: ta.pdfUrl || ta.pdfBase64, title: `TA ${ta.number} — ${contractNumber}` })}
                                 title="Visualizar PDF"
                                 className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors">
                           <Eye className="w-4 h-4" />
@@ -2752,7 +2776,7 @@
                                     onClick={() => {
                                       const data = pdfStorage[pdfKey];
                                       if (!data) { addToast('❌ PDF não encontrado. Tente reanexar o arquivo.'); return; }
-                                      setPdfViewer({ open:true, base64: data,
+                                      setPdfViewer({ open:true, src: data,
                                         title:`NF – ${c.contractNumber} · Parcela ${c.installment}/${c.totalInstallments} · ${monthLong(c.nfDate.slice(0,7))}` });
                                     }}
                                     className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-lg text-white shadow-sm hover:opacity-90 transition-opacity"
@@ -3123,19 +3147,19 @@
     ═══════════════════════════════════════════════════════ */
     function App() {
       const currentMonth = new Date().toISOString().slice(0, 7);
-      const [users,         setUsers]         = useState(() => loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS));
-      const [currentUser,   setCurrentUser]   = useState(() => {
-        const id = localStorage.getItem('belem-session');
-        if (!id) return null;
-        const saved = loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS);
-        return saved.find(u => u.id === parseInt(id)) || null;
-      });
-      const [showProfile,   setShowProfile]   = useState(false);
-
-      const [contracts,          setContracts]          = useState(() => loadFromStorage(STORAGE_KEYS.contracts, MOCK_CONTRACTS));
-      const [contacts,           setContacts]           = useState(() => loadFromStorage(STORAGE_KEYS.contacts,  MOCK_CONTACTS));
-      const [contractMeta,       setContractMeta]       = useState(() => loadObjectFromStorage(STORAGE_KEYS.contractMeta, MOCK_CONTRACT_META));
-      const [contractAdditives,  setContractAdditives]  = useState(() => loadObjectFromStorage(STORAGE_KEYS.additives, {}));
+      // ── Autenticação (ainda usa localStorage só para a sessão) ──
+      const [users,        setUsers]        = useState([]);
+      const [currentUser,  setCurrentUser]  = useState(null);
+      const [sessionId,    setSessionId]    = useState(() => { const id = localStorage.getItem('belem-session'); return id ? parseInt(id) : null; });
+      const [showProfile,  setShowProfile]  = useState(false);
+      // ── Dados compartilhados via Firestore ──
+      const [contracts,         setContracts]         = useState([]);
+      const [contacts,          setContacts]          = useState([]);
+      const [contractMeta,      setContractMeta]      = useState({});
+      const [contractAdditives, setContractAdditives] = useState({});
+      const [pdfStorage,        setPdfStorage]        = useState({});
+      const [dbReady,           setDbReady]           = useState(false);
+      // ── Somente local ──
       const [apiKey,        setApiKey]        = useState(() => localStorage.getItem('belem-api-key') || '');
       const [apiKeyDraft,   setApiKeyDraft]   = useState('');
       const [pdfFile,       setPdfFile]       = useState(null);
@@ -3155,12 +3179,68 @@
         manager:'', fiscalPrimary:'', fiscalSubstitute:'', client:'', unit:'', situation:'ativo',
       });
 
-      // Persistência automática
-      useEffect(() => { saveToStorage(STORAGE_KEYS.users,        users);               }, [users]);
-      useEffect(() => { saveToStorage(STORAGE_KEYS.contracts,    contracts);           }, [contracts]);
-      useEffect(() => { saveToStorage(STORAGE_KEYS.contacts,     contacts);            }, [contacts]);
-      useEffect(() => { saveToStorage(STORAGE_KEYS.contractMeta, contractMeta);        }, [contractMeta]);
-      useEffect(() => { saveToStorage(STORAGE_KEYS.additives,    contractAdditives);   }, [contractAdditives]);
+      // ── Restore session quando users chegarem do Firestore ──
+      useEffect(() => {
+        if (sessionId && users.length > 0 && !currentUser) {
+          const u = users.find(u => u.id === sessionId);
+          if (u) setCurrentUser(u);
+        }
+      }, [users, sessionId]);
+
+      // ── Firebase: seed inicial + onSnapshot ──
+      useEffect(() => {
+        const loaded = new Set();
+        function markLoaded(name) {
+          loaded.add(name);
+          if (['users','contracts','contractMeta','contractAdditives','contacts','pdfs'].every(k => loaded.has(k)))
+            setDbReady(true);
+        }
+        async function init() {
+          // Seed users se coleção estiver vazia
+          const usersSnap = await db.collection('users').get();
+          if (usersSnap.empty) {
+            const b = db.batch();
+            INITIAL_USERS.forEach(u => b.set(db.collection('users').doc(String(u.id)), u));
+            await b.commit();
+          }
+          // Seed contacts se coleção estiver vazia
+          const contactsSnap = await db.collection('contacts').get();
+          if (contactsSnap.empty) {
+            const b = db.batch();
+            MOCK_CONTACTS.forEach(c => b.set(db.collection('contacts').doc(String(c.id)), c));
+            await b.commit();
+          }
+        }
+        init().catch(console.error);
+
+        const unsubs = [
+          db.collection('users').onSnapshot(snap => {
+            setUsers(snap.docs.map(d => d.data()));
+            markLoaded('users');
+          }),
+          db.collection('contracts').onSnapshot(snap => {
+            setContracts(snap.docs.map(d => d.data()));
+            markLoaded('contracts');
+          }),
+          db.collection('contractMeta').onSnapshot(snap => {
+            const m = {}; snap.forEach(d => { m[d.id] = d.data(); });
+            setContractMeta(m); markLoaded('contractMeta');
+          }),
+          db.collection('contractAdditives').onSnapshot(snap => {
+            const a = {}; snap.forEach(d => { a[d.id] = d.data().additives || []; });
+            setContractAdditives(a); markLoaded('contractAdditives');
+          }),
+          db.collection('contacts').onSnapshot(snap => {
+            setContacts(snap.docs.map(d => d.data()));
+            markLoaded('contacts');
+          }),
+          db.collection('pdfs').onSnapshot(snap => {
+            const p = {}; snap.forEach(d => { p[d.id] = d.data().url; });
+            setPdfStorage(p); markLoaded('pdfs');
+          }),
+        ];
+        return () => unsubs.forEach(u => u());
+      }, []);
 
       const uniqueContractCount = useMemo(() => {
         const fromContracts = contracts.map(c => c.contractNumber);
@@ -3194,11 +3274,9 @@
         completed: filtered.filter(c => contractStatus(c) === 'completed').length,
       }), [filtered]);
 
-      // ── Estado da página de detalhe + PDFs ──
+      // ── Estado da página de detalhe ──
       const [activeContractNumber, setActiveContractNumber] = useState(null);
-      const [pdfStorage,           setPdfStorage]           = useState(() => loadObjectFromStorage(STORAGE_KEYS.pdfs, {}));
       const [contractSearch,       setContractSearch]       = useState('');
-      useEffect(() => { saveToStorage(STORAGE_KEYS.pdfs, pdfStorage); }, [pdfStorage]);
 
       // Contratos únicos = union entre parcelas existentes E metadados salvos
       // (garante que contratos sem parcelas ainda aparecem na tela inicial)
@@ -3244,14 +3322,27 @@
         localStorage.removeItem('belem-session');
         setCurrentUser(null);
       }
-      function handleUpdateUser(updated) {
-        setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+      async function handleUpdateUser(updated) {
+        await db.collection('users').doc(String(updated.id)).set(updated);
         setCurrentUser(updated);
       }
-      function handleDeleteContract(contractNumber) {
+      async function handleDeleteContract(contractNumber) {
         if (!confirm(`Excluir o contrato ${contractNumber} e todas as suas parcelas? Esta ação não pode ser desfeita.`)) return;
-        setContracts(prev => prev.filter(c => c.contractNumber !== contractNumber));
-        setContractMeta(prev => { const n = {...prev}; delete n[contractNumber]; return n; });
+        const batch = db.batch();
+        contracts.filter(c => c.contractNumber === contractNumber)
+          .forEach(c => batch.delete(db.collection('contracts').doc(String(c.id))));
+        batch.delete(db.collection('contractMeta').doc(contractNumber));
+        batch.delete(db.collection('contractAdditives').doc(contractNumber));
+        await batch.commit();
+        // Remove PDFs do Storage (best-effort)
+        const pdfKeys = contracts.filter(c => c.contractNumber === contractNumber).map(c => String(c.id));
+        const taKeys  = (contractAdditives[contractNumber] || []).map(a => 'ta_' + a.id);
+        const pdfBatch = db.batch();
+        [...pdfKeys, ...taKeys].forEach(k => {
+          pdfBatch.delete(db.collection('pdfs').doc(k));
+          storage.ref('pdfs/' + k).delete().catch(() => {});
+        });
+        await pdfBatch.commit();
         addToast(`🗑️ Contrato ${contractNumber} excluído.`);
       }
       function handleSelectContract(contractNumber) {
@@ -3262,12 +3353,13 @@
         setEditingContractNumber(contractNumber);
         setShowContractsList(false);
       }
-      function handleSaveContractEdit(contractNumber, meta, processNumber) {
-        setContractMeta(prev => ({ ...prev, [contractNumber]: { ...(prev[contractNumber]||{}), ...meta } }));
+      async function handleSaveContractEdit(contractNumber, meta, processNumber) {
+        await db.collection('contractMeta').doc(contractNumber).set({ ...(contractMeta[contractNumber]||{}), ...meta });
         if (processNumber !== undefined) {
-          setContracts(prev => prev.map(c =>
-            c.contractNumber === contractNumber ? { ...c, processNumber } : c
-          ));
+          const batch = db.batch();
+          contracts.filter(c => c.contractNumber === contractNumber)
+            .forEach(c => batch.update(db.collection('contracts').doc(String(c.id)), { processNumber }));
+          await batch.commit();
         }
         setEditingContractNumber(null);
         addToast(`✅ Contrato ${contractNumber} atualizado.`);
@@ -3284,20 +3376,25 @@
         setShowContractsList(false);
         setShowAdmin(false);
       }
-      function handleSavePdf(installmentId, base64Data) {
+      async function handleSavePdf(installmentId, base64Data) {
         try {
-          setPdfStorage(prev => ({ ...prev, [installmentId]: base64Data }));
-          addToast('📎 PDF da NF anexado com sucesso.');
+          const ref = storage.ref('pdfs/' + installmentId);
+          await ref.putString(base64Data, 'data_url');
+          const url = await ref.getDownloadURL();
+          await db.collection('pdfs').doc(String(installmentId)).set({ url });
+          addToast('📎 PDF da NF enviado com sucesso.');
         } catch(e) {
-          addToast('❌ Não foi possível armazenar o PDF. Tente um arquivo menor.');
+          console.error(e);
+          addToast('❌ Erro ao enviar PDF: ' + (e.message || 'tente novamente.'));
         }
       }
-      function handleDeletePdf(installmentId) {
-        setPdfStorage(prev => { const n = {...prev}; delete n[installmentId]; return n; });
+      async function handleDeletePdf(installmentId) {
+        try { await storage.ref('pdfs/' + installmentId).delete(); } catch(e) {}
+        await db.collection('pdfs').doc(String(installmentId)).delete();
         addToast('🗑️ PDF da NF removido.');
       }
 
-      function handleAddInstallment(contractNumber, data, pdfBase64) {
+      async function handleAddInstallment(contractNumber, data, pdfBase64) {
         const existing  = contracts.filter(c => c.contractNumber === contractNumber);
         const newTotal  = existing.length + 1;
         const newId     = Date.now();
@@ -3317,41 +3414,45 @@
           currentStep:      pdfBase64 ? 2 : 1,
           completedSteps:   pdfBase64 ? [1] : [],
         };
-        // Atualiza totalInstallments de todas as parcelas existentes
-        setContracts(prev => [
-          ...prev.map(c => c.contractNumber === contractNumber
-            ? { ...c, totalInstallments: newTotal } : c),
-          newRec,
-        ]);
-        if (pdfBase64) {
-          setPdfStorage(prev => ({ ...prev, [String(newId)]: pdfBase64 }));
-        }
+        const batch = db.batch();
+        batch.set(db.collection('contracts').doc(String(newId)), newRec);
+        existing.forEach(c => batch.update(db.collection('contracts').doc(String(c.id)), { totalInstallments: newTotal }));
+        await batch.commit();
+        if (pdfBase64) await handleSavePdf(String(newId), pdfBase64);
         addToast(`✅ Parcela ${newTotal} cadastrada — ${monthLong(data.nfDate.slice(0,7))}.`);
       }
 
-      function handleDeleteInstallment(installmentIds, contractNumber) {
-        // Aceita um único ID ou array de IDs
-        const ids = Array.isArray(installmentIds) ? installmentIds : [installmentIds];
+      async function handleDeleteInstallment(installmentIds, contractNumber) {
+        const ids   = Array.isArray(installmentIds) ? installmentIds : [installmentIds];
         const idSet = new Set(ids.map(String));
-        // Remove PDFs do storage
-        setPdfStorage(prev => {
-          const n = {...prev};
-          idSet.forEach(k => delete n[k]);
-          return n;
-        });
-        // Remove parcelas e reindexar
-        setContracts(prev => {
-          const remaining = prev.filter(c => c.contractNumber === contractNumber && !idSet.has(String(c.id)));
-          const others    = prev.filter(c => c.contractNumber !== contractNumber);
-          const newTotal  = remaining.length;
-          const reindexed = remaining
-            .sort((a, b) => a.installment - b.installment)
-            .map((c, i) => ({ ...c, installment: i + 1, totalInstallments: newTotal }));
-          return [...others, ...reindexed];
-        });
+        const remaining = contracts
+          .filter(c => c.contractNumber === contractNumber && !idSet.has(String(c.id)))
+          .sort((a, b) => a.installment - b.installment);
+        const newTotal = remaining.length;
+        const batch = db.batch();
+        idSet.forEach(k => batch.delete(db.collection('contracts').doc(k)));
+        remaining.forEach((c, i) => batch.update(db.collection('contracts').doc(String(c.id)),
+          { installment: i + 1, totalInstallments: newTotal }));
+        await batch.commit();
+        // Remove PDFs (best-effort)
+        for (const k of idSet) {
+          try { await storage.ref('pdfs/' + k).delete(); } catch(e) {}
+          await db.collection('pdfs').doc(k).delete().catch(() => {});
+        }
         const qty = ids.length;
         addToast(`🗑️ ${qty === 1 ? '1 parcela excluída.' : `${qty} parcelas excluídas.`}`);
       }
+
+      // Aguarda Firebase carregar
+      if (!dbReady) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{background: BLUE}}>
+          <img src="belemdigital-logo.png" alt="Belém Digital"
+               style={{height:64, width:'auto', objectFit:'contain', opacity:.9}}
+               onError={e => e.currentTarget.style.display='none'} />
+          <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+          <p className="text-white/70 text-sm font-medium">Conectando ao banco de dados…</p>
+        </div>
+      );
 
       // Redireciona para login se não autenticado
       if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onUpdateUser={handleUpdateUser} />;
@@ -3425,35 +3526,48 @@
         }
       }
 
-      function handleSaveAdditives(contractNumber, additive) {
-        // additive: { id, number, object, date, pdfBase64, pdfFileName }
-        setContractAdditives(prev => {
-          const existing = prev[contractNumber] || [];
-          const idx = existing.findIndex(a => a.id === additive.id);
-          const updated = idx >= 0
-            ? existing.map((a, i) => i === idx ? additive : a)
-            : [...existing, additive];
-          return { ...prev, [contractNumber]: updated };
-        });
+      async function handleSaveAdditives(contractNumber, additive) {
+        let final = { ...additive };
+        if (additive.pdfBase64) {
+          const key = 'ta_' + additive.id;
+          const existingTa = (contractAdditives[contractNumber] || []).find(a => a.id === additive.id);
+          if (existingTa?.pdfUrl) { storage.ref('pdfs/' + key).delete().catch(() => {}); }
+          const ref = storage.ref('pdfs/' + key);
+          await ref.putString(additive.pdfBase64, 'data_url');
+          const url = await ref.getDownloadURL();
+          final = { ...final, pdfBase64: null, pdfUrl: url };
+        } else if (additive.pdfUrl === null) {
+          storage.ref('pdfs/ta_' + additive.id).delete().catch(() => {});
+        }
+        const existing = contractAdditives[contractNumber] || [];
+        const idx = existing.findIndex(a => a.id === final.id);
+        const updated = idx >= 0 ? existing.map(a => a.id === final.id ? final : a) : [...existing, final];
+        await db.collection('contractAdditives').doc(contractNumber).set({ additives: updated });
       }
 
-      function handleDeleteAdditive(contractNumber, additiveId) {
-        setContractAdditives(prev => ({
-          ...prev,
-          [contractNumber]: (prev[contractNumber] || []).filter(a => a.id !== additiveId),
-        }));
+      async function handleDeleteAdditive(contractNumber, additiveId) {
+        storage.ref('pdfs/ta_' + additiveId).delete().catch(() => {});
+        const updated = (contractAdditives[contractNumber] || []).filter(a => a.id !== additiveId);
+        await db.collection('contractAdditives').doc(contractNumber).set({ additives: updated });
       }
 
-      function resetAllData() {
-        if (!confirm('Tem certeza? Isso vai apagar TODOS os contratos e contatos salvos.')) return;
-        localStorage.removeItem(STORAGE_KEYS.contracts);
-        localStorage.removeItem(STORAGE_KEYS.contacts);
-        localStorage.removeItem(STORAGE_KEYS.contractMeta);
-        localStorage.removeItem(STORAGE_KEYS.additives);
-        setContracts([]);
-        setContacts(MOCK_CONTACTS);
-        setContractMeta({});
-        setContractAdditives({});
+      async function handleSaveContact(contact) {
+        await db.collection('contacts').doc(String(contact.id)).set(contact);
+      }
+      async function handleDeleteContact(id) {
+        await db.collection('contacts').doc(String(id)).delete();
+      }
+
+      async function resetAllData() {
+        if (!confirm('Tem certeza? Isso vai apagar TODOS os contratos e parcelas do banco de dados compartilhado.')) return;
+        const cols = ['contracts','contractMeta','contractAdditives','pdfs'];
+        for (const col of cols) {
+          const snap = await db.collection(col).get();
+          const b = db.batch();
+          snap.docs.forEach(d => b.delete(d.ref));
+          await b.commit();
+        }
+        addToast('🗑️ Todos os dados foram apagados.');
       }
 
       function addToast(msg) {
@@ -3462,56 +3576,49 @@
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5500);
       }
 
-      function handleAdd(e) {
+      async function handleAdd(e) {
         e.preventDefault();
-        // Salva apenas os metadados do contrato — parcelas são cadastradas manualmente
-        setContractMeta(prev => ({
-          ...prev,
-          [form.contractNumber]: {
-            object:           form.object,
-            modality:         form.modality,
-            contractorName:   form.contractorName,
-            contractorCnpj:   form.contractorCnpj,
-            globalValue:      parseFloat(form.globalValue) || 0,
-            startDate:        form.startDate,
-            endDate:          form.endDate,
-            manager:          form.manager,
-            fiscalPrimary:    form.fiscalPrimary,
-            fiscalSubstitute: form.fiscalSubstitute,
-            unit:             form.unit,
-            situation:        form.situation || 'ativo',
-          }
-        }));
+        const cn = form.contractNumber;
+        await db.collection('contractMeta').doc(cn).set({
+          object:           form.object,
+          modality:         form.modality,
+          contractorName:   form.contractorName,
+          contractorCnpj:   form.contractorCnpj,
+          globalValue:      parseFloat(form.globalValue) || 0,
+          startDate:        form.startDate,
+          endDate:          form.endDate,
+          manager:          form.manager,
+          fiscalPrimary:    form.fiscalPrimary,
+          fiscalSubstitute: form.fiscalSubstitute,
+          unit:             form.unit,
+          situation:        form.situation || 'ativo',
+        });
         setForm({ contractNumber:'', processNumber:'', object:'', modality:'', contractorName:'', contractorCnpj:'', globalValue:'', startDate:'', endDate:'', manager:'', fiscalPrimary:'', fiscalSubstitute:'', client:'', unit:'', situation:'ativo' });
         setShowForm(false);
-        addToast(`✅ Contrato ${form.contractNumber} cadastrado. Adicione as parcelas manualmente.`);
+        addToast(`✅ Contrato ${cn} cadastrado. Adicione as parcelas manualmente.`);
       }
 
-      function handleAdvance(id) {
-        setContracts(prev => prev.map(c => {
-          if (c.id !== id) return c;
-          return { ...c, completedSteps:[...c.completedSteps, c.currentStep], currentStep: c.currentStep + 1 };
-        }));
-      }
-
-      function handleUpdateNfNumber(id, value) {
-        const trimmed = (value || '').trim();
-        setContracts(prev => prev.map(c => c.id === id ? { ...c, nfNumber: trimmed } : c));
-      }
-
-      function handleUndo(id) {
-        setContracts(prev => prev.map(c => {
-          if (c.id !== id) return c;
-          if (c.completedSteps.length <= 1) return c;
-          const newCompleted = [...c.completedSteps];
-          const last = newCompleted.pop();
-          return { ...c, completedSteps: newCompleted, currentStep: last };
-        }));
+      async function handleAdvance(id) {
         const c = contracts.find(x => x.id === id);
-        if (c) {
-          const undoneStep = STEPS.find(s => s.id === c.completedSteps[c.completedSteps.length - 1]);
-          addToast(`↩️ Etapa "${undoneStep?.name}" desfeita em ${c.contractNumber}.`);
-        }
+        if (!c) return;
+        await db.collection('contracts').doc(String(id)).update({
+          completedSteps: [...c.completedSteps, c.currentStep],
+          currentStep: c.currentStep + 1,
+        });
+      }
+
+      async function handleUpdateNfNumber(id, value) {
+        await db.collection('contracts').doc(String(id)).update({ nfNumber: (value || '').trim() });
+      }
+
+      async function handleUndo(id) {
+        const c = contracts.find(x => x.id === id);
+        if (!c || c.completedSteps.length <= 1) return;
+        const newCompleted = [...c.completedSteps];
+        const last = newCompleted.pop();
+        await db.collection('contracts').doc(String(id)).update({ completedSteps: newCompleted, currentStep: last });
+        const undoneStep = STEPS.find(s => s.id === c.completedSteps[c.completedSteps.length - 1]);
+        addToast(`↩️ Etapa "${undoneStep?.name}" desfeita em ${c.contractNumber}.`);
       }
 
       function handleNotify(contract, channel) {
@@ -3550,6 +3657,12 @@
           <ProfileDrawer open={showProfile} onClose={() => setShowProfile(false)}
                          currentUser={currentUser} onUpdateUser={handleUpdateUser}
                          onLogout={handleLogout} addToast={addToast} />
+
+          {/* Contacts Drawer */}
+          <ContactsDrawer open={showContacts} onClose={() => setShowContacts(false)}
+                          contacts={contacts}
+                          onSaveContact={handleSaveContact}
+                          onDeleteContact={handleDeleteContact} />
 
           {/* Contracts List Drawer */}
           <ContractsListDrawer open={showContractsList} onClose={() => setShowContractsList(false)}
@@ -3948,7 +4061,7 @@
               <p className="flex items-center gap-2 text-[10px]">
                 <span className="flex items-center gap-1 text-green-700">
                   <CheckCircle className="w-3 h-3" />
-                  Dados salvos automaticamente no seu navegador
+                  Dados sincronizados em tempo real — Firebase Cloud
                 </span>
                 <span className="text-gray-300">·</span>
                 <button onClick={resetAllData}
