@@ -52,6 +52,8 @@
     }
     .pres-in     { opacity:0; animation:presIn 0.55s ease forwards; }
     .present-bar { animation:barGrow 1.1s cubic-bezier(.22,1,.36,1) forwards; }
+    .kpi-scale-hover { display:inline-block; transition:transform 0.28s cubic-bezier(.22,1,.36,1); }
+    .kpi-scale-hover:hover { transform:scale(1.12); }
   </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
@@ -3428,6 +3430,7 @@
       const [tab, setTab]                     = useState('dashboard');
       const [expandedAlert, setExpandedAlert] = useState(null);
       const [presentMode,   setPresentMode]   = useState(false);
+      const [kpiOpen,       setKpiOpen]       = useState(null);
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -3440,7 +3443,7 @@
 
       // Sincroniza estado quando o usuário sai do fullscreen pelo Esc do navegador
       useEffect(() => {
-        const fn = () => { if (!document.fullscreenElement) setPresentMode(false); };
+        const fn = () => { if (!document.fullscreenElement) { setPresentMode(false); setKpiOpen(null); } };
         document.addEventListener('fullscreenchange', fn);
         return () => document.removeEventListener('fullscreenchange', fn);
       }, []);
@@ -3578,11 +3581,24 @@
          MODO APRESENTAÇÃO — layout executivo profissional
       ══════════════════════════════════════════════════════════ */
       if (presentMode) {
+        // Dados da lista expandida ao clicar nos KPIs
+        const kpiListData = (() => {
+          if (!kpiOpen) return null;
+          if (kpiOpen === 'billed') {
+            const sorted = [...allMeta].sort((a,b) => (b.totalBilled||0) - (a.totalBilled||0));
+            const max = Math.max(...sorted.map(m => m.totalBilled||0), 1);
+            return { sorted, max, getValue: m => m.totalBilled||0, title:'Total Faturado por Contrato', color:'#059669' };
+          }
+          const sorted = [...allMeta].sort((a,b) => (b.globalValue||0) - (a.globalValue||0));
+          const max = Math.max(...sorted.map(m => m.globalValue||0), 1);
+          return { sorted, max, getValue: m => m.globalValue||0, title:'Contratos por Valor Global', color:'#1D4ED8' };
+        })();
+
         return (
           <div className="fixed inset-0 z-[200] overflow-y-auto" style={{background:'#ffffff'}}>
 
             {/* ── Botão Sair — sempre visível, canto superior direito ── */}
-            <button onClick={() => setPresentMode(false)} title="Sair (Esc)"
+            <button onClick={() => { setPresentMode(false); setKpiOpen(null); }} title="Sair (Esc)"
                     className="fixed top-5 right-5 z-[210] flex items-center gap-2 text-white text-xs font-bold px-4 py-2.5 rounded-md shadow-lg hover:opacity-90 transition-opacity"
                     style={{background:'#dc2626', letterSpacing:'0.05em'}}>
               <Minimize2 className="w-3.5 h-3.5" /> SAIR
@@ -3605,159 +3621,220 @@
                 </div>
               </div>
 
-              {/* ── Faixa de KPIs — 4 números separados por hairlines ── */}
+              {/* ── Faixa de KPIs — clicáveis (exceto Taxa de Execução) ── */}
               <div className="pres-in" style={{animationDelay:'0.14s', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:'48px'}}>
                 {[
-                  { label:'Contratos',       value: String(uniqueNums.length),                      sub: `${activeCount} ativo${activeCount!==1?'s':''}`,       hi:false },
-                  { label:'Valor Contratado', value: fmtCurrencyShort(totalContracted),             sub: 'montante global',                                      hi:false },
-                  { label:'Total Faturado',   value: fmtCurrencyShort(totalBilledAll),              sub: 'acumulado até hoje',                                   hi:true  },
-                  { label:'Taxa de Execução', value: `${execRateAll.toFixed(1).replace('.',',')}%`, sub: 'do contratado faturado',                               hi:execRateAll>=50 },
-                ].map(({label, value, sub, hi}, i) => (
-                  <div key={i} style={{
-                    paddingBottom:'28px',
-                    borderLeft: i>0 ? '1px solid rgba(0,0,0,0.08)' : 'none',
-                    paddingLeft: i===0 ? '0' : '28px',
-                  }}>
-                    <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 14px 0'}}>
-                      {label}
-                    </p>
-                    <p style={{fontSize:'44px', fontWeight:'800', color: hi ? '#059669' : '#0B2B5E', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 8px 0'}}>
-                      {value}
-                    </p>
-                    <p style={{fontSize:'11px', color:'rgba(0,0,0,0.35)', margin:0}}>{sub}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* ── Gráfico mensal + Situação dos contratos ── */}
-              <div style={{display:'grid', gridTemplateColumns:'1fr 300px', gap:'0', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'40px', marginBottom:'48px'}}>
-
-                {/* Faturamento mensal */}
-                <div className="pres-in" style={{animationDelay:'0.24s', paddingRight:'44px', borderRight:'1px solid rgba(0,0,0,0.08)'}}>
-                  <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 4px 0'}}>
-                    Faturamento Mensal
-                  </p>
-                  <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', margin:'0 0 32px 0'}}>
-                    Últimos 6 meses · por emissão de NF
-                  </p>
-                  <div style={{display:'flex', alignItems:'flex-end', gap:'8px', height:'130px'}}>
-                    {monthlyBilling.map((m, mi) => {
-                      const pct    = maxMonthly > 0 ? (m.value / maxMonthly) * 100 : 0;
-                      const isCurr = m.key === todayKey;
-                      return (
-                        <div key={m.key} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', height:'100%', justifyContent:'flex-end'}}>
-                          <div style={{width:'100%', position:'relative', display:'flex', flexDirection:'column', justifyContent:'flex-end', height:'96px'}}>
-                            {m.value > 0 && (
-                              <span style={{position:'absolute', top:'-18px', left:'50%', transform:'translateX(-50%)', fontSize:'9px', fontWeight:'700', color: isCurr ? '#059669' : 'rgba(0,0,0,0.45)', whiteSpace:'nowrap'}}>
-                                {fmtCurrencyShort(m.value)}
-                              </span>
-                            )}
-                            <div className="present-bar" style={{
-                              width:'100%',
-                              height:`${Math.max(pct, m.value>0 ? 4 : 0.5)}%`,
-                              maxHeight:'96px',
-                              background: isCurr ? '#059669' : '#1D4ED8',
-                              opacity: isCurr ? 1 : 0.55,
-                              borderRadius:'2px 2px 0 0',
-                              '--bar-w':'100%',
-                              animationDelay:`${0.62 + mi*0.06}s`
-                            }} />
-                          </div>
-                          <span style={{fontSize:'10px', whiteSpace:'nowrap', color: isCurr ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0.32)', fontWeight: isCurr ? '700' : '400'}}>
-                            {m.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Situação dos contratos */}
-                <div className="pres-in" style={{animationDelay:'0.30s', paddingLeft:'44px'}}>
-                  <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 32px 0'}}>
-                    Situação dos Contratos
-                  </p>
-                  {uniqueNums.length === 0 ? (
-                    <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', fontStyle:'italic'}}>Sem dados</p>
-                  ) : (
-                    <div style={{display:'flex', flexDirection:'column', gap:'22px'}}>
-                      {Object.entries(CONTRACT_SITUATION).map(([key, val], si) => {
-                        const count = bySituation[key] || 0;
-                        const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
-                        const clr   = key==='ativo' ? '#059669' : key==='suspenso' ? '#D97706' : key==='encerrado' ? 'rgba(0,0,0,0.22)' : '#DC2626';
-                        return (
-                          <div key={key}>
-                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'7px'}}>
-                              <span style={{fontSize:'12px', color:'rgba(0,0,0,0.50)', fontWeight:'500'}}>{val.label}</span>
-                              <span style={{fontSize:'20px', fontWeight:'800', color: count > 0 ? clr : 'rgba(0,0,0,0.15)', letterSpacing:'-0.02em', lineHeight:'1'}}>{count}</span>
-                            </div>
-                            <div style={{height:'2px', background:'rgba(0,0,0,0.07)', borderRadius:'2px', overflow:'hidden'}}>
-                              <div className="present-bar" style={{height:'100%', background:clr, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${0.88 + si*0.07}s`}} />
-                            </div>
-                          </div>
-                        );
-                      })}
+                  { label:'Contratos',        value: String(uniqueNums.length),                      sub:`${activeCount} ativo${activeCount!==1?'s':''}`,  hi:false, action:'contracts' },
+                  { label:'Valor Contratado',  value: fmtCurrencyShort(totalContracted),              sub:'montante global',                                 hi:false, action:'value'     },
+                  { label:'Total Faturado',    value: fmtCurrencyShort(totalBilledAll),               sub:'acumulado até hoje',                              hi:true,  action:'billed'    },
+                  { label:'Taxa de Execução',  value: `${execRateAll.toFixed(1).replace('.',',')}%`,  sub:'do contratado faturado',                          hi:execRateAll>=50, action:null },
+                ].map(({label, value, sub, hi, action}, i) => {
+                  const isActive  = action && kpiOpen === action;
+                  const clickable = action !== null;
+                  return (
+                    <div key={i}
+                         onClick={clickable ? () => setKpiOpen(kpiOpen === action ? null : action) : undefined}
+                         style={{
+                           paddingBottom:'28px',
+                           borderLeft: i>0 ? '1px solid rgba(0,0,0,0.08)' : 'none',
+                           paddingLeft: i===0 ? '0' : '28px',
+                           cursor: clickable ? 'pointer' : 'default',
+                           userSelect:'none',
+                         }}>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', textTransform:'uppercase', margin:'0 0 14px 0',
+                                 color: isActive ? '#1D4ED8' : 'rgba(0,0,0,0.38)', transition:'color 0.2s'}}>
+                        {label}{isActive ? ' ▴' : (clickable ? ' ▾' : '')}
+                      </p>
+                      {action === null ? (
+                        <span className="kpi-scale-hover" style={{fontSize:'44px', fontWeight:'800', color: hi ? '#059669' : '#0B2B5E', letterSpacing:'-0.03em', lineHeight:'1', display:'inline-block'}}>
+                          {value}
+                        </span>
+                      ) : (
+                        <p style={{fontSize:'44px', fontWeight:'800', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 8px 0',
+                                   color: isActive ? '#1D4ED8' : (hi ? '#059669' : '#0B2B5E'), transition:'color 0.2s'}}>
+                          {value}
+                        </p>
+                      )}
+                      <p style={{fontSize:'11px', color:'rgba(0,0,0,0.35)', margin: action === null ? '8px 0 0 0' : '0'}}>{sub}</p>
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
 
-              {/* ── Maiores contratos — tabela limpa ── */}
-              {topContracts.length > 0 && (
-                <div className="pres-in" style={{animationDelay:'0.35s', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'36px', marginBottom:'40px'}}>
-                  <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 24px 0'}}>
-                    Maiores Contratos por Valor Global
-                  </p>
-                  {topContracts.map((m, ti) => {
-                    const pct = (m.globalValue / topContracts[0].globalValue) * 100;
+              {/* ── Conteúdo principal: lista expandida OU gráficos ── */}
+              {kpiListData ? (
+
+                /* ── Lista detalhada ao clicar nos KPIs ── */
+                <div>
+                  <div className="pres-in" style={{animationDelay:'0s', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'32px', marginBottom:'24px'}}>
+                    <div>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 3px 0'}}>
+                        {kpiListData.title}
+                      </p>
+                      <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', margin:0}}>do maior para o menor</p>
+                    </div>
+                    <button onClick={() => setKpiOpen(null)}
+                            style={{fontSize:'11px', fontWeight:'600', color:'rgba(0,0,0,0.40)', background:'none', border:'1px solid rgba(0,0,0,0.14)', borderRadius:'6px', padding:'5px 14px', cursor:'pointer', letterSpacing:'0.04em'}}>
+                      Fechar ×
+                    </button>
+                  </div>
+                  {kpiListData.sorted.map((m, i) => {
+                    const val = kpiListData.getValue(m);
+                    const pct = (val / kpiListData.max) * 100;
                     return (
-                      <div key={m.contractNumber} style={{display:'grid', gridTemplateColumns:'20px 1fr auto', gap:'16px', alignItems:'center', padding:'13px 0', borderBottom:'1px solid rgba(0,0,0,0.05)'}}>
-                        <span style={{fontSize:'11px', color:'rgba(0,0,0,0.22)', fontWeight:'600', textAlign:'right'}}>{ti+1}</span>
+                      <div key={m.contractNumber} className="pres-in" style={{
+                        display:'grid', gridTemplateColumns:'24px 1fr auto', gap:'16px', alignItems:'center',
+                        padding:'12px 0', borderBottom:'1px solid rgba(0,0,0,0.05)',
+                        animationDelay:`${i * 0.04}s`
+                      }}>
+                        <span style={{fontSize:'11px', color:'rgba(0,0,0,0.22)', fontWeight:'600', textAlign:'right'}}>{i+1}</span>
                         <div>
-                          <div style={{display:'flex', alignItems:'baseline', gap:'12px', marginBottom:'7px'}}>
-                            <span style={{fontSize:'14px', fontWeight:'700', color:'#0B2B5E'}}>{m.contractNumber}</span>
-                            {m.contractorName && <span style={{fontSize:'11px', color:'rgba(0,0,0,0.38)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'340px'}}>{m.contractorName}</span>}
+                          <div style={{display:'flex', alignItems:'baseline', gap:'10px', marginBottom:'6px'}}>
+                            <span style={{fontSize:'13px', fontWeight:'700', color:'#0B2B5E'}}>{m.contractNumber}</span>
+                            {m.contractorName && <span style={{fontSize:'11px', color:'rgba(0,0,0,0.40)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'520px'}}>{m.contractorName}</span>}
                           </div>
                           <div style={{height:'2px', background:'rgba(0,0,0,0.06)', borderRadius:'2px', overflow:'hidden'}}>
-                            <div className="present-bar" style={{height:'100%', background:'#1D4ED8', opacity:0.55, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${1.0 + ti*0.06}s`}} />
+                            <div className="present-bar" style={{height:'100%', background:kpiListData.color, opacity:0.55, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${0.05 + i * 0.04}s`}} />
                           </div>
                         </div>
-                        <span style={{fontSize:'16px', fontWeight:'800', color:'#0B2B5E', whiteSpace:'nowrap', letterSpacing:'-0.02em'}}>
-                          {fmtCurrencyShort(m.globalValue)}
+                        <span style={{fontSize:'15px', fontWeight:'800', color:'#0B2B5E', whiteSpace:'nowrap', letterSpacing:'-0.02em'}}>
+                          {fmtCurrencyShort(val)}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-              )}
 
-              {/* ── Alertas de vigência (só se houver) ── */}
-              {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0) && (
-                <div className="pres-in" style={{animationDelay:'0.42s', borderTop:'1px solid rgba(239,68,68,0.20)', paddingTop:'32px'}}>
-                  <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(220,38,38,0.60)', textTransform:'uppercase', margin:'0 0 20px 0'}}>
-                    Alertas de Vigência
-                  </p>
-                  <div style={{display:'flex', gap:'52px'}}>
-                    {expiredList.length > 0 && (
-                      <div>
-                        <p style={{fontSize:'42px', fontWeight:'800', color:'#DC2626', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{expiredList.length}</p>
-                        <p style={{fontSize:'11px', color:'rgba(220,38,38,0.60)', margin:0}}>contrato{expiredList.length!==1?'s':''} vencido{expiredList.length!==1?'s':''}</p>
+              ) : (
+
+                /* ── Gráficos + Top contratos + Alertas ── */
+                <>
+                  {/* Gráfico mensal + Situação dos contratos */}
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 300px', gap:'0', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'40px', marginBottom:'48px'}}>
+
+                    {/* Faturamento mensal */}
+                    <div className="pres-in" style={{animationDelay:'0.24s', paddingRight:'44px', borderRight:'1px solid rgba(0,0,0,0.08)'}}>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 4px 0'}}>
+                        Faturamento Mensal
+                      </p>
+                      <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', margin:'0 0 32px 0'}}>
+                        Últimos 6 meses · por emissão de NF
+                      </p>
+                      <div style={{display:'flex', alignItems:'flex-end', gap:'8px', height:'130px'}}>
+                        {monthlyBilling.map((m, mi) => {
+                          const pct    = maxMonthly > 0 ? (m.value / maxMonthly) * 100 : 0;
+                          const isCurr = m.key === todayKey;
+                          return (
+                            <div key={m.key} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', height:'100%', justifyContent:'flex-end'}}>
+                              <div style={{width:'100%', position:'relative', display:'flex', flexDirection:'column', justifyContent:'flex-end', height:'96px'}}>
+                                {m.value > 0 && (
+                                  <span style={{position:'absolute', top:'-18px', left:'50%', transform:'translateX(-50%)', fontSize:'9px', fontWeight:'700', color: isCurr ? '#059669' : 'rgba(0,0,0,0.45)', whiteSpace:'nowrap'}}>
+                                    {fmtCurrencyShort(m.value)}
+                                  </span>
+                                )}
+                                <div className="present-bar" style={{
+                                  width:'100%', height:`${Math.max(pct, m.value>0 ? 4 : 0.5)}%`, maxHeight:'96px',
+                                  background: isCurr ? '#059669' : '#1D4ED8', opacity: isCurr ? 1 : 0.55,
+                                  borderRadius:'2px 2px 0 0', '--bar-w':'100%', animationDelay:`${0.62 + mi*0.06}s`
+                                }} />
+                              </div>
+                              <span style={{fontSize:'10px', whiteSpace:'nowrap', color: isCurr ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0.32)', fontWeight: isCurr ? '700' : '400'}}>
+                                {m.label}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
-                    {exp7List.length > 0 && (
-                      <div>
-                        <p style={{fontSize:'42px', fontWeight:'800', color:'#D97706', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp7List.length}</p>
-                        <p style={{fontSize:'11px', color:'rgba(217,119,6,0.60)', margin:0}}>vence{exp7List.length===1?'':'m'} em 7 dias</p>
-                      </div>
-                    )}
-                    {exp30List.length > 0 && (
-                      <div>
-                        <p style={{fontSize:'42px', fontWeight:'800', color:'rgba(0,0,0,0.35)', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp30List.length}</p>
-                        <p style={{fontSize:'11px', color:'rgba(0,0,0,0.30)', margin:0}}>vence{exp30List.length===1?'':'m'} em 30 dias</p>
-                      </div>
-                    )}
+                    </div>
+
+                    {/* Situação dos contratos */}
+                    <div className="pres-in" style={{animationDelay:'0.30s', paddingLeft:'44px'}}>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 32px 0'}}>
+                        Situação dos Contratos
+                      </p>
+                      {uniqueNums.length === 0 ? (
+                        <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', fontStyle:'italic'}}>Sem dados</p>
+                      ) : (
+                        <div style={{display:'flex', flexDirection:'column', gap:'22px'}}>
+                          {Object.entries(CONTRACT_SITUATION).map(([key, val], si) => {
+                            const count = bySituation[key] || 0;
+                            const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
+                            const clr   = key==='ativo' ? '#059669' : key==='suspenso' ? '#D97706' : key==='encerrado' ? 'rgba(0,0,0,0.22)' : '#DC2626';
+                            return (
+                              <div key={key}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'7px'}}>
+                                  <span style={{fontSize:'12px', color:'rgba(0,0,0,0.50)', fontWeight:'500'}}>{val.label}</span>
+                                  <span style={{fontSize:'20px', fontWeight:'800', color: count > 0 ? clr : 'rgba(0,0,0,0.15)', letterSpacing:'-0.02em', lineHeight:'1'}}>{count}</span>
+                                </div>
+                                <div style={{height:'2px', background:'rgba(0,0,0,0.07)', borderRadius:'2px', overflow:'hidden'}}>
+                                  <div className="present-bar" style={{height:'100%', background:clr, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${0.88 + si*0.07}s`}} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+
+                  {/* Maiores contratos — tabela limpa */}
+                  {topContracts.length > 0 && (
+                    <div className="pres-in" style={{animationDelay:'0.35s', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'36px', marginBottom:'40px'}}>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 24px 0'}}>
+                        Maiores Contratos por Valor Global
+                      </p>
+                      {topContracts.map((m, ti) => {
+                        const pct = (m.globalValue / topContracts[0].globalValue) * 100;
+                        return (
+                          <div key={m.contractNumber} style={{display:'grid', gridTemplateColumns:'20px 1fr auto', gap:'16px', alignItems:'center', padding:'13px 0', borderBottom:'1px solid rgba(0,0,0,0.05)'}}>
+                            <span style={{fontSize:'11px', color:'rgba(0,0,0,0.22)', fontWeight:'600', textAlign:'right'}}>{ti+1}</span>
+                            <div>
+                              <div style={{display:'flex', alignItems:'baseline', gap:'12px', marginBottom:'7px'}}>
+                                <span style={{fontSize:'14px', fontWeight:'700', color:'#0B2B5E'}}>{m.contractNumber}</span>
+                                {m.contractorName && <span style={{fontSize:'11px', color:'rgba(0,0,0,0.38)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'340px'}}>{m.contractorName}</span>}
+                              </div>
+                              <div style={{height:'2px', background:'rgba(0,0,0,0.06)', borderRadius:'2px', overflow:'hidden'}}>
+                                <div className="present-bar" style={{height:'100%', background:'#1D4ED8', opacity:0.55, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${1.0 + ti*0.06}s`}} />
+                              </div>
+                            </div>
+                            <span style={{fontSize:'16px', fontWeight:'800', color:'#0B2B5E', whiteSpace:'nowrap', letterSpacing:'-0.02em'}}>
+                              {fmtCurrencyShort(m.globalValue)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Alertas de vigência */}
+                  {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0) && (
+                    <div className="pres-in" style={{animationDelay:'0.42s', borderTop:'1px solid rgba(239,68,68,0.20)', paddingTop:'32px'}}>
+                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(220,38,38,0.60)', textTransform:'uppercase', margin:'0 0 20px 0'}}>
+                        Alertas de Vigência
+                      </p>
+                      <div style={{display:'flex', gap:'52px'}}>
+                        {expiredList.length > 0 && (
+                          <div>
+                            <p style={{fontSize:'42px', fontWeight:'800', color:'#DC2626', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{expiredList.length}</p>
+                            <p style={{fontSize:'11px', color:'rgba(220,38,38,0.60)', margin:0}}>contrato{expiredList.length!==1?'s':''} vencido{expiredList.length!==1?'s':''}</p>
+                          </div>
+                        )}
+                        {exp7List.length > 0 && (
+                          <div>
+                            <p style={{fontSize:'42px', fontWeight:'800', color:'#D97706', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp7List.length}</p>
+                            <p style={{fontSize:'11px', color:'rgba(217,119,6,0.60)', margin:0}}>vence{exp7List.length===1?'':'m'} em 7 dias</p>
+                          </div>
+                        )}
+                        {exp30List.length > 0 && (
+                          <div>
+                            <p style={{fontSize:'42px', fontWeight:'800', color:'rgba(0,0,0,0.35)', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp30List.length}</p>
+                            <p style={{fontSize:'11px', color:'rgba(0,0,0,0.30)', margin:0}}>vence{exp30List.length===1?'':'m'} em 30 dias</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
             </div>
