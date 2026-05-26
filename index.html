@@ -3429,13 +3429,21 @@
       const [expandedAlert, setExpandedAlert] = useState(null);
       const [presentMode,   setPresentMode]   = useState(false);
 
-      // Esc para sair do modo apresentação
+      // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
-        if (!presentMode) return;
-        const fn = e => { if (e.key === 'Escape') setPresentMode(false); };
-        document.addEventListener('keydown', fn);
-        return () => document.removeEventListener('keydown', fn);
+        if (presentMode) {
+          document.documentElement.requestFullscreen?.().catch(() => {});
+        } else {
+          if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+        }
       }, [presentMode]);
+
+      // Sincroniza estado quando o usuário sai do fullscreen pelo Esc do navegador
+      useEffect(() => {
+        const fn = () => { if (!document.fullscreenElement) setPresentMode(false); };
+        document.addEventListener('fullscreenchange', fn);
+        return () => document.removeEventListener('fullscreenchange', fn);
+      }, []);
 
       const today = new Date(); today.setHours(12,0,0,0);
       const in7   = new Date(today); in7.setDate(today.getDate() + 7);
