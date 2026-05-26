@@ -3878,6 +3878,20 @@
         completed: contracts.filter(c => contractStatus(c) === 'completed').length,
       }), [uniqueContracts, contracts]);
 
+      const homeAlerts = useMemo(() => {
+        const t = new Date(); t.setHours(12,0,0,0);
+        const in7  = new Date(t); in7.setDate(t.getDate() + 7);
+        const in30 = new Date(t); in30.setDate(t.getDate() + 30);
+        const entries = Object.values(contractMeta);
+        return {
+          expired:  entries.filter(m => { if (!m.endDate||(m.situation||'ativo')!=='ativo') return false; return new Date(m.endDate+'T12:00:00') < t; }).length,
+          exp7:     entries.filter(m => { if (!m.endDate||(m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>=t&&e<=in7; }).length,
+          exp30:    entries.filter(m => { if (!m.endDate||(m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>in7&&e<=in30; }).length,
+          overdue:  contracts.filter(c => contractStatus(c) === 'overdue').length,
+          dueToday: contracts.filter(c => contractStatus(c) === 'due-today').length,
+        };
+      }, [contractMeta, contracts]);
+
       function handleLogin(user) {
         localStorage.setItem('belem-session', String(user.id));
         setCurrentUser(user);
@@ -4626,6 +4640,54 @@
                     ))}
                   </div>
                 </div>
+
+                {/* ── ALERTAS DA HOME ── */}
+                {(homeAlerts.expired + homeAlerts.exp7 + homeAlerts.exp30 + homeAlerts.overdue + homeAlerts.dueToday) > 0 && (
+                  <div className="rounded-2xl border border-amber-200 overflow-hidden shadow-sm">
+                    <div className="px-4 py-2.5 flex items-center gap-2" style={{background:'#fffbeb'}}>
+                      <Bell className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                      <p className="text-xs font-black text-amber-700 uppercase tracking-wider flex-1">Alertas Ativos</p>
+                      {currentUser?.role === 'admin' && (
+                        <button onClick={() => setShowAdmin(true)}
+                                className="text-[10px] font-bold text-amber-600 hover:text-amber-900 transition-colors flex items-center gap-1 flex-shrink-0">
+                          Ver detalhes <ChevronRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="px-4 py-3 bg-white flex flex-wrap gap-2">
+                      {homeAlerts.expired > 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                          {homeAlerts.expired} contrato{homeAlerts.expired!==1?'s':''} vencido{homeAlerts.expired!==1?'s':''}
+                        </span>
+                      )}
+                      {homeAlerts.exp7 > 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
+                          {homeAlerts.exp7} vence{homeAlerts.exp7===1?'':'m'} em 7 dias
+                        </span>
+                      )}
+                      {homeAlerts.exp30 > 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
+                          {homeAlerts.exp30} vence{homeAlerts.exp30===1?'':'m'} em 30 dias
+                        </span>
+                      )}
+                      {homeAlerts.overdue > 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
+                          {homeAlerts.overdue} parcela{homeAlerts.overdue!==1?'s':''} atrasada{homeAlerts.overdue!==1?'s':''}
+                        </span>
+                      )}
+                      {homeAlerts.dueToday > 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0 animate-pulse" />
+                          {homeAlerts.dueToday} parcela{homeAlerts.dueToday!==1?'s':''} vence{homeAlerts.dueToday===1?'':'m'} hoje
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* ── BUSCA DE CONTRATOS ── */}
                 <div className="flex items-center gap-3">
