@@ -2068,7 +2068,7 @@
       const [showDeletePanel,  setShowDeletePanel]  = useState(false);
       const [selectedToDelete, setSelectedToDelete] = useState(new Set());
       // ── termos aditivos ──
-      const emptyTaForm = () => ({ id: null, number: '', date: '', object: '', pdfBase64: null, pdfFileName: '', pdfStored: false });
+      const emptyTaForm = () => ({ id: null, number: '', date: '', newEndDate: '', object: '', pdfBase64: null, pdfFileName: '', pdfStored: false });
       const [showTaForm,    setShowTaForm]    = useState(false);
       const [taForm,        setTaForm]        = useState(emptyTaForm);
       const [taFormLoading, setTaFormLoading] = useState(false);
@@ -2533,7 +2533,7 @@
                   </p>
                 </div>
                 <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1.5">Nº do Termo Aditivo <span className="text-red-500">*</span></label>
                       <input required value={taForm.number}
@@ -2547,6 +2547,39 @@
                              onChange={e => setTaForm(f => ({...f, date: e.target.value}))}
                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
+                  </div>
+
+                  {/* Nova vigência */}
+                  <div className="rounded-xl border-2 border-blue-100 bg-blue-50 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 flex-shrink-0" style={{color:BLUE}} />
+                      <p className="text-xs font-bold" style={{color:BLUE}}>Alteração de Prazo de Vigência</p>
+                      <span className="text-[10px] text-blue-400 font-medium">(opcional — preencha somente se este TA alterar o prazo do contrato)</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Nova Data Final do Contrato</label>
+                        <input type="date" value={taForm.newEndDate}
+                               onChange={e => setTaForm(f => ({...f, newEndDate: e.target.value}))}
+                               className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                      </div>
+                      {taForm.newEndDate && (
+                        <div className="flex items-center">
+                          <div className="flex-1 p-3 rounded-xl bg-white border border-blue-200">
+                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider mb-0.5">Nova vigência do contrato</p>
+                            <p className="text-sm font-black" style={{color:BLUE}}>
+                              {new Date(taForm.newEndDate+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}
+                            </p>
+                            <p className="text-[10px] text-blue-500 mt-0.5">
+                              ✅ O contrato será atualizado automaticamente ao salvar
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1.5">Anexar PDF do TA</label>
                       <label className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-300 rounded-xl px-3 py-2 hover:border-blue-400 hover:bg-blue-50 transition-colors">
@@ -2612,6 +2645,11 @@
                         {ta.date && (
                           <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">
                             {new Date(ta.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                        {ta.newEndDate && (
+                          <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium flex items-center gap-1 border border-blue-200">
+                            <Calendar className="w-2.5 h-2.5" /> Nova vigência: {new Date(ta.newEndDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
                         {(pdfStorage['ta_' + ta.id] || ta.pdfBase64) && (
@@ -4249,6 +4287,15 @@
         const idx = existing.findIndex(a => a.id === final.id);
         const updated = idx >= 0 ? existing.map(a => a.id === final.id ? final : a) : [...existing, final];
         await db.collection('contractAdditives').doc(contractNumber).set({ additives: updated });
+        // Se o TA define nova vigência, atualiza contractMeta automaticamente
+        if (additive.newEndDate) {
+          const existingMeta = contractMeta[contractNumber] || {};
+          await db.collection('contractMeta').doc(contractNumber).set({
+            ...existingMeta,
+            endDate: additive.newEndDate
+          });
+          addToast(`📅 Vigência do contrato atualizada para ${new Date(additive.newEndDate + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'})}`);
+        }
       }
 
       async function handleDeleteAdditive(contractNumber, additiveId) {
