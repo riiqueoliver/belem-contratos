@@ -32,6 +32,15 @@
       100% { box-shadow: 0 0 0 0 rgba(58,138,53,0); }
     }
     .step-pulse { animation: pulse-ring 2s infinite; }
+    @keyframes swing {
+      0%,100% { transform: rotate(0deg);    }
+      15%     { transform: rotate(16deg);   }
+      30%     { transform: rotate(-14deg);  }
+      45%     { transform: rotate(10deg);   }
+      60%     { transform: rotate(-8deg);   }
+      75%     { transform: rotate(5deg);    }
+      88%     { transform: rotate(-2deg);   }
+    }
   </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
@@ -4362,16 +4371,35 @@
                     )}
                   </button>
                 )}
-                <button onClick={() => setShowContractsList(true)}
-                        title="Ver contratos cadastrados"
-                        className="flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
-                        style={{background: GREEN}}>
-                  <Clipboard className="w-4 h-4" />
-                  <span className="hidden sm:inline">Contratos</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20">
-                    {uniqueContractCount}
-                  </span>
-                </button>
+                {(() => {
+                  const totalHomeAlerts = homeAlerts.expired + homeAlerts.exp7 + homeAlerts.exp30 + homeAlerts.overdue + homeAlerts.dueToday;
+                  const alertColor =
+                    (homeAlerts.expired > 0 || homeAlerts.overdue > 0) ? '#dc2626' :
+                    (homeAlerts.exp7 > 0 || homeAlerts.dueToday > 0)   ? '#ea580c' :
+                    homeAlerts.exp30 > 0                                 ? '#b45309' :
+                    GREEN;
+                  const hasAlert = totalHomeAlerts > 0;
+                  return (
+                    <button onClick={() => setShowContractsList(true)}
+                            title="Ver contratos cadastrados"
+                            className="relative flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-90 shadow-md"
+                            style={{background: alertColor}}>
+                      {hasAlert
+                        ? <Bell className="w-4 h-4" style={{animation: 'swing 1.4s ease-in-out infinite'}} />
+                        : <Clipboard className="w-4 h-4" />}
+                      <span className="hidden sm:inline">Contratos</span>
+                      {hasAlert ? (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white/30">
+                          {totalHomeAlerts}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20">
+                          {uniqueContractCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })()}
                 <button onClick={() => setShowForm(!showForm)}
                         className="flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
                         style={{background: BLUE}}>
@@ -4640,54 +4668,6 @@
                     ))}
                   </div>
                 </div>
-
-                {/* ── ALERTAS DA HOME ── */}
-                {(homeAlerts.expired + homeAlerts.exp7 + homeAlerts.exp30 + homeAlerts.overdue + homeAlerts.dueToday) > 0 && (
-                  <div className="rounded-2xl border border-amber-200 overflow-hidden shadow-sm">
-                    <div className="px-4 py-2.5 flex items-center gap-2" style={{background:'#fffbeb'}}>
-                      <Bell className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                      <p className="text-xs font-black text-amber-700 uppercase tracking-wider flex-1">Alertas Ativos</p>
-                      {currentUser?.role === 'admin' && (
-                        <button onClick={() => setShowAdmin(true)}
-                                className="text-[10px] font-bold text-amber-600 hover:text-amber-900 transition-colors flex items-center gap-1 flex-shrink-0">
-                          Ver detalhes <ChevronRight className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="px-4 py-3 bg-white flex flex-wrap gap-2">
-                      {homeAlerts.expired > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
-                          {homeAlerts.expired} contrato{homeAlerts.expired!==1?'s':''} vencido{homeAlerts.expired!==1?'s':''}
-                        </span>
-                      )}
-                      {homeAlerts.exp7 > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
-                          {homeAlerts.exp7} vence{homeAlerts.exp7===1?'':'m'} em 7 dias
-                        </span>
-                      )}
-                      {homeAlerts.exp30 > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
-                          {homeAlerts.exp30} vence{homeAlerts.exp30===1?'':'m'} em 30 dias
-                        </span>
-                      )}
-                      {homeAlerts.overdue > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
-                          {homeAlerts.overdue} parcela{homeAlerts.overdue!==1?'s':''} atrasada{homeAlerts.overdue!==1?'s':''}
-                        </span>
-                      )}
-                      {homeAlerts.dueToday > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0 animate-pulse" />
-                          {homeAlerts.dueToday} parcela{homeAlerts.dueToday!==1?'s':''} vence{homeAlerts.dueToday===1?'':'m'} hoje
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* ── BUSCA DE CONTRATOS ── */}
                 <div className="flex items-center gap-3">
