@@ -3058,52 +3058,162 @@
     /* ═══════════════════════════════════════════════════════
        PAINEL ADMIN
     ═══════════════════════════════════════════════════════ */
+
+    /* ── Sub-componentes do Dashboard ───────────────────── */
+    function DashKpiCard({ icon, label, value, sub, color, progressBar }) {
+      return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider leading-tight">{label}</p>
+            <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:`${color}18`}}>
+              {React.cloneElement(icon, { className:'w-4 h-4', style:{color} })}
+            </span>
+          </div>
+          <p className="text-2xl font-black leading-none mt-1" style={{color}}>{value}</p>
+          {progressBar !== undefined && (
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(progressBar,100)}%`, background:color}} />
+            </div>
+          )}
+          {sub && <p className="text-[10px] text-gray-400 leading-snug">{sub}</p>}
+        </div>
+      );
+    }
+
+    function AlertGroupCard({ color, icon, count, title, subtitle, expanded, onToggle, contracts: alertContracts, daysUntil }) {
+      const palettes = {
+        red:    { wrap:'bg-red-50 border-red-200',    hdr:'border-red-200',  badge:'bg-red-100',    text:'text-red-700',   sub:'text-red-500',   divider:'divide-red-100' },
+        orange: { wrap:'bg-orange-50 border-orange-200', hdr:'border-orange-200', badge:'bg-orange-100', text:'text-orange-700',sub:'text-orange-500',divider:'divide-orange-100' },
+        yellow: { wrap:'bg-yellow-50 border-yellow-200', hdr:'border-yellow-200', badge:'bg-yellow-100', text:'text-yellow-800',sub:'text-yellow-600',divider:'divide-yellow-100' },
+      };
+      const p = palettes[color] || palettes.red;
+      return (
+        <div className={`border-2 rounded-2xl overflow-hidden ${p.wrap}`}>
+          <button onClick={onToggle} className="w-full p-4 text-left hover:brightness-95 transition-all">
+            <div className="flex items-start gap-3">
+              <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${p.badge}`}>
+                {React.cloneElement(icon, { className:`w-4 h-4 ${p.text}` })}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-2xl font-black ${p.text}`}>{count}</p>
+                  <ChevronDown className={`w-4 h-4 ${p.sub} transition-transform duration-200 flex-shrink-0 ${expanded?'rotate-180':''}`} />
+                </div>
+                <p className={`text-xs font-bold ${p.text} leading-tight`}>{title}</p>
+                <p className={`text-[10px] ${p.sub} mt-0.5 leading-snug`}>{subtitle}</p>
+              </div>
+            </div>
+          </button>
+          {expanded && (
+            <div className={`border-t ${p.hdr} divide-y ${p.divider}`}>
+              {alertContracts.map(m => {
+                const days = daysUntil(m.endDate);
+                return (
+                  <div key={m.contractNumber} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`text-xs font-bold ${p.text}`}>{m.contractNumber}</p>
+                      {m.object        && <p className="text-[10px] text-gray-500 truncate max-w-[220px]">{m.object}</p>}
+                      {m.contractorName && <p className="text-[10px] text-gray-400 truncate max-w-[220px]">{m.contractorName}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {m.endDate && <p className={`text-xs font-bold ${p.text}`}>{new Date(m.endDate+'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                      <p className={`text-[10px] ${p.sub}`}>
+                        {days === null ? '' : days < 0 ? `Vencido há ${Math.abs(days)}d` : days === 0 ? 'Vence hoje' : `${days}d restantes`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser }) {
-      const [filter, setFilter] = useState('');
-      const [tab, setTab]       = useState('contratos'); // 'contratos' | 'usuarios'
+      const [filter, setFilter]               = useState('');
+      const [tab, setTab]                     = useState('dashboard');
+      const [expandedAlert, setExpandedAlert] = useState(null);
 
       const today = new Date(); today.setHours(12,0,0,0);
+      const in7   = new Date(today); in7.setDate(today.getDate() + 7);
       const in30  = new Date(today); in30.setDate(today.getDate() + 30);
 
       const uniqueNums = useMemo(() => {
-        const fromContracts = contracts.map(c => c.contractNumber);
-        const fromMeta      = Object.keys(contractMeta);
-        return [...new Set([...fromContracts, ...fromMeta])].sort();
+        const a = contracts.map(c => c.contractNumber);
+        const b = Object.keys(contractMeta);
+        return [...new Set([...a, ...b])].sort();
       }, [contracts, contractMeta]);
 
-      const allMeta = useMemo(() => uniqueNums.map(cn => ({
-        contractNumber: cn,
-        ...(contractMeta[cn] || {}),
-        installments:  contracts.filter(c => c.contractNumber === cn),
-        processNumber: contracts.find(c => c.contractNumber === cn)?.processNumber || '',
-        client:        contracts.find(c => c.contractNumber === cn)?.client || '',
-      })), [uniqueNums, contractMeta, contracts]);
+      const allMeta = useMemo(() => uniqueNums.map(cn => {
+        const meta = contractMeta[cn] || {};
+        const installments = contracts.filter(c => c.contractNumber === cn);
+        const totalBilled = installments.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const execRate = meta.globalValue > 0 ? Math.min((totalBilled / meta.globalValue) * 100, 100) : 0;
+        return { contractNumber: cn, ...meta, installments, totalBilled, execRate };
+      }), [uniqueNums, contractMeta, contracts]);
 
-      const totalValue    = allMeta.reduce((s, m) => s + (m.globalValue || 0), 0);
-      const activeCount   = allMeta.filter(m => (m.situation || 'ativo') === 'ativo').length;
-      const expiringCount = allMeta.filter(m => {
-        if (!m.endDate) return false;
-        const e = new Date(m.endDate+'T12:00:00');
-        return e >= today && e <= in30;
-      }).length;
+      // Financial KPIs
+      const totalContracted  = allMeta.reduce((s, m) => s + (m.globalValue || 0), 0);
+      const totalBilledAll   = allMeta.reduce((s, m) => s + m.totalBilled, 0);
+      const execRateAll      = totalContracted > 0 ? (totalBilledAll / totalContracted * 100) : 0;
+      const activeCount      = allMeta.filter(m => (m.situation||'ativo') === 'ativo').length;
+      const suspendedCount   = allMeta.filter(m => m.situation === 'suspenso').length;
+      const closedCount      = allMeta.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
 
-      const allStatuses  = contracts.map(c => contractStatus(c));
-      const overdueCount  = allStatuses.filter(s => s === 'overdue').length;
-      const dueTodayCount = allStatuses.filter(s => s === 'due-today').length;
-      const onTimeCount   = allStatuses.filter(s => s === 'on-time').length;
+      // Alert groups
+      const expiredList  = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; return new Date(m.endDate+'T12:00:00') < today; });
+      const exp7List     = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>=today && e<=in7; });
+      const exp30List    = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>in7 && e<=in30; });
+      const totalAlerts  = expiredList.length + exp7List.length + exp30List.length;
 
+      // Installment stats
+      const allStatuses    = contracts.map(c => contractStatus(c));
+      const overdueCount   = allStatuses.filter(s => s === 'overdue').length;
+      const dueTodayCount  = allStatuses.filter(s => s === 'due-today').length;
+      const completedCount = allStatuses.filter(s => s === 'completed').length;
+
+      // Monthly billing last 6 months
+      const monthlyBilling = useMemo(() => {
+        const map = {};
+        contracts.forEach(c => {
+          if (!c.billingValue || !c.nfDate) return;
+          const key = c.nfDate.slice(0,7);
+          map[key] = (map[key]||0) + (parseFloat(c.billingValue)||0);
+        });
+        const result = [];
+        for (let i=5; i>=0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth()-i, 1);
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          const label = d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
+          result.push({ key, label:`${label}/${String(d.getFullYear()).slice(2)}`, value: map[key]||0 });
+        }
+        return result;
+      }, [contracts]);
+      const maxMonthly = Math.max(...monthlyBilling.map(m=>m.value), 1);
+
+      // By unit (by value)
       const byUnit = useMemo(() => {
         const map = {};
-        allMeta.forEach(m => { const u = m.unit || 'Não informado'; map[u] = (map[u]||0)+1; });
-        return Object.entries(map).sort((a,b) => b[1]-a[1]);
+        allMeta.forEach(m => { const u=m.unit||'Não informado'; map[u]=(map[u]||0)+(m.globalValue||0); });
+        return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,7);
       }, [allMeta]);
+      const maxUnit = Math.max(...byUnit.map(([,v])=>v), 1);
 
+      // By situation
       const bySituation = useMemo(() => {
         const map = {};
-        allMeta.forEach(m => { const s = m.situation||'ativo'; map[s]=(map[s]||0)+1; });
+        allMeta.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
         return map;
       }, [allMeta]);
 
+      // Top 5 contracts
+      const topContracts = useMemo(() =>
+        [...allMeta].filter(m=>m.globalValue>0).sort((a,b)=>(b.globalValue||0)-(a.globalValue||0)).slice(0,5),
+        [allMeta]
+      );
+
+      // Filtered table
       const filteredMeta = useMemo(() => {
         const q = filter.toLowerCase();
         if (!q) return allMeta;
@@ -3116,30 +3226,34 @@
         );
       }, [allMeta, filter]);
 
+      function daysUntil(dateStr) {
+        if (!dateStr) return null;
+        return Math.round((new Date(dateStr+'T12:00:00') - today) / (1000*60*60*24));
+      }
+
       function handleExport() {
         const XLSX = window.XLSX;
         if (!XLSX) { alert('Biblioteca Excel não carregada. Aguarde e tente novamente.'); return; }
         const wb = XLSX.utils.book_new();
         const rows = allMeta.map(m => [
-          m.contractNumber, m.processNumber, m.object||'', m.contractorName||'', m.contractorCnpj||'',
+          m.contractNumber, m.processNumber||'', m.object||'', m.contractorName||'', m.contractorCnpj||'',
           m.globalValue||0, m.startDate||'', m.endDate||'',
           CONTRACT_SITUATION[m.situation||'ativo']?.label||'',
           m.modality||'', m.manager||'', m.fiscalPrimary||'', m.fiscalSubstitute||'',
-          m.unit||'', m.client||'', m.installments.length,
+          m.unit||'', m.client||'', m.installments.length, m.totalBilled, `${m.execRate.toFixed(1)}%`,
         ]);
         const ws1 = XLSX.utils.aoa_to_sheet([
-          ['Nº Contrato','Processo','Objeto','Contratada','CNPJ','Valor Global (R$)','Início','Fim','Situação','Modalidade','Gestor','Fiscal Titular','Fiscal Substituto','Unidade','Órgão/Cliente','Qtd Parcelas'],
+          ['Nº Contrato','Processo','Objeto','Contratada','CNPJ','Valor Global (R$)','Início','Fim','Situação','Modalidade','Gestor','Fiscal Titular','Fiscal Substituto','Unidade','Órgão/Cliente','Qtd Parcelas','Total Faturado','Execução'],
           ...rows,
         ]);
-        ws1['!cols'] = Array(16).fill({wch:24});
+        ws1['!cols'] = Array(18).fill({wch:22});
         XLSX.utils.book_append_sheet(wb, ws1, 'Contratos');
-
         const parcelRows = contracts.map(c => {
           const st = contractStatus(c);
-          return [c.contractNumber, c.processNumber||'', `${c.installment}/${c.totalInstallments}`, c.nfDate, c.nfNumber||'', c.client||'', STEPS.find(s=>s.id===c.currentStep)?.name||'Concluído', CFG[st]?.label||''];
+          return [c.contractNumber, c.processNumber||'', `${c.installment}/${c.totalInstallments}`, c.nfDate, c.nfNumber||'', c.billingValue||'', c.client||'', STEPS.find(s=>s.id===c.currentStep)?.name||'Concluído', CFG[st]?.label||''];
         });
         const ws2 = XLSX.utils.aoa_to_sheet([
-          ['Contrato','Processo','Parcela','Data NF','Nº NF','Órgão','Etapa Atual','Status'],
+          ['Contrato','Processo','Parcela','Data NF','Nº NF','Valor Faturado','Órgão','Etapa Atual','Status'],
           ...parcelRows,
         ]);
         XLSX.utils.book_append_sheet(wb, ws2, 'Parcelas');
@@ -3148,18 +3262,12 @@
 
       if (!open) return null;
 
-      const kpis = [
-        { label:'Contratos',    value: uniqueNums.length,              color:BLUE,      bg:'bg-white',       Icon:Clipboard },
-        { label:'Valor Total',  value: fmtCurrencyShort(totalValue),   color:'#1e40af', bg:'bg-blue-50',     Icon:DollarSign, text:true },
-        { label:'Ativos',       value: activeCount,                    color:'#166534', bg:'bg-green-50',    Icon:CheckCircle },
-        { label:'Venc. 30d',    value: expiringCount,                  color:'#9a3412', bg:'bg-orange-50',   Icon:AlertTriangle },
-        { label:'Atrasados',    value: overdueCount,                   color:'#991b1b', bg:'bg-red-50',      Icon:Clock },
-        { label:'Vence Hoje',   value: dueTodayCount,                  color:'#854d0e', bg:'bg-yellow-50',   Icon:Bell },
-      ];
+      const todayKey = today.toISOString().slice(0,7);
 
       return (
         <div className="fixed inset-0 z-[60] flex flex-col bg-slate-100 overflow-hidden">
-          {/* Header */}
+
+          {/* ── HEADER ── */}
           <div className="flex-shrink-0 shadow-md" style={{background:BLUE}}>
             <div className="px-5 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-3">
@@ -3177,27 +3285,325 @@
                 <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10"><X className="w-5 h-5" /></button>
               </div>
             </div>
-            {/* Abas */}
             <div className="flex px-5 gap-1 pb-0">
               {[
+                { key:'dashboard', label:'Dashboard' },
                 { key:'contratos', label:'Contratos' },
                 { key:'usuarios',  label: <span className="flex items-center gap-1.5">Usuários {pendingUsers?.length > 0 && <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white" style={{background:'#f59e0b'}}>{pendingUsers.length}</span>}</span> },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                        className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-colors ${tab === t.key ? 'bg-slate-100 text-blue-700' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
+                        className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-colors relative ${tab===t.key ? 'bg-slate-100 text-blue-700' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
                   {t.label}
+                  {t.key==='dashboard' && totalAlerts > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white bg-red-500">{totalAlerts > 9 ? '9+' : totalAlerts}</span>
+                  )}
                 </button>
               ))}
             </div>
             <div className="h-1" style={{background:`linear-gradient(to right, ${BLUE}, ${GREEN})`}} />
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="flex-1 overflow-y-auto p-5">
 
-          {/* ══ ABA USUÁRIOS ══ */}
+          {/* ══════════════════ DASHBOARD ══════════════════ */}
+          {tab === 'dashboard' && (
+            <div className="space-y-5">
+
+              {/* Central de Alertas */}
+              {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0 || overdueCount > 0 || dueTodayCount > 0) && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#fef9f0'}}>
+                    <Bell className="w-4 h-4 text-amber-500" />
+                    <h2 className="text-xs font-black uppercase tracking-widest text-amber-700">Central de Alertas</h2>
+                    <span className="ml-auto text-[10px] text-amber-500 font-semibold">
+                      {expiredList.length + exp7List.length + exp30List.length + overdueCount + dueTodayCount} item{(expiredList.length + exp7List.length + exp30List.length + overdueCount + dueTodayCount) !== 1 ? 's' : ''} de atenção
+                    </span>
+                  </div>
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {expiredList.length > 0 && (
+                      <AlertGroupCard color="red" icon={<AlertTriangle />} count={expiredList.length}
+                        title="Contratos Vencidos" subtitle="Vigência expirada — encerrar ou aditvar"
+                        expanded={expandedAlert==='expired'} onToggle={() => setExpandedAlert(p => p==='expired' ? null : 'expired')}
+                        contracts={expiredList} daysUntil={daysUntil} />
+                    )}
+                    {exp7List.length > 0 && (
+                      <AlertGroupCard color="orange" icon={<AlertTriangle />} count={exp7List.length}
+                        title="Vence em 7 Dias" subtitle="Ação urgente — prazo crítico"
+                        expanded={expandedAlert==='exp7'} onToggle={() => setExpandedAlert(p => p==='exp7' ? null : 'exp7')}
+                        contracts={exp7List} daysUntil={daysUntil} />
+                    )}
+                    {exp30List.length > 0 && (
+                      <AlertGroupCard color="yellow" icon={<Clock />} count={exp30List.length}
+                        title="Vence em 30 Dias" subtitle="Providenciar renovação ou encerramento"
+                        expanded={expandedAlert==='exp30'} onToggle={() => setExpandedAlert(p => p==='exp30' ? null : 'exp30')}
+                        contracts={exp30List} daysUntil={daysUntil} />
+                    )}
+                    {(overdueCount > 0 || dueTodayCount > 0) && (
+                      <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 flex-shrink-0">
+                            <Clock className="w-4 h-4 text-red-600" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold text-red-700">SLA de Parcelas</p>
+                            <p className="text-[10px] text-red-500">prazo de processamento</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4">
+                          {overdueCount > 0 && (
+                            <div>
+                              <p className="text-2xl font-black text-red-600">{overdueCount}</p>
+                              <p className="text-[10px] text-red-500">atrasada{overdueCount!==1?'s':''}</p>
+                            </div>
+                          )}
+                          {dueTodayCount > 0 && (
+                            <div>
+                              <p className="text-2xl font-black text-yellow-600">{dueTodayCount}</p>
+                              <p className="text-[10px] text-yellow-600">vence hoje</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* KPIs */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <DashKpiCard icon={<Clipboard />} label="Total de Contratos" value={uniqueNums.length} color={BLUE}
+                  sub={`${activeCount} ativo${activeCount!==1?'s':''} · ${suspendedCount} suspenso${suspendedCount!==1?'s':''}`} />
+                <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(totalContracted)} color="#1e40af"
+                  sub={`em ${uniqueNums.length} contrato${uniqueNums.length!==1?'s':''}`} />
+                <DashKpiCard icon={<CheckCircle />} label="Total Faturado" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
+                  sub={`${completedCount} parcela${completedCount!==1?'s':''} concluída${completedCount!==1?'s':''}`} />
+                <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
+                  value={`${execRateAll.toFixed(1).replace('.',',')}%`}
+                  color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
+                  progressBar={execRateAll}
+                  sub={`${fmtCurrencyShort(totalContracted - totalBilledAll)} a faturar`} />
+              </div>
+
+              {/* Gráfico mensal + Situação */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>Faturamento Mensal</h3>
+                    <span className="text-[10px] text-gray-400 font-medium">últimos 6 meses</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mb-4">Soma dos valores faturados por mês de emissão da NF</p>
+                  <div className="flex items-end gap-2" style={{height:'160px'}}>
+                    {monthlyBilling.map(m => {
+                      const pct = (m.value / maxMonthly) * 100;
+                      const isCurr = m.key === todayKey;
+                      return (
+                        <div key={m.key} className="flex flex-col items-center gap-1 flex-1 h-full justify-end group">
+                          <div className="relative w-full flex flex-col justify-end" style={{height:'128px'}}>
+                            {m.value > 0 && (
+                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-gray-600 whitespace-nowrap bg-white px-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                                {fmtCurrencyShort(m.value)}
+                              </span>
+                            )}
+                            <div className="w-full rounded-t-lg transition-all duration-700 flex-shrink-0"
+                                 style={{height:`${Math.max(pct*1.28, m.value>0?3:2)}px`, maxHeight:'128px', background:isCurr?GREEN:BLUE, opacity:isCurr?1:0.6}} />
+                          </div>
+                          <span className={`text-[10px] whitespace-nowrap ${isCurr?'text-gray-700 font-bold':'text-gray-400 font-medium'}`}>{m.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-5 text-[10px] text-gray-400">
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{background:BLUE,opacity:0.6}} /> Meses anteriores</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{background:GREEN}} /> Mês atual</span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-4" style={{color:BLUE}}>Situação dos Contratos</h3>
+                  {uniqueNums.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
+                    <div className="space-y-3 flex-1">
+                      {Object.entries(CONTRACT_SITUATION).map(([key, val]) => {
+                        const count = bySituation[key] || 0;
+                        const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
+                        const barColor = key==='ativo' ? GREEN : key==='suspenso' ? '#f59e0b' : key==='encerrado' ? '#64748b' : '#ef4444';
+                        return (
+                          <div key={key}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${val.badge}`}>{val.label}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-400">{pct.toFixed(0)}%</span>
+                                <span className="text-sm font-black text-gray-700 w-5 text-right">{count}</span>
+                              </div>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`, background:barColor}} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
+                    <div className="p-2 rounded-xl" style={{background:'#f0fdf4'}}>
+                      <p className="text-lg font-black" style={{color:GREEN}}>{activeCount}</p>
+                      <p className="text-[9px] text-green-600 font-semibold">Ativos</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-yellow-50">
+                      <p className="text-lg font-black text-yellow-600">{suspendedCount}</p>
+                      <p className="text-[9px] text-yellow-600 font-semibold">Suspensos</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-gray-50">
+                      <p className="text-lg font-black text-gray-500">{closedCount}</p>
+                      <p className="text-[9px] text-gray-500 font-semibold">Encerrados</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Valor por unidade + Top contratos */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Valor Contratado por Unidade</h3>
+                  <p className="text-[10px] text-gray-400 mb-4">Ordenado pelo maior volume contratado</p>
+                  {byUnit.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
+                    <div className="space-y-3">
+                      {byUnit.map(([unit, value], i) => {
+                        const pct = Math.round((value / maxUnit) * 100);
+                        return (
+                          <div key={unit} className="flex items-center gap-3">
+                            <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-black text-white flex-shrink-0"
+                                  style={{background:BLUE, opacity: Math.max(1 - i*0.1, 0.4)}}>
+                              {i+1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-gray-700 truncate">{unit}</span>
+                                <span className="text-xs font-bold text-gray-500 ml-2 flex-shrink-0">{fmtCurrencyShort(value)}</span>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-700"
+                                     style={{width:`${pct}%`, background:BLUE, opacity:Math.max(1-i*0.1,0.4)}} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Top 5 — Maiores Contratos</h3>
+                  <p className="text-[10px] text-gray-400 mb-4">Cinza = valor total · Verde = valor faturado</p>
+                  {topContracts.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
+                    <div className="space-y-4">
+                      {topContracts.map((m, i) => {
+                        const rankColor = i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#cd7f32':BLUE;
+                        const barW  = (m.globalValue / (topContracts[0].globalValue||1)) * 100;
+                        const billW = (m.totalBilled  / (topContracts[0].globalValue||1)) * 100;
+                        return (
+                          <div key={m.contractNumber}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0" style={{background:rankColor}}>{i+1}</span>
+                              <span className="text-xs font-bold flex-1 truncate" style={{color:BLUE}}>{m.contractNumber}</span>
+                              <span className="text-xs font-bold text-gray-700 flex-shrink-0">{fmtCurrencyShort(m.globalValue)}</span>
+                            </div>
+                            <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="absolute inset-y-0 left-0 rounded-full bg-gray-200 transition-all duration-700" style={{width:`${barW}%`}} />
+                              <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700" style={{width:`${billW}%`, background:GREEN}} />
+                            </div>
+                            <div className="flex items-center justify-between mt-1">
+                              {m.object && <p className="text-[10px] text-gray-400 truncate flex-1">{m.object}</p>}
+                              <span className="text-[10px] font-bold flex-shrink-0 ml-2" style={{color:GREEN}}>{m.execRate.toFixed(0)}% exec.</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* ══════════════════ CONTRATOS ══════════════════ */}
+          {tab === 'contratos' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
+                  <h3 className="text-xs font-black uppercase tracking-widest flex-1" style={{color:BLUE}}>Todos os Contratos</h3>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filtrar…"
+                           className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-44" />
+                  </div>
+                </div>
+                {filteredMeta.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-sm">
+                    <Clipboard className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    {filter ? 'Nenhum resultado para a busca.' : 'Nenhum contrato cadastrado ainda.'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left" style={{background:'#f8fafc'}}>
+                          {['Contrato','Objeto','Contratada','Valor','Faturado','Execução','Vigência','Situação','Unidade'].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-100">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {filteredMeta.map(m => {
+                          const sit     = CONTRACT_SITUATION[m.situation || 'ativo'];
+                          const endDate = m.endDate ? new Date(m.endDate+'T12:00:00') : null;
+                          const expiring = endDate && endDate >= today && endDate <= in30;
+                          const expired  = endDate && endDate < today && (m.situation||'ativo') === 'ativo';
+                          return (
+                            <tr key={m.contractNumber} className="hover:bg-slate-50">
+                              <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{color:BLUE}}>{m.contractNumber}</td>
+                              <td className="px-3 py-2.5 text-gray-600 max-w-xs">
+                                <div style={{overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{m.object||'—'}</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{m.contractorName||'—'}</td>
+                              <td className="px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap">{m.globalValue ? fmtCurrencyShort(m.globalValue) : '—'}</td>
+                              <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{color:GREEN}}>{m.totalBilled>0 ? fmtCurrencyShort(m.totalBilled) : '—'}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {m.globalValue > 0 ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                      <div className="h-full rounded-full" style={{width:`${m.execRate}%`, background:GREEN}} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-600">{m.execRate.toFixed(0)}%</span>
+                                  </div>
+                                ) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {m.endDate ? (
+                                  <span className={`font-medium ${expiring?'text-orange-600 font-bold':expired?'text-red-500 font-bold':'text-gray-600'}`}>
+                                    {(expiring||expired) && '⚠️ '}{new Date(m.endDate+'T12:00:00').toLocaleDateString('pt-BR')}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {sit && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sit.badge}`}>{sit.label}</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{m.unit||'—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════ USUÁRIOS ══════════════════ */}
           {tab === 'usuarios' && (
             <div className="space-y-4">
-              {/* Solicitações pendentes */}
               {pendingUsers && pendingUsers.length > 0 && (
                 <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
                   <div className="px-5 py-3 flex items-center gap-3" style={{background:'#fffbeb'}}>
@@ -3212,8 +3618,7 @@
                   <div className="divide-y divide-gray-100">
                     {pendingUsers.map(p => (
                       <div key={p.id} className="px-5 py-4 flex items-start gap-4">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold"
-                             style={{background:'#f59e0b'}}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold" style={{background:'#f59e0b'}}>
                           {(p.name||'?')[0].toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -3227,13 +3632,10 @@
                           {p.createdAt && <p className="text-[10px] text-gray-400 mt-1">Solicitado em {new Date(p.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>}
                         </div>
                         <div className="flex gap-2 flex-shrink-0 mt-0.5">
-                          <button onClick={() => onApproveUser(p)}
-                                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90"
-                                  style={{background:'#16a34a'}}>
+                          <button onClick={() => onApproveUser(p)} className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90" style={{background:'#16a34a'}}>
                             <CheckCircle className="w-3.5 h-3.5" /> Aprovar
                           </button>
-                          <button onClick={() => { if(confirm(`Recusar a solicitação de ${p.name}?`)) onRejectUser(p); }}
-                                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90 bg-red-500">
+                          <button onClick={() => { if(confirm(`Recusar a solicitação de ${p.name}?`)) onRejectUser(p); }} className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90 bg-red-500">
                             <X className="w-3.5 h-3.5" /> Recusar
                           </button>
                         </div>
@@ -3242,8 +3644,6 @@
                   </div>
                 </div>
               )}
-
-              {/* Lista de usuários cadastrados */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100" style={{background:'#f8fafc'}}>
                   <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>
@@ -3256,7 +3656,7 @@
                     const isAdmin = u.role === 'admin';
                     return (
                       <div key={u.id} className="px-5 py-4 flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold`}
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold"
                              style={{background: isAdmin ? BLUE : '#64748b'}}>
                           {(u.name||u.username||'?')[0].toUpperCase()}
                         </div>
@@ -3276,14 +3676,12 @@
                           </div>
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
-                          <button onClick={() => onToggleAdmin(u)}
-                                  title={isAdmin ? 'Remover Admin' : 'Tornar Admin'}
+                          <button onClick={() => onToggleAdmin(u)} title={isAdmin ? 'Remover Admin' : 'Tornar Admin'}
                                   className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${isAdmin ? 'border-blue-200 text-blue-600 hover:bg-blue-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                             {isAdmin ? 'Remover Admin' : 'Tornar Admin'}
                           </button>
                           {!isMe && (
                             <button onClick={() => { if(confirm(`Excluir o usuário ${u.name}? Esta ação não pode ser desfeita.`)) onDeleteUser(u); }}
-                                    title="Excluir usuário"
                                     className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -3296,129 +3694,6 @@
               </div>
             </div>
           )}
-
-          {/* ══ ABA CONTRATOS ══ */}
-          {tab === 'contratos' && <div className="space-y-5">
-
-            {/* KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {kpis.map(({ label, value, color, bg, Icon, text }) => (
-                <div key={label} className={`${bg} rounded-2xl p-4 shadow-sm border border-gray-100`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-gray-500">{label}</p>
-                    <Icon className="w-4 h-4 opacity-60" style={{color}} />
-                  </div>
-                  <p className={`font-black leading-none ${text ? 'text-xl' : 'text-3xl'}`} style={{color}}>{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Por situação + Por unidade */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest mb-3" style={{color:BLUE}}>Por Situação</h3>
-                {uniqueNums.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
-                  <div className="space-y-2">
-                    {Object.entries(CONTRACT_SITUATION).map(([key, val]) => {
-                      const count = bySituation[key] || 0;
-                      const pct   = uniqueNums.length > 0 ? Math.round(count / uniqueNums.length * 100) : 0;
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-20 text-center flex-shrink-0 ${val.badge}`}>{val.label}</span>
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{width:`${pct}%`, background:BLUE}} />
-                          </div>
-                          <span className="text-xs font-bold text-gray-600 w-5 text-right">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest mb-3" style={{color:BLUE}}>Por Unidade</h3>
-                {byUnit.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
-                  <div className="space-y-2">
-                    {byUnit.slice(0,8).map(([unit, count]) => {
-                      const pct = uniqueNums.length > 0 ? Math.round(count / uniqueNums.length * 100) : 0;
-                      return (
-                        <div key={unit} className="flex items-center gap-3">
-                          <span className="text-xs font-semibold text-gray-600 w-20 truncate flex-shrink-0">{unit}</span>
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{width:`${pct}%`, background:GREEN}} />
-                          </div>
-                          <span className="text-xs font-bold text-gray-600 w-5 text-right">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tabela de contratos */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
-                <h3 className="text-xs font-black uppercase tracking-widest flex-1" style={{color:BLUE}}>Todos os Contratos</h3>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input value={filter} onChange={e => setFilter(e.target.value)}
-                         placeholder="Filtrar…"
-                         className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-44" />
-                </div>
-              </div>
-              {filteredMeta.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-sm">
-                  <Clipboard className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                  {filter ? 'Nenhum resultado para a busca.' : 'Nenhum contrato cadastrado ainda.'}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left" style={{background:'#f8fafc'}}>
-                        {['Contrato','Objeto','Contratada','Valor','Vigência','Situação','Unidade','Parcelas'].map(h => (
-                          <th key={h} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-100">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {filteredMeta.map(m => {
-                        const sit      = CONTRACT_SITUATION[m.situation || 'ativo'];
-                        const endDate  = m.endDate ? new Date(m.endDate+'T12:00:00') : null;
-                        const expiring = endDate && endDate >= today && endDate <= in30;
-                        const expired  = endDate && endDate < today && (m.situation||'ativo') === 'ativo';
-                        return (
-                          <tr key={m.contractNumber} className="hover:bg-slate-50">
-                            <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{color:BLUE}}>{m.contractNumber}</td>
-                            <td className="px-3 py-2.5 text-gray-600 max-w-xs">
-                              <div style={{overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{m.object||'—'}</div>
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{m.contractorName||'—'}</td>
-                            <td className="px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap">{m.globalValue ? fmtCurrencyShort(m.globalValue) : '—'}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              {m.endDate ? (
-                                <span className={`font-medium ${expiring ? 'text-orange-600 font-bold' : expired ? 'text-red-500' : 'text-gray-600'}`}>
-                                  {expiring && '⚠️ '}{new Date(m.endDate+'T12:00:00').toLocaleDateString('pt-BR')}
-                                </span>
-                              ) : '—'}
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              {sit && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sit.badge}`}>{sit.label}</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{m.unit||'—'}</td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">{m.installments.length}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>}
 
           </div>
         </div>
