@@ -4413,86 +4413,93 @@
                           onDeleteUser={handleDeleteUser} />
 
           {/* Header */}
-          <header className="shadow-xl sticky top-0 z-40" style={{background: BLUE}}>
-            <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <button onClick={handleGoHome} title="Ir para a página inicial"
-                        className="flex items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none">
-                  <img src="belemdigital-logo.png"
-                       alt="Belém Digital"
-                       style={{height: 54, width: 'auto', display: 'block', objectFit: 'contain'}}
-                       onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                </button>
-                <div className="hidden md:block w-px h-7 mx-1 self-center" style={{background: 'rgba(255,255,255,0.22)'}} />
-                <p className="hidden md:block text-[10px] font-bold tracking-widest uppercase leading-none" style={{color: '#a8c4e8'}}>
-                  Sistema de Acompanhamento
-                </p>
-              </div>
+          <header className="sticky top-0 z-40" style={{background: BLUE, boxShadow:'0 2px 16px rgba(11,43,94,0.45)'}}>
+            <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
 
-              <div className="flex items-center gap-2">
-                <button onClick={handleGoHome} title="Página inicial"
-                        className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/10 transition-colors">
-                  <Home className="w-4 h-4" />
+              {/* ── Logotipo ── */}
+              <button onClick={handleGoHome} title="Página inicial"
+                      className="flex items-center gap-3 hover:opacity-85 transition-opacity focus:outline-none flex-shrink-0 mr-auto">
+                <img src="belemdigital-logo.png" alt="Belém Digital"
+                     style={{height:38, width:'auto', display:'block', objectFit:'contain'}}
+                     onError={e => { e.currentTarget.style.display='none'; }} />
+                <div className="hidden md:flex flex-col justify-center leading-none">
+                  <span className="w-px h-6 mr-0" style={{background:'rgba(255,255,255,0.2)'}} />
+                </div>
+                <span className="hidden lg:block text-[10px] font-bold tracking-widest uppercase" style={{color:'#a8c4e8'}}>
+                  Gestão de Contratos
+                </span>
+              </button>
+
+              {/* ── Ações centrais ── */}
+              <nav className="flex items-center gap-1">
+
+                {/* Início */}
+                <button onClick={handleGoHome} title="Início"
+                        className="flex items-center gap-1.5 text-white/80 hover:text-white hover:bg-white/10 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all">
+                  <Home className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Início</span>
                 </button>
-                <button onClick={() => setShowProfile(true)} title="Meu perfil"
-                        className="flex items-center gap-2 text-white px-2.5 py-2 rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0" style={{background: GREEN}}>
-                    {(currentUser.name || currentUser.username).split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}
-                  </div>
-                  <span className="hidden md:inline text-sm">{(currentUser.name || currentUser.username).split(' ')[0]}</span>
-                </button>
+
+                {/* Admin */}
                 {currentUser.role === 'admin' && (
-                  <button onClick={() => setShowAdmin(true)} title="Painel Administrativo"
-                          className="relative flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/10 transition-colors border border-white/20">
-                    <LayoutDashboard className="w-4 h-4" />
+                  <button onClick={() => setShowAdmin(true)} title="Painel Admin"
+                          className="relative flex items-center gap-1.5 text-white/80 hover:text-white hover:bg-white/10 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-white/15 hover:border-white/30">
+                    <LayoutDashboard className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Admin</span>
                     {pendingUsers.length > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center text-white"
-                            style={{background:'#ef4444'}}>
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white bg-red-500">
                         {pendingUsers.length}
                       </span>
                     )}
                   </button>
                 )}
+
+                {/* Separador */}
+                <div className="w-px h-5 mx-1 flex-shrink-0" style={{background:'rgba(255,255,255,0.18)'}} />
+
+                {/* Contratos */}
                 {(() => {
                   const totalHomeAlerts = homeAlerts.expired + homeAlerts.exp7 + homeAlerts.exp30;
                   const alertColor =
                     homeAlerts.expired > 0 ? '#dc2626' :
                     homeAlerts.exp7    > 0 ? '#ea580c' :
-                    homeAlerts.exp30   > 0 ? '#b45309' :
-                    GREEN;
+                    homeAlerts.exp30   > 0 ? '#b45309' : GREEN;
                   const hasAlert = totalHomeAlerts > 0;
                   return (
-                    <button onClick={() => setShowContractsList(true)}
-                            title="Ver contratos cadastrados"
-                            className="relative flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-90 shadow-md"
+                    <button onClick={() => setShowContractsList(true)} title="Ver contratos"
+                            className="flex items-center gap-1.5 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90 shadow-sm"
                             style={{background: alertColor}}>
                       {hasAlert
-                        ? <Bell className="w-4 h-4" style={{animation: 'swing 1.4s ease-in-out infinite'}} />
-                        : <Clipboard className="w-4 h-4" />}
+                        ? <Bell className="w-3.5 h-3.5" style={{animation:'swing 1.4s ease-in-out infinite'}} />
+                        : <Clipboard className="w-3.5 h-3.5" />}
                       <span className="hidden sm:inline">Contratos</span>
-                      {hasAlert ? (
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white/30">
-                          {totalHomeAlerts}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20">
-                          {uniqueContractCount}
-                        </span>
-                      )}
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${hasAlert ? 'bg-white/30' : 'bg-white/20'}`}>
+                        {hasAlert ? totalHomeAlerts : uniqueContractCount}
+                      </span>
                     </button>
                   );
                 })()}
-                <button onClick={() => setShowForm(!showForm)}
-                        className="flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
-                        style={{background: BLUE}}>
-                  {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+
+                {/* Novo Contrato */}
+                <button onClick={() => setShowForm(!showForm)} title={showForm ? 'Cancelar' : 'Novo Contrato'}
+                        className="flex items-center gap-1.5 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90 shadow-sm"
+                        style={{background: showForm ? '#475569' : `linear-gradient(135deg, ${GREEN}, #2d6e28)`}}>
+                  {showForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                   <span className="hidden sm:inline">{showForm ? 'Cancelar' : 'Novo Contrato'}</span>
                 </button>
-              </div>
+              </nav>
+
+              {/* ── Avatar perfil (far right) ── */}
+              <button onClick={() => setShowProfile(true)} title="Meu perfil"
+                      className="flex-shrink-0 ml-1 focus:outline-none group">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-white ring-2 ring-white/20 group-hover:ring-white/60 transition-all"
+                     style={{background: GREEN}}>
+                  {(currentUser.name || currentUser.username).split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}
+                </div>
+              </button>
+
             </div>
-            <div className="h-1" style={{background: `linear-gradient(to right, ${BLUE}, ${GREEN})`}} />
+            <div className="h-0.5" style={{background:`linear-gradient(to right, ${BLUE}, ${GREEN})`}} />
           </header>
 
           <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
