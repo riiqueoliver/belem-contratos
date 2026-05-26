@@ -2020,7 +2020,8 @@
                                   contractAdditives, onSaveAdditive, onDeleteAdditive,
                                   onBack, onSaveEdit, onAdvance, onUndo, onUpdateNfNumber,
                                   onNotify, onSavePdf, onDeletePdf, onAddInstallment,
-                                  onDeleteInstallment, addToast }) {
+                                  onDeleteInstallment, onSaveContractPdf, onDeleteContractPdf,
+                                  addToast }) {
 
       function buildForm() {
         const m  = contractMeta[contractNumber] || {};
@@ -2073,6 +2074,9 @@
       const [showTaForm,    setShowTaForm]    = useState(false);
       const [taForm,        setTaForm]        = useState(emptyTaForm);
       const [taFormLoading, setTaFormLoading] = useState(false);
+      // ── PDF do contrato (edição) ──
+      const [editContractPdfFile,    setEditContractPdfFile]    = useState(null);
+      const [editContractPdfLoading, setEditContractPdfLoading] = useState(false);
 
       useEffect(() => { if (!editMode) setEditForm(buildForm()); }, [contractNumber, contractMeta, editMode]);
 
@@ -2085,7 +2089,24 @@
       const additives = (contractAdditives || {})[contractNumber] || [];
 
       // ── handlers ──
-      function handleSave() {
+      async function handleSave() {
+        // Salvar PDF do contrato se um novo foi selecionado
+        if (editContractPdfFile) {
+          setEditContractPdfLoading(true);
+          try {
+            const base64 = await new Promise((res, rej) => {
+              const reader = new FileReader();
+              reader.onload = ev => res(ev.target.result);
+              reader.onerror = rej;
+              reader.readAsDataURL(editContractPdfFile);
+            });
+            await onSaveContractPdf(contractNumber, base64);
+          } catch(err) {
+            addToast('⚠️ PDF não pôde ser enviado: ' + (err.message || 'tente novamente.'));
+          } finally {
+            setEditContractPdfLoading(false);
+          }
+        }
         onSaveEdit(contractNumber, {
           object: editForm.object, modality: editForm.modality,
           contractorName: editForm.contractorName, contractorCnpj: editForm.contractorCnpj,
@@ -2094,6 +2115,7 @@
           manager: editForm.manager, fiscalPrimary: editForm.fiscalPrimary,
           fiscalSubstitute: editForm.fiscalSubstitute, unit: editForm.unit, situation: editForm.situation,
         }, editForm.processNumber);
+        setEditContractPdfFile(null);
         setEditMode(false);
       }
       function handleAttachPdf(pdfKey, file) {
@@ -2338,6 +2360,14 @@
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${sitCfg.badge}`}>{sitCfg.label}</span>
               </div>
               <div className="flex gap-2">
+                {pdfStorage['contract_' + contractNumber] && !editMode && (
+                  <button
+                    onClick={() => setPdfViewer({ open:true, src: pdfStorage['contract_' + contractNumber], title: `Contrato ${contractNumber}` })}
+                    title="Visualizar PDF do Contrato"
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors font-semibold">
+                    <Eye className="w-3.5 h-3.5" /> Ver PDF
+                  </button>
+                )}
                 {editMode ? (
                   <>
                     <button onClick={() => setEditMode(false)}
@@ -2374,6 +2404,14 @@
                   <span className={`text-xs font-bold px-3 py-1 rounded-full border ${sitCfg.badge}`}>{sitCfg.label}</span>
                   {meta.modality && (
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">{meta.modality}</span>
+                  )}
+                  {pdfStorage['contract_' + contractNumber] && (
+                    <button
+                      onClick={() => setPdfViewer({ open:true, src: pdfStorage['contract_' + contractNumber], title: `Contrato ${contractNumber}` })}
+                      title="Visualizar PDF do Contrato"
+                      className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors">
+                      <Paperclip className="w-3 h-3" /> PDF
+                    </button>
                   )}
                 </div>
               </div>
@@ -2419,6 +2457,63 @@
                   <F label="Gestor do Contrato"    k="manager"          ph="Nome do gestor" />
                   <F label="Fiscal Titular"         k="fiscalPrimary"    ph="Nome do fiscal titular" />
                   <F label="Fiscal Substituto"      k="fiscalSubstitute" ph="Nome do fiscal substituto" />
+                </div>
+
+                {/* PDF do Contrato */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-bold text-gray-600 mb-3 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5" style={{color:BLUE}} />
+                    PDF do Contrato Original
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {pdfStorage['contract_' + contractNumber] && !editContractPdfFile ? (
+                      <>
+                        <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full flex items-center gap-1 font-medium">
+                          <Paperclip className="w-3 h-3" /> PDF armazenado
+                        </span>
+                        <button type="button"
+                          onClick={() => setPdfViewer({ open:true, src: pdfStorage['contract_' + contractNumber], title: `Contrato ${contractNumber}` })}
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium">
+                          <Eye className="w-3.5 h-3.5" /> Visualizar
+                        </button>
+                        <button type="button"
+                          onClick={() => { if(confirm('Remover o PDF do contrato? Esta ação não pode ser desfeita.')) onDeleteContractPdf(contractNumber); }}
+                          className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                          <Trash2 className="w-3 h-3" /> Remover
+                        </button>
+                      </>
+                    ) : !editContractPdfFile ? (
+                      <span className="text-xs text-gray-400 italic">Nenhum PDF armazenado</span>
+                    ) : null}
+                    {editContractPdfFile && (
+                      <span className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full flex items-center gap-1 font-medium truncate max-w-[200px]">
+                        <Paperclip className="w-3 h-3 flex-shrink-0" /> {editContractPdfFile.name}
+                      </span>
+                    )}
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      {editContractPdfFile ? 'Trocar' : (pdfStorage['contract_' + contractNumber] ? 'Substituir PDF' : 'Anexar PDF')}
+                      <input type="file" accept="application/pdf" className="hidden"
+                             onChange={e => {
+                               const f = e.target.files?.[0];
+                               if (!f) return;
+                               if (f.type !== 'application/pdf') { addToast('❌ Selecione um arquivo PDF válido.'); return; }
+                               if (f.size > 700 * 1024) { addToast(`❌ PDF muito grande (${Math.round(f.size/1024)} KB). Limite: 700 KB.`); return; }
+                               setEditContractPdfFile(f);
+                             }} />
+                    </label>
+                    {editContractPdfFile && (
+                      <button type="button" onClick={() => setEditContractPdfFile(null)}
+                              className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                        <X className="w-3 h-3" /> Cancelar
+                      </button>
+                    )}
+                    {editContractPdfLoading && (
+                      <span className="text-xs text-blue-500 flex items-center gap-1">
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full"/> Enviando…
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -4152,6 +4247,19 @@
         await db.collection('pdfs').doc(String(installmentId)).delete();
         addToast('🗑️ PDF da NF removido.');
       }
+      async function handleSaveContractPdf(contractNumber, base64Data) {
+        try {
+          await db.collection('pdfs').doc('contract_' + contractNumber).set({ data: base64Data });
+          addToast('📄 PDF do contrato armazenado na nuvem.');
+        } catch(e) {
+          console.error(e);
+          addToast('❌ Erro ao enviar PDF do contrato: ' + (e.message || 'tente novamente.'));
+        }
+      }
+      async function handleDeleteContractPdf(contractNumber) {
+        await db.collection('pdfs').doc('contract_' + contractNumber).delete();
+        addToast('🗑️ PDF do contrato removido.');
+      }
 
       async function handleAddInstallment(contractNumber, data, pdfBase64) {
         const existing  = contracts.filter(c => c.contractNumber === contractNumber);
@@ -4380,9 +4488,31 @@
             situation:        form.situation || 'ativo',
             processNumber:    form.processNumber,
           });
+          // Salvar PDF do contrato no Firestore (se foi selecionado via IA ou manualmente)
+          if (pdfFile) {
+            if (pdfFile.size > 700 * 1024) {
+              addToast(`⚠️ Contrato salvo, mas o PDF (${Math.round(pdfFile.size/1024)} KB) é muito grande para armazenar. Limite: 700 KB.`);
+            } else {
+              try {
+                const base64 = await new Promise((res, rej) => {
+                  const reader = new FileReader();
+                  reader.onload = ev => res(ev.target.result);
+                  reader.onerror = rej;
+                  reader.readAsDataURL(pdfFile);
+                });
+                await db.collection('pdfs').doc('contract_' + safeCn).set({ data: base64 });
+                addToast(`📄 PDF do contrato armazenado na nuvem.`);
+              } catch(pdfErr) {
+                console.error('Erro ao salvar PDF do contrato:', pdfErr);
+                addToast('⚠️ Contrato salvo, mas PDF não pôde ser armazenado.');
+              }
+            }
+          }
           setForm({ contractNumber:'', processNumber:'', object:'', modality:'', contractorName:'', contractorCnpj:'', globalValue:'', startDate:'', endDate:'', manager:'', fiscalPrimary:'', fiscalSubstitute:'', client:'', unit:'', situation:'ativo' });
+          setPdfFile(null);
+          setPdfResult(null);
           setShowForm(false);
-          addToast(`✅ Contrato ${safeCn} cadastrado. Adicione as parcelas manualmente.`);
+          addToast(`✅ Contrato ${safeCn} cadastrado com sucesso.`);
         } catch(err) {
           console.error('Erro ao salvar contrato:', err);
           addToast('❌ Erro ao salvar contrato: ' + (err.message || 'verifique sua conexão e tente novamente.'));
@@ -4781,6 +4911,8 @@
                 onNotify={handleNotify}
                 onSavePdf={handleSavePdf}
                 onDeletePdf={handleDeletePdf}
+                onSaveContractPdf={handleSaveContractPdf}
+                onDeleteContractPdf={handleDeleteContractPdf}
                 onAddInstallment={handleAddInstallment}
                 onDeleteInstallment={handleDeleteInstallment}
                 onSaveAdditive={handleSaveAdditives}
