@@ -1753,6 +1753,7 @@
           <label className="block text-xs font-medium text-gray-600 mb-1.5">{label}</label>
           {children || (
             <input type={type} value={form[k]} onChange={e => setForm({...form, [k]: e.target.value})} placeholder={ph}
+                   lang={type === 'date' ? 'pt-BR' : undefined}
                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-300" />
           )}
         </div>
@@ -2107,22 +2108,34 @@
 
       function handleTaFormPdf(file) {
         if (!file) return;
-        if (file.size > 600 * 1024) { addToast('❌ PDF muito grande. Limite: 600 KB (armazenamento Firestore).'); return; }
+        if (file.type !== 'application/pdf') { addToast('❌ Selecione um arquivo PDF válido.'); return; }
+        if (file.size > 700 * 1024) {
+          addToast(`❌ PDF muito grande (${Math.round(file.size/1024)} KB). Limite: 700 KB. Compacte o arquivo e tente novamente.`);
+          return;
+        }
         setTaFormLoading(true);
         const reader = new FileReader();
-        reader.onload  = e => { setTaForm(f => ({...f, pdfBase64: e.target.result, pdfFileName: file.name})); setTaFormLoading(false); };
-        reader.onerror = () => { addToast('❌ Erro ao ler o PDF.'); setTaFormLoading(false); };
+        reader.onload  = e => {
+          setTaForm(f => ({...f, pdfBase64: e.target.result, pdfFileName: file.name}));
+          setTaFormLoading(false);
+        };
+        reader.onerror = () => { addToast('❌ Erro ao ler o arquivo. Tente novamente.'); setTaFormLoading(false); };
         reader.readAsDataURL(file);
       }
 
-      function handleSubmitTaForm(e) {
+      async function handleSubmitTaForm(e) {
         e.preventDefault();
         if (!taForm.number) { addToast('⚠ Informe o número do Termo Aditivo.'); return; }
+        if (taFormLoading) { addToast('⏳ Aguarde o PDF terminar de carregar.'); return; }
         const additive = { ...taForm, id: taForm.id || Date.now() };
-        onSaveAdditive(contractNumber, additive);
-        setTaForm(emptyTaForm());
-        setShowTaForm(false);
-        addToast(`✅ Termo Aditivo ${additive.number} salvo.`);
+        setTaFormLoading(true);
+        const ok = await onSaveAdditive(contractNumber, additive);
+        setTaFormLoading(false);
+        if (ok !== false) {
+          setTaForm(emptyTaForm());
+          setShowTaForm(false);
+          addToast(`✅ Termo Aditivo ${additive.number} salvo com sucesso.`);
+        }
       }
 
       function handleDeleteTa(id) {
@@ -2543,7 +2556,7 @@
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1.5">Data de Assinatura</label>
-                      <input type="date" value={taForm.date}
+                      <input type="date" lang="pt-BR" value={taForm.date}
                              onChange={e => setTaForm(f => ({...f, date: e.target.value}))}
                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
@@ -2559,7 +2572,7 @@
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1.5">Nova Data Final do Contrato</label>
-                        <input type="date" value={taForm.newEndDate}
+                        <input type="date" lang="pt-BR" value={taForm.newEndDate}
                                onChange={e => setTaForm(f => ({...f, newEndDate: e.target.value}))}
                                className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
                       </div>
@@ -2616,11 +2629,11 @@
                             className="text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
                       Cancelar
                     </button>
-                    <button type="submit"
-                            className="text-white py-2 px-5 rounded-xl text-xs font-bold hover:opacity-90 flex items-center gap-2"
+                    <button type="submit" disabled={taFormLoading}
+                            className="text-white py-2 px-5 rounded-xl text-xs font-bold hover:opacity-90 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{background: BLUE}}>
                       <CheckCircle className="w-3.5 h-3.5" />
-                      {taForm.id ? 'Salvar Alterações' : 'Cadastrar TA'}
+                      {taFormLoading ? 'Salvando…' : (taForm.id ? 'Salvar Alterações' : 'Cadastrar TA')}
                     </button>
                   </div>
                 </div>
@@ -2740,7 +2753,7 @@
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
                         Data da Emissão da NF
                       </label>
-                      <input type="date"
+                      <input type="date" lang="pt-BR"
                              value={addForm.nfDate}
                              onChange={e => setAddForm(f => ({...f, nfDate: e.target.value}))}
                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white" />
@@ -4273,28 +4286,39 @@
       }
 
       async function handleSaveAdditives(contractNumber, additive) {
-        let final = { ...additive };
-        if (additive.pdfBase64) {
-          // Salva PDF diretamente no Firestore (coleção pdfs, chave ta_ID)
-          const key = 'ta_' + additive.id;
-          await db.collection('pdfs').doc(key).set({ data: additive.pdfBase64 });
-          final = { ...final, pdfBase64: null, pdfStored: true };
-        } else if (additive.pdfStored === false) {
-          // Usuário removeu o PDF explicitamente
-          await db.collection('pdfs').doc('ta_' + additive.id).delete().catch(() => {});
-        }
-        const existing = contractAdditives[contractNumber] || [];
-        const idx = existing.findIndex(a => a.id === final.id);
-        const updated = idx >= 0 ? existing.map(a => a.id === final.id ? final : a) : [...existing, final];
-        await db.collection('contractAdditives').doc(contractNumber).set({ additives: updated });
-        // Se o TA define nova vigência, atualiza contractMeta automaticamente
-        if (additive.newEndDate) {
-          const existingMeta = contractMeta[contractNumber] || {};
-          await db.collection('contractMeta').doc(contractNumber).set({
-            ...existingMeta,
-            endDate: additive.newEndDate
-          });
-          addToast(`📅 Vigência do contrato atualizada para ${new Date(additive.newEndDate + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'})}`);
+        try {
+          let final = { ...additive };
+          if (additive.pdfBase64) {
+            // Valida tamanho antes de tentar salvar (Firestore doc limit: 1MB)
+            const sizeKB = Math.round(additive.pdfBase64.length * 0.75 / 1024);
+            if (sizeKB > 900) {
+              addToast(`❌ PDF muito grande (${sizeKB} KB). Limite: ~900 KB.`);
+              return false;
+            }
+            const key = 'ta_' + additive.id;
+            await db.collection('pdfs').doc(key).set({ data: additive.pdfBase64 });
+            final = { ...final, pdfBase64: null, pdfStored: true };
+          } else if (additive.pdfStored === false) {
+            await db.collection('pdfs').doc('ta_' + additive.id).delete().catch(() => {});
+          }
+          const existing = contractAdditives[contractNumber] || [];
+          const idx = existing.findIndex(a => a.id === final.id);
+          const updated = idx >= 0 ? existing.map(a => a.id === final.id ? final : a) : [...existing, final];
+          await db.collection('contractAdditives').doc(contractNumber).set({ additives: updated });
+          // Se o TA define nova vigência, atualiza contractMeta automaticamente
+          if (additive.newEndDate) {
+            const existingMeta = contractMeta[contractNumber] || {};
+            await db.collection('contractMeta').doc(contractNumber).set({
+              ...existingMeta,
+              endDate: additive.newEndDate
+            });
+            addToast(`📅 Vigência atualizada para ${new Date(additive.newEndDate + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'})}`);
+          }
+          return true;
+        } catch (err) {
+          console.error('Erro ao salvar Termo Aditivo:', err);
+          addToast('❌ Erro ao salvar TA: ' + (err.message || 'verifique a conexão e tente novamente.'));
+          return false;
         }
       }
 
@@ -4679,12 +4703,12 @@
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1.5">Início da Vigência <span className="text-red-500">*</span></label>
-                        <input required type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})}
+                        <input required type="date" lang="pt-BR" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})}
                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1.5">Fim da Vigência</label>
-                        <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})}
+                        <input type="date" lang="pt-BR" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})}
                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       </div>
                       <div>
