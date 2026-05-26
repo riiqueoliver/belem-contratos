@@ -4459,8 +4459,8 @@
                   return (
                     <button onClick={() => setShowContractsList(true)}
                             title="Ver contratos cadastrados"
-                            className="relative flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-90 shadow-md"
-                            style={{background: alertColor}}>
+                            className="relative flex items-center gap-2 text-white px-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 shadow-md"
+                            style={{background: alertColor, height:'38px'}}>
                       {hasAlert
                         ? <Bell className="w-4 h-4" style={{animation: 'swing 1.4s ease-in-out infinite'}} />
                         : <Clipboard className="w-4 h-4" />}
@@ -4478,8 +4478,8 @@
                   );
                 })()}
                 <button onClick={() => setShowForm(!showForm)}
-                        className="flex items-center gap-2 text-white px-3 py-2 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
-                        style={{background: showForm ? '#475569' : '#0284c7'}}>
+                        className="flex items-center gap-2 text-white px-3 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
+                        style={{background: showForm ? '#475569' : '#4338ca', height:'38px'}}>
                   {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span className="hidden sm:inline">{showForm ? 'Cancelar' : 'Novo Contrato'}</span>
                 </button>
