@@ -4478,8 +4478,9 @@
                   );
                 })()}
                 <button onClick={() => setShowForm(!showForm)}
-                        className="flex items-center gap-2 text-white px-3 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 shadow-md"
+                        className="relative flex items-center gap-2 text-white px-3 rounded-xl text-sm font-bold transition-colors shadow-md overflow-hidden group"
                         style={{background: BLUE, height:'38px'}}>
+                  <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity rounded-xl pointer-events-none" />
                   {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span className="hidden sm:inline">{showForm ? 'Cancelar' : 'Novo Contrato'}</span>
                 </button>
