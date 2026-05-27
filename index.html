@@ -3431,6 +3431,7 @@
       const [expandedAlert, setExpandedAlert] = useState(null);
       const [presentMode,   setPresentMode]   = useState(false);
       const [kpiOpen,       setKpiOpen]       = useState(null);
+      const [adminStatsYear, setAdminStatsYear] = useState(String(new Date().getFullYear()));
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -3480,11 +3481,25 @@
       const exp30List    = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>in7 && e<=in30; });
       const totalAlerts  = expiredList.length + exp7List.length + exp30List.length;
 
-      // Installment stats
+      // Installment stats — totais (usados na Central de Alertas)
       const allStatuses    = contracts.map(c => contractStatus(c));
       const overdueCount   = allStatuses.filter(s => s === 'overdue').length;
       const dueTodayCount  = allStatuses.filter(s => s === 'due-today').length;
       const completedCount = allStatuses.filter(s => s === 'completed').length;
+
+      // Anos com NFs cadastradas (filtro do painel admin)
+      const adminAvailableYears = useMemo(() => {
+        const years = new Set([String(new Date().getFullYear())]);
+        contracts.forEach(c => { if (c.nfDate) years.add(c.nfDate.slice(0,4)); });
+        return [...years].sort((a,b) => Number(b) - Number(a));
+      }, [contracts]);
+
+      // Stats de parcelas filtradas pelo ano selecionado no admin
+      const adminByYear      = useMemo(() => contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === adminStatsYear), [contracts, adminStatsYear]);
+      const issuedYr         = adminByYear.length;
+      const overdueYr        = adminByYear.filter(c => contractStatus(c) === 'overdue').length;
+      const dueTodayYr       = adminByYear.filter(c => contractStatus(c) === 'due-today').length;
+      const completedYr      = adminByYear.filter(c => contractStatus(c) === 'completed').length;
 
       // Monthly billing last 6 months
       const monthlyBilling = useMemo(() => {
@@ -3951,6 +3966,21 @@
                 </div>
               )}
 
+              {/* KPIs — cabeçalho com filtro de ano */}
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{color:BLUE}}>Indicadores</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{background:GREEN}}>em tempo real</span>
+                </div>
+                <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm">
+                  <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Parcelas — ano:</span>
+                  <select value={adminStatsYear} onChange={e => setAdminStatsYear(e.target.value)}
+                          className="text-[11px] font-bold bg-transparent focus:outline-none cursor-pointer"
+                          style={{color: BLUE}}>
+                    {adminAvailableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
               {/* KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashKpiCard icon={<Clipboard />} label="Total de Contratos" value={uniqueNums.length} color={BLUE}
@@ -3958,12 +3988,12 @@
                 <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(totalContracted)} color="#1e40af"
                   sub={`em ${uniqueNums.length} contrato${uniqueNums.length!==1?'s':''}`} />
                 <DashKpiCard icon={<CheckCircle />} label="Total Faturado" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
-                  sub={`${completedCount} parcela${completedCount!==1?'s':''} concluída${completedCount!==1?'s':''}`} />
+                  sub={`${completedYr} parcela${completedYr!==1?'s':''} concluída${completedYr!==1?'s':''} em ${adminStatsYear}`} />
                 <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
                   value={`${execRateAll.toFixed(1).replace('.',',')}%`}
                   color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
                   progressBar={execRateAll}
-                  sub={`${fmtCurrencyShort(totalContracted - totalBilledAll)} a faturar`} />
+                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(totalContracted - totalBilledAll)} a faturar`} />
               </div>
 
               {/* Gráfico mensal + Situação */}
@@ -4423,6 +4453,7 @@
       // ── Estado da página de detalhe ──
       const [activeContractNumber, setActiveContractNumber] = useState(null);
       const [contractSearch,       setContractSearch]       = useState('');
+      const [statsYear,            setStatsYear]            = useState(String(new Date().getFullYear()));
 
       // Contratos únicos = union entre parcelas existentes E metadados salvos
       // (garante que contratos sem parcelas ainda aparecem na tela inicial)
@@ -4452,14 +4483,24 @@
         });
       }, [uniqueContracts, contractSearch, contractMeta]);
 
-      const globalStats = useMemo(() => ({
-        total:     uniqueContracts.length,
-        onTime:    contracts.filter(c => contractStatus(c) === 'on-time').length,
-        dueToday:  contracts.filter(c => contractStatus(c) === 'due-today').length,
-        overdue:   contracts.filter(c => contractStatus(c) === 'overdue').length,
-        completed: contracts.filter(c => contractStatus(c) === 'completed').length,
-        issued:    contracts.length,
-      }), [uniqueContracts, contracts]);
+      // Anos com NFs cadastradas (para o filtro dos indicadores de parcelas)
+      const availableYears = useMemo(() => {
+        const years = new Set([String(new Date().getFullYear())]);
+        contracts.forEach(c => { if (c.nfDate) years.add(c.nfDate.slice(0,4)); });
+        return [...years].sort((a,b) => Number(b) - Number(a));
+      }, [contracts]);
+
+      const globalStats = useMemo(() => {
+        const byYear = contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === statsYear);
+        return {
+          total:     uniqueContracts.length,
+          onTime:    byYear.filter(c => contractStatus(c) === 'on-time').length,
+          dueToday:  byYear.filter(c => contractStatus(c) === 'due-today').length,
+          overdue:   byYear.filter(c => contractStatus(c) === 'overdue').length,
+          completed: byYear.filter(c => contractStatus(c) === 'completed').length,
+          issued:    byYear.length,
+        };
+      }, [uniqueContracts, contracts, statsYear]);
 
       const homeAlerts = useMemo(() => {
         const t = new Date(); t.setHours(12,0,0,0);
@@ -5279,10 +5320,19 @@
 
                 {/* ── KPIs GLOBAIS ── */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-sm font-bold" style={{color: BLUE}}>Indicadores Gerais</h2>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{background: GREEN}}>em tempo real</span>
+                      {/* Filtro de ano — parcelas */}
+                      <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-0.5 bg-white shadow-sm">
+                        <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Parcelas:</span>
+                        <select value={statsYear} onChange={e => setStatsYear(e.target.value)}
+                                className="text-[11px] font-bold bg-transparent focus:outline-none cursor-pointer"
+                                style={{color: BLUE}}>
+                          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
                     </div>
                     {globalStats.overdue > 0 && (
                       <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full flex items-center gap-1 animate-pulse">
