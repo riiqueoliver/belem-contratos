@@ -1,0 +1,7 @@
+# Microserviço (instalado em cima do pacote `nota-fiscal-ocr`).
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+
+# Pacote do extrator (instalado a partir do diretório-pai no Dockerfile).
+# Em deploy via Docker, ele é instalado por `pip install -e ..[tesseract]`.

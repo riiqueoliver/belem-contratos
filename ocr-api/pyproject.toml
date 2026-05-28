@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nota-fiscal-ocr"
+version = "0.1.1"
+description = "Extrator de campos (número, valor, cliente, data de emissão) de NFS-e e NF-e brasileiras via OCR."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Leonardo Mendonça" }]
+keywords = ["nfse", "nf-e", "ocr", "nota-fiscal", "brasil", "danfe"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Text Processing :: General",
+    "Natural Language :: Portuguese (Brazilian)",
+]
+
+# Núcleo: extração de texto (PDF vetorial) + renderização de PDF escaneado.
+# Um backend de OCR precisa ser escolhido via extras (ocrmac OU tesseract).
+dependencies = [
+    "Pillow>=10.0",
+    "pdfplumber>=0.11",
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+# OCR backends — escolha pelo menos um se vai processar imagens / PDFs escaneados.
+ocrmac    = ["ocrmac>=1.0; sys_platform == 'darwin'"]
+tesseract = ["pytesseract>=0.3.10"]
+# Interface web (Streamlit).
+app       = ["streamlit>=1.32", "pandas>=2.0"]
+# Para rodar os testes (geração de PDFs sintéticos).
+dev       = ["reportlab>=4.0"]
+# Atalho: tudo.
+all       = [
+    "ocrmac>=1.0; sys_platform == 'darwin'",
+    "pytesseract>=0.3.10",
+    "streamlit>=1.32",
+    "pandas>=2.0",
+    "reportlab>=4.0",
+]
+
+[project.scripts]
+nota-fiscal-ocr = "nota_fiscal_ocr.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/leonardomendonca/nota-fiscal-ocr"
+Issues   = "https://github.com/leonardomendonca/nota-fiscal-ocr/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["nota_fiscal_ocr*"]
+exclude = ["tests*", "exemplos*"]
