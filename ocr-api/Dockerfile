@@ -31,7 +31,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY nota_fiscal_ocr/ ./nota_fiscal_ocr/
 COPY api/requirements.txt ./api/requirements.txt
 
-RUN pip install . "[tesseract]" \
+RUN pip install ".[tesseract]" \
     && pip install -r api/requirements.txt
 
 COPY api/ ./api/
