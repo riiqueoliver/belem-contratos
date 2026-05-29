@@ -128,41 +128,12 @@
     const BLUE  = '#0B2B5E';
     const GREEN = '#3A8A35';
 
-    /* ═══════════════════════════════════════════════════════
-       OCR DE NOTA FISCAL — microserviço Railway
-       URL configurável: Admin → Configurações → URL da API OCR
-       ou localStorage.setItem('nfo_api_url', 'https://...')
-    ═══════════════════════════════════════════════════════ */
-    function getNfoApiUrl() {
-      return (localStorage.getItem('nfo_api_url') || '').trim()
-          || 'https://belem-contratos.onrender.com';
-    }
-
+    /* converte DD/MM/YYYY → YYYY-MM-DD */
     function brDateToIso(ddmmyyyy) {
       if (!ddmmyyyy) return null;
       const [dd, mm, yyyy] = ddmmyyyy.split('/');
       if (!dd || !mm || !yyyy) return null;
       return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-    }
-
-    async function extrairNF(file) {
-      const url = getNfoApiUrl();
-      const form = new FormData();
-      form.append('arquivo', file, file.name);
-      const headers = {};
-      const key = (localStorage.getItem('nfo_api_key') || '').trim();
-      if (key) headers['X-API-Key'] = key;
-      const resp = await fetch(`${url}/v1/extrair`, { method:'POST', body:form, headers });
-      if (!resp.ok) {
-        const txt = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status}${txt ? ': ' + txt.slice(0,120) : ''}`);
-      }
-      const data = await resp.json();
-      data.notas = (data.notas || []).map(nf => ({
-        ...nf,
-        data_emissao_iso: brDateToIso(nf.data_emissao),
-      }));
-      return data;
     }
 
     /* ═══════════════════════════════════════════════════════
@@ -2071,7 +2042,7 @@
     function ContractDetailView({ contractNumber, contracts, contractMeta, pdfStorage,
                                   contractAdditives, onSaveAdditive, onDeleteAdditive,
                                   onBack, onSaveEdit, onAdvance, onUndo, onUpdateNfNumber,
-                                  onNotify, onSavePdf, onDeletePdf, onAddInstallment,
+                                  onNotify, onSavePdf, onDeletePdf, onAddInstallment, apiKey,
                                   onDeleteInstallment, onSaveContractPdf, onDeleteContractPdf,
                                   addToast }) {
 
@@ -2118,7 +2089,6 @@
       const [showAddForm,  setShowAddForm]  = useState(false);
       const [addForm,      setAddForm]      = useState(emptyAddForm);
       const [addFormPdfLoading, setAddFormPdfLoading] = useState(false);
-      const [addFormPdfFile,    setAddFormPdfFile]    = useState(null); // File object para OCR
       // ── painel excluir parcelas ──
       const [showDeletePanel,  setShowDeletePanel]  = useState(false);
       const [selectedToDelete, setSelectedToDelete] = useState(new Set());
@@ -2248,7 +2218,6 @@
       async function handleAddFormPdf(file) {
         if (!file) return;
         if (file.size > 600 * 1024) { addToast(`❌ PDF muito grande (${Math.round(file.size/1024)} KB). Limite: 600 KB.`); return; }
-        // Lê como base64 para armazenamento no Firestore
         try {
           const base64 = await new Promise((res, rej) => {
             const reader = new FileReader();
@@ -2257,38 +2226,55 @@
             reader.readAsDataURL(file);
           });
           setAddForm(f => ({...f, pdfBase64: base64, pdfFileName: file.name}));
-          setAddFormPdfFile(file); // guarda o File para o botão Analisar NF
         } catch {
           addToast('❌ Erro ao ler o arquivo PDF.');
         }
       }
 
       async function handleAnalyzeNF() {
-        if (!addFormPdfFile) return;
+        if (!addForm.pdfBase64 || !apiKey) return;
         setAddFormPdfLoading(true);
         try {
-          const { notas } = await extrairNF(addFormPdfFile);
-          if (notas.length > 0) {
-            const nf = notas[0];
-            const valorBRL = nf.valor != null
-              ? nf.valor.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
-              : null;
-            setAddForm(f => ({
-              ...f,
-              nfNumber:     nf.numero           || f.nfNumber,
-              nfDate:       nf.data_emissao_iso  || f.nfDate,
-              billingValue: valorBRL             || f.billingValue,
-              refMonth:     nf.data_emissao_iso  ? nf.data_emissao_iso.slice(0,7) : f.refMonth,
-            }));
-            addToast(`🔍 NF lida: nº ${nf.numero || '–'} · ${nf.data_emissao || ''} · R$ ${valorBRL || '–'}`);
-          } else {
-            addToast('⚠ Nenhuma NF detectada neste PDF.');
-          }
+          const base64Data = addForm.pdfBase64.split(',')[1];
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 256,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+                  { type: 'text', text: 'Extraia desta Nota Fiscal brasileira: número da NF, data de emissão e valor total. Responda APENAS com JSON válido, sem markdown, no formato: {"numero": "470", "data_emissao": "15/03/2025", "valor": 15200.70}' }
+                ]
+              }]
+            })
+          });
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error.message);
+          let text = data.content[0].text.trim();
+          if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
+          const nf = JSON.parse(text);
+          const isoDate  = brDateToIso(nf.data_emissao);
+          const valorBRL = nf.valor != null
+            ? Number(nf.valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+            : null;
+          setAddForm(f => ({
+            ...f,
+            nfNumber:     nf.numero  || f.nfNumber,
+            nfDate:       isoDate    || f.nfDate,
+            billingValue: valorBRL   || f.billingValue,
+            refMonth:     isoDate    ? isoDate.slice(0,7) : f.refMonth,
+          }));
+          addToast(`🤖 NF lida: nº ${nf.numero || '–'} · ${nf.data_emissao || ''} · R$ ${valorBRL || '–'}`);
         } catch (err) {
-          const notConfigured = !localStorage.getItem('nfo_api_url');
-          addToast(notConfigured
-            ? '⚠ Configure a URL da API OCR em Painel Admin → Configurações.'
-            : `❌ OCR: ${err.message || 'serviço indisponível.'}`);
+          addToast(`❌ Erro na leitura da NF: ${err.message}`);
         } finally {
           setAddFormPdfLoading(false);
         }
@@ -3043,7 +3029,7 @@
                             <p className="text-[10px] text-green-600">PDF anexado</p>
                           </div>
                           <button type="button"
-                                  onClick={() => { setAddForm(f => ({...f, pdfBase64:null, pdfFileName:''})); setAddFormPdfFile(null); }}
+                                  onClick={() => setAddForm(f => ({...f, pdfBase64:null, pdfFileName:''}))}
                                   className="text-xs text-red-500 hover:text-red-700 font-semibold flex-shrink-0 flex items-center gap-0.5">
                             <X className="w-3.5 h-3.5" /> Remover
                           </button>
@@ -3512,8 +3498,6 @@
       const [presentMode,   setPresentMode]   = useState(false);
       const [kpiOpen,       setKpiOpen]       = useState(null);
       const [adminStatsYear, setAdminStatsYear] = useState(String(new Date().getFullYear()));
-      const [nfoApiUrl,     setNfoApiUrl]     = useState(() => localStorage.getItem('nfo_api_url') || '');
-      const [nfoApiKey,     setNfoApiKey]     = useState(() => localStorage.getItem('nfo_api_key') || '');
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -4393,105 +4377,22 @@
           {/* ══════════════════ CONFIGURAÇÕES ══════════════════ */}
           {tab === 'configuracoes' && (
             <div className="space-y-5">
-
-              {/* OCR API */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>⚡</div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>🤖</div>
                   <div>
-                    <h3 className="font-bold text-gray-800 text-sm">API de OCR — Leitura automática de NF</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Microserviço Railway que extrai número, data e valor de PDFs de Nota Fiscal.</p>
+                    <h3 className="font-bold text-gray-800 text-sm">Leitura de NF via IA</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Extração automática de número, data e valor usando a API Claude.</p>
                   </div>
                 </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">URL da API</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={nfoApiUrl}
-                        onChange={e => setNfoApiUrl(e.target.value)}
-                        placeholder="https://ocr-api-production.up.railway.app"
-                        className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 font-mono"
-                      />
-                      <button
-                        onClick={() => {
-                          const v = nfoApiUrl.trim();
-                          localStorage.setItem('nfo_api_url', v);
-                          addToast(v ? '✅ URL da API OCR salva!' : '🗑️ URL removida — usando padrão.');
-                        }}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
-                        style={{background: GREEN}}>
-                        Salvar
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1.5">
-                      Deixe em branco para usar o endpoint padrão. Após o deploy no Railway, cole aqui a URL gerada em <strong>Settings → Networking → Generate Domain</strong>.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">API Key <span className="normal-case font-normal text-gray-300">(opcional)</span></label>
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={nfoApiKey}
-                        onChange={e => setNfoApiKey(e.target.value)}
-                        placeholder="Deixe em branco se não configurou"
-                        className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 font-mono"
-                      />
-                      <button
-                        onClick={() => {
-                          const v = nfoApiKey.trim();
-                          localStorage.setItem('nfo_api_key', v);
-                          addToast(v ? '✅ API Key salva!' : '🗑️ API Key removida.');
-                        }}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
-                        style={{background: GREEN}}>
-                        Salvar
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Test button */}
-                  <div className="pt-1">
-                    <button
-                      onClick={async () => {
-                        const url = (localStorage.getItem('nfo_api_url') || '').trim() || 'https://nota-fiscal-ocr.up.railway.app';
-                        try {
-                          const r = await fetch(`${url}/health`);
-                          if (r.ok) {
-                            const d = await r.json().catch(() => ({}));
-                            addToast(`✅ API online — ${d.service || 'serviço'} v${d.version || '?'}`);
-                          } else {
-                            addToast(`❌ API retornou HTTP ${r.status}`);
-                          }
-                        } catch (e) {
-                          addToast(`❌ Não foi possível conectar: ${e.message}`);
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border-2 transition-colors hover:bg-gray-50"
-                      style={{borderColor: BLUE, color: BLUE}}>
-                      🔌 Testar conexão
-                    </button>
-                  </div>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-green-50 border border-green-200">
+                  <span className="text-green-600 text-sm">✅</span>
+                  <p className="text-xs text-green-700 font-semibold">API Claude configurada e ativa</p>
                 </div>
+                <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+                  Na tela de <strong>Nova Parcela</strong>, selecione o PDF da Nota Fiscal e clique em <strong>"Analisar NF"</strong> — os campos número, data de emissão e valor serão preenchidos automaticamente.
+                </p>
               </div>
-
-              {/* Deploy guide */}
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
-                <h4 className="font-bold text-blue-900 text-xs mb-2">Como fazer o deploy da API OCR no Railway</h4>
-                <ol className="text-[11px] text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>Acesse <strong>railway.app</strong> → <em>New Project → Deploy from GitHub repo</em></li>
-                  <li>Selecione o repo <code className="bg-blue-100 px-1 rounded">riiqueoliver/belem-contratos</code></li>
-                  <li>Em <strong>Source → Root Directory</strong> digite: <code className="bg-blue-100 px-1 rounded">ocr-api</code></li>
-                  <li>Aguarde o build (~3 min) — Railway detecta o Dockerfile automaticamente</li>
-                  <li>Vá em <strong>Settings → Networking → Generate Domain</strong> e copie a URL</li>
-                  <li>Cole a URL no campo acima e clique em <strong>Salvar</strong></li>
-                </ol>
-              </div>
-
             </div>
           )}
 
@@ -5491,6 +5392,7 @@
                 onSaveAdditive={handleSaveAdditives}
                 onDeleteAdditive={handleDeleteAdditive}
                 addToast={addToast}
+                apiKey={apiKey}
               />
             ) : (
               <>
