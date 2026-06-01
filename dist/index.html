@@ -4613,6 +4613,36 @@
         localStorage.removeItem('belem-session');
         setCurrentUser(null);
       }
+
+      // ── Auto-logout por inatividade (5 minutos) ──────────────
+      useEffect(() => {
+        if (!currentUser) return;
+        const TIMEOUT_MS = 5 * 60 * 1000; // 5 min → logout
+        const WARN_MS    = 4 * 60 * 1000; // 4 min → aviso
+        let logoutTimer, warnTimer;
+
+        function reset() {
+          clearTimeout(logoutTimer);
+          clearTimeout(warnTimer);
+          warnTimer   = setTimeout(() =>
+            addToast('⚠ Sua sessão expira em 1 minuto por inatividade.'), WARN_MS);
+          logoutTimer = setTimeout(() => {
+            localStorage.removeItem('belem-session');
+            setCurrentUser(null);
+            addToast('🔒 Sessão encerrada por inatividade. Faça login novamente.');
+          }, TIMEOUT_MS);
+        }
+
+        const events = ['mousemove','mousedown','keydown','scroll','touchstart','click'];
+        events.forEach(ev => window.addEventListener(ev, reset, { passive: true }));
+        reset(); // inicia o contador ao logar
+
+        return () => {
+          clearTimeout(logoutTimer);
+          clearTimeout(warnTimer);
+          events.forEach(ev => window.removeEventListener(ev, reset));
+        };
+      }, [currentUser]);
       async function handleUpdateUser(updated) {
         await db.collection('users').doc(String(updated.id)).set(updated);
         setCurrentUser(updated);
