@@ -1686,7 +1686,7 @@
                       {/* Topo do card */}
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-bold text-sm ${lvl > 0 ? ast.text : ''}`} style={lvl === 0 ? {color:BLUE} : {}}>
+                          <span className={`font-bold text-xs ${lvl > 0 ? ast.text : ''}`} style={lvl === 0 ? {color:BLUE} : {}}>
                             {c.contractNumber}{m.unit ? ` · ${m.unit.toUpperCase()}` : ''}
                           </span>
                           {sit && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sit.badge}`}>{sit.label}</span>}
@@ -2018,7 +2018,7 @@
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-base font-black" style={{color: BLUE}}>
+                <span className="text-sm font-black" style={{color: BLUE}}>
                   {contractNumber}{meta.unit ? ` · ${meta.unit.toUpperCase()}` : ''}
                 </span>
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${sitCfg.badge}`}>{sitCfg.label}</span>
@@ -2029,7 +2029,7 @@
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-500 mb-3 flex-wrap">
             {meta.contractorName && <span className="truncate max-w-[200px]"><span className="font-medium">Contratada:</span> {meta.contractorName}</span>}
-            {meta.globalValue > 0 && <span className="flex-shrink-0"><span className="font-medium">Valor:</span> {fmtCurrencyShort(meta.globalValue)}</span>}
+            {meta.globalValue > 0 && <span className="flex-shrink-0"><span className="font-medium">Valor:</span> <span className="font-bold text-gray-700">{fmtCurrencyShort(meta.globalValue)}</span></span>}
             {meta.unit && <span className="flex-shrink-0 hidden sm:block"><span className="font-medium">Unid.:</span> {meta.unit}</span>}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
