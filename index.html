@@ -5498,9 +5498,59 @@
                       </div>
                     </div>
                     {globalStats.overdue > 0 && (
-                      <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full flex items-center gap-1 animate-pulse">
-                        <AlertTriangle className="w-3 h-3" /> {globalStats.overdue} parcela{globalStats.overdue !== 1 ? 's' : ''} atrasada{globalStats.overdue !== 1 ? 's' : ''}
-                      </span>
+                      <div className="relative">
+                        <button type="button"
+                          onClick={() => setShowOverduePanel(p => !p)}
+                          className={`text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full flex items-center gap-1 hover:bg-red-100 transition-colors ${showOverduePanel ? '' : 'animate-pulse'}`}>
+                          <AlertTriangle className="w-3 h-3" />
+                          {globalStats.overdue} parcela{globalStats.overdue !== 1 ? 's' : ''} atrasada{globalStats.overdue !== 1 ? 's' : ''}
+                          <span className={`ml-0.5 transition-transform duration-200 ${showOverduePanel ? 'rotate-180' : ''}`}>▾</span>
+                        </button>
+
+                        {showOverduePanel && (
+                          <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl border border-red-200 shadow-xl z-50 overflow-hidden">
+                            <div className="px-4 py-2.5 bg-red-50 border-b border-red-100 flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-red-600 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3 h-3" /> {globalStats.overdue} parcela{globalStats.overdue !== 1 ? 's' : ''} fora do SLA
+                              </span>
+                              <button onClick={() => setShowOverduePanel(false)} className="text-red-400 hover:text-red-600 transition-colors">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                              {globalStats.overdueList.map(c => {
+                                const meta = contractMeta[c.contractNumber] || {};
+                                const days = paymentDaysLeft(c.nfDate);
+                                const step = STEPS.find(s => s.id === c.currentStep);
+                                return (
+                                  <button key={c.id} type="button"
+                                    onClick={() => { handleOpenContractDetail(c.contractNumber); setShowOverduePanel(false); }}
+                                    className="w-full text-left px-4 py-3 hover:bg-red-50 transition-colors flex items-center gap-3 group">
+                                    <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-black text-gray-800">Contrato {c.contractNumber}</span>
+                                        {c.nfNumber && <span className="text-[10px] text-gray-400">NF {c.nfNumber}</span>}
+                                      </div>
+                                      {meta.object && <p className="text-[10px] text-gray-500 truncate mt-0.5">{meta.object}</p>}
+                                      <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                        <span className="text-[10px] font-bold text-red-600">{Math.abs(days)} dia{Math.abs(days) !== 1 ? 's' : ''} de atraso</span>
+                                        <span className="text-[10px] text-gray-400">Emissão: {new Date(c.nfDate+'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                        {step && <span className="text-[10px] text-orange-600 font-semibold">{step.name}</span>}
+                                      </div>
+                                    </div>
+                                    <svg className="w-4 h-4 text-gray-300 group-hover:text-red-400 flex-shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -5552,83 +5602,25 @@
                     </div>
 
                     {/* ── Parcelas Atrasadas ── */}
-                    <div className="flex flex-col">
-                      <button type="button"
-                        onClick={() => globalStats.overdue > 0 && setShowOverduePanel(p => !p)}
-                        className={`rounded-2xl border shadow-sm p-4 flex flex-col justify-between transition-all text-left w-full ${globalStats.overdue > 0 ? 'bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'bg-white border-gray-100 cursor-default'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Atrasadas</p>
-                          <div className="flex items-center gap-1.5">
-                            {globalStats.overdue > 0 && (
-                              <span className={`text-[9px] font-bold text-red-500 transition-transform duration-200 ${showOverduePanel ? 'rotate-180' : ''}`}>▼</span>
-                            )}
-                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${globalStats.overdue > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-                              <AlertTriangle className={`w-4 h-4 ${globalStats.overdue > 0 ? 'text-red-500' : 'text-gray-400'}`} />
-                            </span>
-                          </div>
-                        </div>
-                        <div>
-                          <p className={`text-4xl font-black leading-none ${globalStats.overdue > 0 ? 'text-red-600' : 'text-gray-300'}`}>
-                            {globalStats.overdue}
-                          </p>
-                          <p className={`text-[10px] mt-1 ${globalStats.overdue > 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                            {globalStats.overdue > 0 ? 'toque para ver detalhes' : 'tudo em dia ✓'}
-                          </p>
-                        </div>
-                        <div className="mt-3 h-1 bg-red-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${globalStats.overdue > 0 ? 'bg-red-400 animate-pulse' : 'bg-gray-100'} transition-all duration-700`}
-                               style={{width: globalStats.issued > 0 ? `${Math.min((globalStats.overdue/globalStats.issued)*100,100)}%` : '0%'}} />
-                        </div>
-                      </button>
-
-                      {/* Painel expansível com lista de parcelas atrasadas */}
-                      {showOverduePanel && globalStats.overdueList.length > 0 && (
-                        <div className="mt-2 rounded-2xl border border-red-200 bg-white shadow-lg overflow-hidden">
-                          <div className="px-4 py-2.5 bg-red-50 border-b border-red-100 flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-red-600 flex items-center gap-1.5">
-                              <AlertTriangle className="w-3 h-3" /> {globalStats.overdue} parcela{globalStats.overdue !== 1 ? 's' : ''} fora do SLA
-                            </span>
-                            <button onClick={() => setShowOverduePanel(false)} className="text-red-400 hover:text-red-600 transition-colors">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                            {globalStats.overdueList.map(c => {
-                              const meta    = contractMeta[c.contractNumber] || {};
-                              const days    = paymentDaysLeft(c.nfDate);
-                              const step    = STEPS.find(s => s.id === c.currentStep);
-                              return (
-                                <button key={c.id} type="button"
-                                  onClick={() => { handleOpenContractDetail(c.contractNumber); setShowOverduePanel(false); }}
-                                  className="w-full text-left px-4 py-3 hover:bg-red-50 transition-colors flex items-center gap-3 group">
-                                  <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
-                                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-black text-gray-800">Contrato {c.contractNumber}</span>
-                                      {c.nfNumber && <span className="text-[10px] text-gray-400">NF {c.nfNumber}</span>}
-                                    </div>
-                                    {meta.object && (
-                                      <p className="text-[10px] text-gray-500 truncate mt-0.5">{meta.object}</p>
-                                    )}
-                                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                      <span className="text-[10px] font-bold text-red-600">
-                                        {Math.abs(days)} dia{Math.abs(days) !== 1 ? 's' : ''} de atraso
-                                      </span>
-                                      <span className="text-[10px] text-gray-400">Emissão: {new Date(c.nfDate+'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                                      {step && <span className="text-[10px] text-orange-600 font-semibold">Etapa: {step.name}</span>}
-                                    </div>
-                                  </div>
-                                  <svg className="w-4 h-4 text-gray-300 group-hover:text-red-400 flex-shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                    <div className={`rounded-2xl border shadow-sm p-4 flex flex-col justify-between transition-all ${globalStats.overdue > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Atrasadas</p>
+                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${globalStats.overdue > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                          <AlertTriangle className={`w-4 h-4 ${globalStats.overdue > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+                        </span>
+                      </div>
+                      <div>
+                        <p className={`text-4xl font-black leading-none ${globalStats.overdue > 0 ? 'text-red-600' : 'text-gray-300'}`}>
+                          {globalStats.overdue}
+                        </p>
+                        <p className={`text-[10px] mt-1 ${globalStats.overdue > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                          {globalStats.overdue > 0 ? 'fora do prazo SLA' : 'tudo em dia ✓'}
+                        </p>
+                      </div>
+                      <div className="mt-3 h-1 bg-red-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${globalStats.overdue > 0 ? 'bg-red-400 animate-pulse' : 'bg-gray-100'} transition-all duration-700`}
+                             style={{width: globalStats.issued > 0 ? `${Math.min((globalStats.overdue/globalStats.issued)*100,100)}%` : '0%'}} />
+                      </div>
                     </div>
 
                     {/* ── Parcelas Pagas ── */}
