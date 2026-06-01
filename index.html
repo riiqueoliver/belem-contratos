@@ -4431,35 +4431,47 @@
               ...Object.keys(contractMeta)
             ])].sort();
 
-            // ── matching automático ──
+            // ── matching automático — baseado exclusivamente na Tomadora ──
             function matchContract(ext) {
-              const clean   = s => (s || '').replace(/\D/g,'');
-              const norm    = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').trim();
-              let best = { cn:'', score:0 };
+              const clean = s => (s || '').replace(/\D/g, '');
+              const norm  = s => (s || '').toLowerCase()
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+              const words = s => norm(s).split(' ').filter(w => w.length >= 3);
+
+              let best = { cn: '', score: 0 };
               for (const cn of allCns) {
                 const meta = contractMeta[cn] || {};
                 let score = 0;
-                // Número do contrato na NF
+
+                // 1. Número de contrato explícito na NF (máxima confiança)
                 if (ext.numero_contrato) {
                   const nfc = clean(ext.numero_contrato);
                   if (nfc && clean(cn).includes(nfc)) score += 90;
                 }
-                // CNPJ do prestador
-                if (ext.prestador_cnpj && clean(ext.prestador_cnpj).length >= 11) {
-                  if (clean(meta.contractorCnpj) === clean(ext.prestador_cnpj)) score += 100;
-                }
-                // Nome do prestador
-                if (ext.prestador_nome) {
-                  const pn = norm(ext.prestador_nome); const cn2 = norm(meta.contractorName);
-                  if (cn2 && (pn.includes(cn2.slice(0,8)) || cn2.includes(pn.slice(0,8)))) score += 50;
-                }
-                // Tomadora vs client/unit
+
+                // 2. TOMADORA vs campo "client" do contrato (critério principal)
                 if (ext.tomadora_nome) {
-                  const tn = norm(ext.tomadora_nome);
-                  const cl = norm(meta.client || ''); const un = norm(meta.unit || '');
-                  if (cl && tn.includes(cl.slice(0,6))) score += 60;
-                  else if (un && tn.includes(un.slice(0,6))) score += 40;
+                  const tn   = norm(ext.tomadora_nome);
+                  const cl   = norm(meta.client  || '');
+                  const un   = norm(meta.unit    || '');
+                  const obj  = norm(meta.object  || '');
+
+                  // Correspondência exata do client
+                  if (cl && tn === cl) { score += 100; }
+                  // Client está contido na tomadora ou vice-versa (ex: "SECOM" em "SECRETARIA... SECOM")
+                  else if (cl && (tn.includes(cl) || cl.includes(tn))) { score += 90; }
+                  // Sigla: última palavra da tomadora bate com client (ex: "SECOM")
+                  else if (cl) {
+                    const twds = words(tn); const cwds = words(cl);
+                    const common = twds.filter(w => cwds.includes(w)).length;
+                    if (common > 0) score += Math.min(common * 25, 80);
+                  }
+
+                  // Fallback: unit field
+                  if (score === 0 && un && (tn.includes(un) || un.includes(tn))) score += 60;
                 }
+
                 if (score > best.score) best = { cn, score };
               }
               return best;
@@ -4488,7 +4500,7 @@
                     model:'claude-haiku-4-5-20251001', max_tokens:512,
                     messages:[{ role:'user', content:[
                       { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
-                      { type:'text', text:'Extraia desta Nota Fiscal de Serviços brasileira todos os campos abaixo. Responda APENAS com JSON válido sem markdown:\n{"numero":"","data_emissao":"DD/MM/YYYY","valor":0.00,"tomadora_nome":"","tomadora_cnpj":"","prestador_nome":"","prestador_cnpj":"","numero_contrato":"","descricao":""}\nDeixe string vazia ou 0 se não encontrar.' }
+                      { type:'text', text:'Extraia desta Nota Fiscal de Serviços brasileira. O campo mais importante é a TOMADORA (órgão/secretaria que contratou o serviço). Responda APENAS com JSON válido sem markdown:\n{"numero":"","data_emissao":"DD/MM/YYYY","valor":0.00,"tomadora_nome":"nome completo da tomadora/contratante","tomadora_cnpj":"","prestador_nome":"","prestador_cnpj":"","numero_contrato":"","descricao":""}\nDeixe string vazia ou 0 se não encontrar. A Tomadora é quem recebe/contrata o serviço, normalmente uma secretaria ou órgão público.' }
                     ]}]
                   })
                 });
