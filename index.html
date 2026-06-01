@@ -4660,8 +4660,8 @@
       // ── Auto-logout por inatividade (5 minutos) ──────────────
       useEffect(() => {
         if (!currentUser) return;
-        const TIMEOUT_MS = 5 * 60 * 1000; // 5 min → logout
-        const WARN_MS    = 4 * 60 * 1000; // 4 min → aviso
+        const TIMEOUT_MS = 15 * 60 * 1000; // 15 min → logout
+        const WARN_MS    = 14 * 60 * 1000; // 14 min → aviso
         let logoutTimer, warnTimer;
 
         function reset() {
