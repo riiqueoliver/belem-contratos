@@ -3531,13 +3531,21 @@
       );
     }
 
-    function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser }) {
+    function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser, apiKey, onAddInstallment, addToast }) {
       const [filter, setFilter]               = useState('');
       const [tab, setTab]                     = useState('dashboard');
       const [expandedAlert, setExpandedAlert] = useState(null);
       const [presentMode,   setPresentMode]   = useState(false);
       const [kpiOpen,       setKpiOpen]       = useState(null);
       const [adminStatsYear, setAdminStatsYear] = useState(String(new Date().getFullYear()));
+
+      // ── Lançar NF ──────────────────────────────────────────
+      const [nfPdf,         setNfPdf]         = useState(null);
+      const [nfFileName,    setNfFileName]    = useState('');
+      const [nfLoading,     setNfLoading]     = useState(false);
+      const [nfExtracted,   setNfExtracted]   = useState(null);
+      const [nfContractNr,  setNfContractNr]  = useState('');
+      const [nfSaving,      setNfSaving]      = useState(false);
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -3991,8 +3999,9 @@
             <div className="flex px-5 gap-1 pb-0">
               {[
                 { key:'dashboard',     label:'Dashboard' },
-                { key:'contratos',     label:'Contratos' },
-                { key:'usuarios',      label: <span className="flex items-center gap-1.5">Usuários {pendingUsers?.length > 0 && <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white" style={{background:'#f59e0b'}}>{pendingUsers.length}</span>}</span> },
+                { key:'lancar-nf',    label:'📄 Lançar NF' },
+                { key:'contratos',    label:'Contratos' },
+                { key:'usuarios',     label: <span className="flex items-center gap-1.5">Usuários {pendingUsers?.length > 0 && <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white" style={{background:'#f59e0b'}}>{pendingUsers.length}</span>}</span> },
                 { key:'configuracoes', label:'Configurações' },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
@@ -4413,6 +4422,259 @@
               </div>
             </div>
           )}
+
+          {/* ══════════════════ LANÇAR NF ══════════════════ */}
+          {tab === 'lancar-nf' && (() => {
+            // ── lista de contratos únicos para o selector ──
+            const allCns = [...new Set([
+              ...contracts.map(c => c.contractNumber),
+              ...Object.keys(contractMeta)
+            ])].sort();
+
+            // ── matching automático ──
+            function matchContract(ext) {
+              const clean   = s => (s || '').replace(/\D/g,'');
+              const norm    = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').trim();
+              let best = { cn:'', score:0 };
+              for (const cn of allCns) {
+                const meta = contractMeta[cn] || {};
+                let score = 0;
+                // Número do contrato na NF
+                if (ext.numero_contrato) {
+                  const nfc = clean(ext.numero_contrato);
+                  if (nfc && clean(cn).includes(nfc)) score += 90;
+                }
+                // CNPJ do prestador
+                if (ext.prestador_cnpj && clean(ext.prestador_cnpj).length >= 11) {
+                  if (clean(meta.contractorCnpj) === clean(ext.prestador_cnpj)) score += 100;
+                }
+                // Nome do prestador
+                if (ext.prestador_nome) {
+                  const pn = norm(ext.prestador_nome); const cn2 = norm(meta.contractorName);
+                  if (cn2 && (pn.includes(cn2.slice(0,8)) || cn2.includes(pn.slice(0,8)))) score += 50;
+                }
+                // Tomadora vs client/unit
+                if (ext.tomadora_nome) {
+                  const tn = norm(ext.tomadora_nome);
+                  const cl = norm(meta.client || ''); const un = norm(meta.unit || '');
+                  if (cl && tn.includes(cl.slice(0,6))) score += 60;
+                  else if (un && tn.includes(un.slice(0,6))) score += 40;
+                }
+                if (score > best.score) best = { cn, score };
+              }
+              return best;
+            }
+
+            async function handleNfUpload(file) {
+              if (!file) return;
+              if (file.size > 600 * 1024) { addToast?.(`❌ PDF muito grande (${Math.round(file.size/1024)} KB). Limite: 600 KB.`); return; }
+              try {
+                const b64 = await new Promise((res,rej) => {
+                  const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+                });
+                setNfPdf(b64); setNfFileName(file.name); setNfExtracted(null); setNfContractNr('');
+              } catch { addToast?.('❌ Erro ao ler o PDF.'); }
+            }
+
+            async function handleNfAnalyze() {
+              if (!nfPdf || !apiKey) return;
+              setNfLoading(true);
+              try {
+                const b64 = nfPdf.split(',')[1];
+                const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+                  body: JSON.stringify({
+                    model:'claude-haiku-4-5-20251001', max_tokens:512,
+                    messages:[{ role:'user', content:[
+                      { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
+                      { type:'text', text:'Extraia desta Nota Fiscal de Serviços brasileira todos os campos abaixo. Responda APENAS com JSON válido sem markdown:\n{"numero":"","data_emissao":"DD/MM/YYYY","valor":0.00,"tomadora_nome":"","tomadora_cnpj":"","prestador_nome":"","prestador_cnpj":"","numero_contrato":"","descricao":""}\nDeixe string vazia ou 0 se não encontrar.' }
+                    ]}]
+                  })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error.message);
+                let text = data.content[0].text.trim();
+                if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
+                const ext = JSON.parse(text);
+                ext.data_emissao_iso = brDateToIso(ext.data_emissao);
+                setNfExtracted(ext);
+                const match = matchContract(ext);
+                setNfContractNr(match.cn);
+                addToast?.(match.cn
+                  ? `🤖 NF lida — contrato ${match.cn} identificado automaticamente.`
+                  : '🤖 NF lida — selecione o contrato manualmente.');
+              } catch(err) {
+                addToast?.(`❌ Erro na leitura: ${err.message}`);
+              } finally { setNfLoading(false); }
+            }
+
+            async function handleNfCreate() {
+              if (!nfExtracted || !nfContractNr) return;
+              setNfSaving(true);
+              try {
+                const nfDate = nfExtracted.data_emissao_iso || (new Date().toISOString().slice(0,10));
+                const valorBRL = nfExtracted.valor
+                  ? Number(nfExtracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
+                  : '';
+                await onAddInstallment(nfContractNr, {
+                  nfDate, nfNumber: nfExtracted.numero || '', gdoc:'', billingValue: valorBRL,
+                }, nfPdf);
+                addToast?.(`✅ Parcela criada no contrato ${nfContractNr}.`);
+                setNfPdf(null); setNfFileName(''); setNfExtracted(null); setNfContractNr('');
+              } catch(err) {
+                addToast?.(`❌ Erro ao criar parcela: ${err.message}`);
+              } finally { setNfSaving(false); }
+            }
+
+            const match = nfExtracted ? matchContract(nfExtracted) : null;
+            const confidence = !match ? 0 : match.score >= 80 ? 'alta' : match.score >= 40 ? 'media' : 'baixa';
+
+            return (
+              <div className="space-y-5">
+
+                {/* Upload */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>📄</div>
+                    <div>
+                      <h3 className="font-bold text-gray-800 text-sm">Lançar Nota Fiscal</h3>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Faça upload do PDF, identifique os dados e o contrato correspondente.</p>
+                    </div>
+                  </div>
+
+                  {/* Zona de upload */}
+                  {!nfPdf ? (
+                    <label className="cursor-pointer block">
+                      <div className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                          <Upload className="w-6 h-6 text-blue-500" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold text-gray-700">Clique para selecionar o PDF da NF</p>
+                          <p className="text-[11px] text-gray-400 mt-1">Arquivo .pdf até 600 KB</p>
+                        </div>
+                      </div>
+                      <input type="file" accept="application/pdf" className="hidden"
+                             onChange={e => e.target.files[0] && handleNfUpload(e.target.files[0])} />
+                    </label>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Arquivo selecionado */}
+                      <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-green-200 bg-green-50">
+                        <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-green-700 truncate">{nfFileName}</p>
+                          <p className="text-[10px] text-green-600">PDF selecionado</p>
+                        </div>
+                        <button type="button" onClick={() => { setNfPdf(null); setNfFileName(''); setNfExtracted(null); setNfContractNr(''); }}
+                                className="text-xs text-red-500 hover:text-red-700 font-semibold flex items-center gap-0.5">
+                          <X className="w-3.5 h-3.5" /> Remover
+                        </button>
+                      </div>
+
+                      {/* Botão Analisar */}
+                      {!nfExtracted && (
+                        <button type="button" onClick={handleNfAnalyze} disabled={nfLoading}
+                                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${nfLoading ? 'border-blue-200 bg-blue-50 text-blue-400 cursor-not-allowed' : 'border-blue-500 bg-blue-500 text-white hover:bg-blue-600 shadow-sm'}`}>
+                          {nfLoading
+                            ? <><div className="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-500 rounded-full animate-spin"/>Analisando NF via IA…</>
+                            : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>Analisar NF — identificar dados e contrato</>
+                          }
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Resultado da análise */}
+                {nfExtracted && (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#f0fdf4'}}>
+                      <span className="text-green-600 text-sm">🤖</span>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-green-700">Dados extraídos pela IA</h3>
+                    </div>
+                    <div className="p-5 space-y-4">
+
+                      {/* Grid de campos extraídos */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[
+                          { label:'Nº da NF',      value: nfExtracted.numero },
+                          { label:'Data Emissão',  value: nfExtracted.data_emissao },
+                          { label:'Valor',         value: nfExtracted.valor ? `R$ ${Number(nfExtracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null },
+                          { label:'Nº Contrato NF',value: nfExtracted.numero_contrato },
+                          { label:'Prestador',     value: nfExtracted.prestador_nome, wide: true },
+                          { label:'CNPJ Prestador',value: nfExtracted.prestador_cnpj },
+                          { label:'Tomadora',      value: nfExtracted.tomadora_nome, wide: true },
+                          { label:'CNPJ Tomadora', value: nfExtracted.tomadora_cnpj },
+                        ].map(f => f.value ? (
+                          <div key={f.label} className={`bg-gray-50 rounded-xl p-3 ${f.wide ? 'col-span-2 sm:col-span-2' : ''}`}>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{f.label}</p>
+                            <p className="text-xs font-bold text-gray-800 truncate">{f.value}</p>
+                          </div>
+                        ) : null)}
+                      </div>
+
+                      {/* Identificação do contrato */}
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          Contrato de destino
+                          {match && match.cn && (
+                            <span className={`ml-2 normal-case font-semibold px-2 py-0.5 rounded-full text-[9px] border ${
+                              confidence==='alta'  ? 'bg-green-50 text-green-700 border-green-200' :
+                              confidence==='media' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                     'bg-orange-50 text-orange-700 border-orange-200'
+                            }`}>
+                              {confidence==='alta' ? '✓ Alta confiança' : confidence==='media' ? '⚠ Confiança média' : '⚠ Baixa confiança'}
+                            </span>
+                          )}
+                        </label>
+                        <select value={nfContractNr} onChange={e => setNfContractNr(e.target.value)}
+                                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-semibold">
+                          <option value="">— Selecione o contrato —</option>
+                          {allCns.map(cn => {
+                            const m = contractMeta[cn] || {};
+                            return <option key={cn} value={cn}>{cn}{m.contractorName ? ` — ${m.contractorName}` : ''}{m.client ? ` (${m.client})` : ''}</option>;
+                          })}
+                        </select>
+                        {nfContractNr && contractMeta[nfContractNr] && (
+                          <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 mt-0.5" style={{background:BLUE}}>✓</div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-blue-900">Contrato {nfContractNr}</p>
+                              {contractMeta[nfContractNr].contractorName && <p className="text-[11px] text-blue-700 truncate">{contractMeta[nfContractNr].contractorName}</p>}
+                              {contractMeta[nfContractNr].object && <p className="text-[10px] text-blue-500 truncate mt-0.5">{contractMeta[nfContractNr].object}</p>}
+                              <p className="text-[10px] text-blue-400 mt-0.5">
+                                {contracts.filter(c=>c.contractNumber===nfContractNr).length} parcela(s) já cadastrada(s)
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Botões */}
+                      <div className="flex gap-3 pt-1">
+                        <button type="button" onClick={() => { setNfExtracted(null); setNfContractNr(''); }}
+                                className="px-4 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                          ← Reanalisar
+                        </button>
+                        <button type="button" onClick={handleNfCreate}
+                                disabled={!nfContractNr || nfSaving}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-white transition-all ${!nfContractNr || nfSaving ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 shadow-sm'}`}
+                                style={{background: GREEN}}>
+                          {nfSaving
+                            ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"/>Criando parcela…</>
+                            : <>✓ Criar parcela no contrato {nfContractNr}</>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            );
+          })()}
 
           {/* ══════════════════ CONFIGURAÇÕES ══════════════════ */}
           {tab === 'configuracoes' && (
@@ -5158,7 +5420,10 @@
                           users={users}
                           currentUserId={currentUser?.id}
                           onToggleAdmin={handleToggleAdmin}
-                          onDeleteUser={handleDeleteUser} />
+                          onDeleteUser={handleDeleteUser}
+                          apiKey={apiKey}
+                          onAddInstallment={handleAddInstallment}
+                          addToast={addToast} />
 
           {/* Header */}
           <header className="shadow-xl sticky top-0 z-40" style={{background: BLUE}}>
