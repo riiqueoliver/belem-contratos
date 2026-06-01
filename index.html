@@ -3539,13 +3539,10 @@
       const [kpiOpen,       setKpiOpen]       = useState(null);
       const [adminStatsYear, setAdminStatsYear] = useState(String(new Date().getFullYear()));
 
-      // ── Lançar NF ──────────────────────────────────────────
-      const [nfPdf,         setNfPdf]         = useState(null);
-      const [nfFileName,    setNfFileName]    = useState('');
-      const [nfLoading,     setNfLoading]     = useState(false);
-      const [nfExtracted,   setNfExtracted]   = useState(null);
-      const [nfContractNr,  setNfContractNr]  = useState('');
-      const [nfSaving,      setNfSaving]      = useState(false);
+      // ── Lançar NF (multi-upload) ────────────────────────────
+      // nfQueue: [{ id, fileName, pdfBase64, status:'pending'|'analyzing'|'done'|'error'|'saved', extracted, contractNr, errorMsg }]
+      const [nfQueue,       setNfQueue]       = useState([]);
+      const [nfProcessing,  setNfProcessing]  = useState(false);
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -4425,7 +4422,6 @@
 
           {/* ══════════════════ LANÇAR NF ══════════════════ */}
           {tab === 'lancar-nf' && (() => {
-            // ── lista de contratos únicos para o selector ──
             const allCns = [...new Set([
               ...contracts.map(c => c.contractNumber),
               ...Object.keys(contractMeta)
@@ -4438,160 +4434,152 @@
                 .normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
               const words = s => norm(s).split(' ').filter(w => w.length >= 3);
-
               let best = { cn: '', score: 0 };
               for (const cn of allCns) {
                 const meta = contractMeta[cn] || {};
                 let score = 0;
-
-                // 1. Número de contrato explícito na NF (máxima confiança)
                 if (ext.numero_contrato) {
                   const nfc = clean(ext.numero_contrato);
                   if (nfc && clean(cn).includes(nfc)) score += 90;
                 }
-
-                // 2. TOMADORA vs campo "client" do contrato (critério principal)
                 if (ext.tomadora_nome) {
-                  const tn   = norm(ext.tomadora_nome);
-                  const cl   = norm(meta.client  || '');
-                  const un   = norm(meta.unit    || '');
-                  const obj  = norm(meta.object  || '');
-
-                  // Correspondência exata do client
-                  if (cl && tn === cl) { score += 100; }
-                  // Client está contido na tomadora ou vice-versa (ex: "SECOM" em "SECRETARIA... SECOM")
-                  else if (cl && (tn.includes(cl) || cl.includes(tn))) { score += 90; }
-                  // Sigla: última palavra da tomadora bate com client (ex: "SECOM")
+                  const tn = norm(ext.tomadora_nome);
+                  const cl = norm(meta.client || '');
+                  const un = norm(meta.unit   || '');
+                  if (cl && tn === cl)                          score += 100;
+                  else if (cl && (tn.includes(cl) || cl.includes(tn))) score += 90;
                   else if (cl) {
-                    const twds = words(tn); const cwds = words(cl);
-                    const common = twds.filter(w => cwds.includes(w)).length;
+                    const common = words(tn).filter(w => words(cl).includes(w)).length;
                     if (common > 0) score += Math.min(common * 25, 80);
                   }
-
-                  // Fallback: unit field
                   if (score === 0 && un && (tn.includes(un) || un.includes(tn))) score += 60;
                 }
-
                 if (score > best.score) best = { cn, score };
               }
               return best;
             }
 
-            async function handleNfUpload(file) {
-              if (!file) return;
-              if (file.size > 600 * 1024) { addToast?.(`❌ PDF muito grande (${Math.round(file.size/1024)} KB). Limite: 600 KB.`); return; }
-              try {
-                const b64 = await new Promise((res,rej) => {
-                  const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
-                });
-                setNfPdf(b64); setNfFileName(file.name); setNfExtracted(null); setNfContractNr('');
-              } catch { addToast?.('❌ Erro ao ler o PDF.'); }
+            // ── adiciona arquivos à fila ──
+            async function handleFilesAdded(files) {
+              const toAdd = [];
+              for (const file of Array.from(files)) {
+                if (file.size > 600 * 1024) { addToast?.(`❌ ${file.name}: muito grande (${Math.round(file.size/1024)} KB). Limite: 600 KB.`); continue; }
+                try {
+                  const b64 = await new Promise((res, rej) => {
+                    const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+                  });
+                  toAdd.push({ id: Date.now() + Math.random(), fileName: file.name, pdfBase64: b64, status: 'pending', extracted: null, contractNr: '', errorMsg: '' });
+                } catch { addToast?.(`❌ Erro ao ler ${file.name}.`); }
+              }
+              if (toAdd.length) setNfQueue(q => [...q, ...toAdd]);
             }
 
-            async function handleNfAnalyze() {
-              if (!nfPdf || !apiKey) return;
-              setNfLoading(true);
+            // ── analisa todos os 'pending' ──
+            async function handleAnalyzeAll() {
+              if (!apiKey || nfProcessing) return;
+              setNfProcessing(true);
+              const pending = nfQueue.filter(f => f.status === 'pending');
+              for (const item of pending) {
+                setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'analyzing'} : f));
+                try {
+                  const b64 = item.pdfBase64.split(',')[1];
+                  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+                    body: JSON.stringify({
+                      model: 'claude-haiku-4-5-20251001', max_tokens: 512,
+                      messages: [{ role: 'user', content: [
+                        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+                        { type: 'text', text: 'Extraia desta Nota Fiscal de Serviços brasileira. O campo mais importante é a TOMADORA (órgão/secretaria que contratou o serviço). Responda APENAS com JSON válido sem markdown:\n{"numero":"","data_emissao":"DD/MM/YYYY","valor":0.00,"tomadora_nome":"nome completo da tomadora/contratante","tomadora_cnpj":"","prestador_nome":"","prestador_cnpj":"","numero_contrato":"","descricao":""}\nDeixe string vazia ou 0 se não encontrar. A Tomadora é quem recebe/contrata o serviço, normalmente uma secretaria ou órgão público.' }
+                      ]}]
+                    })
+                  });
+                  const data = await resp.json();
+                  if (data.error) throw new Error(data.error.message);
+                  let text = data.content[0].text.trim();
+                  if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
+                  const ext = JSON.parse(text);
+                  ext.data_emissao_iso = brDateToIso(ext.data_emissao);
+                  const match = matchContract(ext);
+                  setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'done', extracted: ext, contractNr: match.cn, _matchScore: match.score} : f));
+                } catch(err) {
+                  setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'error', errorMsg: err.message} : f));
+                }
+              }
+              setNfProcessing(false);
+            }
+
+            // ── cria parcela de um item ──
+            async function handleCreateOne(item) {
+              if (!item.extracted || !item.contractNr) return;
+              setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'saving'} : f));
               try {
-                const b64 = nfPdf.split(',')[1];
-                const resp = await fetch('https://api.anthropic.com/v1/messages', {
-                  method:'POST',
-                  headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-                  body: JSON.stringify({
-                    model:'claude-haiku-4-5-20251001', max_tokens:512,
-                    messages:[{ role:'user', content:[
-                      { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
-                      { type:'text', text:'Extraia desta Nota Fiscal de Serviços brasileira. O campo mais importante é a TOMADORA (órgão/secretaria que contratou o serviço). Responda APENAS com JSON válido sem markdown:\n{"numero":"","data_emissao":"DD/MM/YYYY","valor":0.00,"tomadora_nome":"nome completo da tomadora/contratante","tomadora_cnpj":"","prestador_nome":"","prestador_cnpj":"","numero_contrato":"","descricao":""}\nDeixe string vazia ou 0 se não encontrar. A Tomadora é quem recebe/contrata o serviço, normalmente uma secretaria ou órgão público.' }
-                    ]}]
-                  })
-                });
-                const data = await resp.json();
-                if (data.error) throw new Error(data.error.message);
-                let text = data.content[0].text.trim();
-                if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
-                const ext = JSON.parse(text);
-                ext.data_emissao_iso = brDateToIso(ext.data_emissao);
-                setNfExtracted(ext);
-                const match = matchContract(ext);
-                setNfContractNr(match.cn);
-                addToast?.(match.cn
-                  ? `🤖 NF lida — contrato ${match.cn} identificado automaticamente.`
-                  : '🤖 NF lida — selecione o contrato manualmente.');
+                const nfDate   = item.extracted.data_emissao_iso || new Date().toISOString().slice(0,10);
+                const valorBRL = item.extracted.valor ? Number(item.extracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+                await onAddInstallment(item.contractNr, { nfDate, nfNumber: item.extracted.numero || '', gdoc:'', billingValue: valorBRL }, item.pdfBase64);
+                setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'saved'} : f));
+                addToast?.(`✅ NF ${item.extracted.numero || item.fileName} → contrato ${item.contractNr}.`);
               } catch(err) {
-                addToast?.(`❌ Erro na leitura: ${err.message}`);
-              } finally { setNfLoading(false); }
+                setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'done', errorMsg: err.message} : f));
+                addToast?.(`❌ Erro: ${err.message}`);
+              }
             }
 
-            async function handleNfCreate() {
-              if (!nfExtracted || !nfContractNr) return;
-              setNfSaving(true);
-              try {
-                const nfDate = nfExtracted.data_emissao_iso || (new Date().toISOString().slice(0,10));
-                const valorBRL = nfExtracted.valor
-                  ? Number(nfExtracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
-                  : '';
-                await onAddInstallment(nfContractNr, {
-                  nfDate, nfNumber: nfExtracted.numero || '', gdoc:'', billingValue: valorBRL,
-                }, nfPdf);
-                addToast?.(`✅ Parcela criada no contrato ${nfContractNr}.`);
-                setNfPdf(null); setNfFileName(''); setNfExtracted(null); setNfContractNr('');
-              } catch(err) {
-                addToast?.(`❌ Erro ao criar parcela: ${err.message}`);
-              } finally { setNfSaving(false); }
-            }
-
-            const match = nfExtracted ? matchContract(nfExtracted) : null;
-            const confidence = !match ? 0 : match.score >= 80 ? 'alta' : match.score >= 40 ? 'media' : 'baixa';
+            const pendingCount   = nfQueue.filter(f => f.status === 'pending').length;
+            const doneCount      = nfQueue.filter(f => f.status === 'done').length;
+            const savedCount     = nfQueue.filter(f => f.status === 'saved').length;
+            const allDoneOrSaved = nfQueue.length > 0 && nfQueue.every(f => ['done','saved','error'].includes(f.status));
 
             return (
-              <div className="space-y-5">
+              <div className="space-y-4">
 
-                {/* Upload */}
+                {/* Cabeçalho + upload */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>📄</div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-sm">Lançar Nota Fiscal</h3>
-                      <p className="text-[11px] text-gray-400 mt-0.5">Faça upload do PDF, identifique os dados e o contrato correspondente.</p>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-800 text-sm">Lançar Notas Fiscais</h3>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Selecione um ou vários PDFs — a IA identifica os dados e o contrato de cada NF automaticamente.</p>
                     </div>
+                    {nfQueue.length > 0 && (
+                      <button type="button" onClick={() => setNfQueue([])}
+                              className="text-[10px] text-gray-400 hover:text-red-500 font-semibold transition-colors">
+                        Limpar tudo
+                      </button>
+                    )}
                   </div>
 
-                  {/* Zona de upload */}
-                  {!nfPdf ? (
-                    <label className="cursor-pointer block">
-                      <div className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                          <Upload className="w-6 h-6 text-blue-500" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-gray-700">Clique para selecionar o PDF da NF</p>
-                          <p className="text-[11px] text-gray-400 mt-1">Arquivo .pdf até 600 KB</p>
-                        </div>
+                  {/* Zona de drop */}
+                  <label className="cursor-pointer block">
+                    <div className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <Upload className="w-5 h-5 text-blue-500" />
                       </div>
-                      <input type="file" accept="application/pdf" className="hidden"
-                             onChange={e => e.target.files[0] && handleNfUpload(e.target.files[0])} />
-                    </label>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Arquivo selecionado */}
-                      <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-green-200 bg-green-50">
-                        <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-green-700 truncate">{nfFileName}</p>
-                          <p className="text-[10px] text-green-600">PDF selecionado</p>
-                        </div>
-                        <button type="button" onClick={() => { setNfPdf(null); setNfFileName(''); setNfExtracted(null); setNfContractNr(''); }}
-                                className="text-xs text-red-500 hover:text-red-700 font-semibold flex items-center gap-0.5">
-                          <X className="w-3.5 h-3.5" /> Remover
-                        </button>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-gray-700">Clique para adicionar PDFs</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Múltiplos arquivos — cada um até 600 KB</p>
                       </div>
+                    </div>
+                    <input type="file" accept="application/pdf" multiple className="hidden"
+                           onChange={e => e.target.files?.length && handleFilesAdded(e.target.files)} />
+                  </label>
 
-                      {/* Botão Analisar */}
-                      {!nfExtracted && (
-                        <button type="button" onClick={handleNfAnalyze} disabled={nfLoading}
-                                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${nfLoading ? 'border-blue-200 bg-blue-50 text-blue-400 cursor-not-allowed' : 'border-blue-500 bg-blue-500 text-white hover:bg-blue-600 shadow-sm'}`}>
-                          {nfLoading
-                            ? <><div className="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-500 rounded-full animate-spin"/>Analisando NF via IA…</>
-                            : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>Analisar NF — identificar dados e contrato</>
+                  {/* Contador + botão analisar */}
+                  {nfQueue.length > 0 && (
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-3 text-[11px]">
+                        <span className="font-bold text-gray-700">{nfQueue.length} arquivo{nfQueue.length!==1?'s':''}</span>
+                        {savedCount > 0  && <span className="text-green-600 font-bold">✓ {savedCount} salva{savedCount!==1?'s':''}</span>}
+                        {doneCount  > 0  && <span className="text-blue-600 font-bold">{doneCount} aguardando</span>}
+                        {pendingCount > 0 && <span className="text-gray-400">{pendingCount} na fila</span>}
+                      </div>
+                      {pendingCount > 0 && (
+                        <button type="button" onClick={handleAnalyzeAll} disabled={nfProcessing}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all ${nfProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 shadow-sm'}`}
+                                style={{background: BLUE}}>
+                          {nfProcessing
+                            ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Analisando…</>
+                            : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>Analisar {pendingCount} NF{pendingCount!==1?'s':''}</>
                           }
                         </button>
                       )}
@@ -4599,90 +4587,118 @@
                   )}
                 </div>
 
-                {/* Resultado da análise */}
-                {nfExtracted && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#f0fdf4'}}>
-                      <span className="text-green-600 text-sm">🤖</span>
-                      <h3 className="text-xs font-black uppercase tracking-widest text-green-700">Dados extraídos pela IA</h3>
-                    </div>
-                    <div className="p-5 space-y-4">
-
-                      {/* Grid de campos extraídos */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {[
-                          { label:'Nº da NF',      value: nfExtracted.numero },
-                          { label:'Data Emissão',  value: nfExtracted.data_emissao },
-                          { label:'Valor',         value: nfExtracted.valor ? `R$ ${Number(nfExtracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null },
-                          { label:'Nº Contrato NF',value: nfExtracted.numero_contrato },
-                          { label:'Prestador',     value: nfExtracted.prestador_nome, wide: true },
-                          { label:'CNPJ Prestador',value: nfExtracted.prestador_cnpj },
-                          { label:'Tomadora',      value: nfExtracted.tomadora_nome, wide: true },
-                          { label:'CNPJ Tomadora', value: nfExtracted.tomadora_cnpj },
-                        ].map(f => f.value ? (
-                          <div key={f.label} className={`bg-gray-50 rounded-xl p-3 ${f.wide ? 'col-span-2 sm:col-span-2' : ''}`}>
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{f.label}</p>
-                            <p className="text-xs font-bold text-gray-800 truncate">{f.value}</p>
-                          </div>
-                        ) : null)}
-                      </div>
-
-                      {/* Identificação do contrato */}
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                          Contrato de destino
-                          {match && match.cn && (
-                            <span className={`ml-2 normal-case font-semibold px-2 py-0.5 rounded-full text-[9px] border ${
-                              confidence==='alta'  ? 'bg-green-50 text-green-700 border-green-200' :
-                              confidence==='media' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                                     'bg-orange-50 text-orange-700 border-orange-200'
-                            }`}>
-                              {confidence==='alta' ? '✓ Alta confiança' : confidence==='media' ? '⚠ Confiança média' : '⚠ Baixa confiança'}
-                            </span>
-                          )}
-                        </label>
-                        <select value={nfContractNr} onChange={e => setNfContractNr(e.target.value)}
-                                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-semibold">
-                          <option value="">— Selecione o contrato —</option>
-                          {allCns.map(cn => {
-                            const m = contractMeta[cn] || {};
-                            return <option key={cn} value={cn}>{cn}{m.contractorName ? ` — ${m.contractorName}` : ''}{m.client ? ` (${m.client})` : ''}</option>;
-                          })}
-                        </select>
-                        {nfContractNr && contractMeta[nfContractNr] && (
-                          <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
-                            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 mt-0.5" style={{background:BLUE}}>✓</div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-black text-blue-900">Contrato {nfContractNr}</p>
-                              {contractMeta[nfContractNr].contractorName && <p className="text-[11px] text-blue-700 truncate">{contractMeta[nfContractNr].contractorName}</p>}
-                              {contractMeta[nfContractNr].object && <p className="text-[10px] text-blue-500 truncate mt-0.5">{contractMeta[nfContractNr].object}</p>}
-                              <p className="text-[10px] text-blue-400 mt-0.5">
-                                {contracts.filter(c=>c.contractNumber===nfContractNr).length} parcela(s) já cadastrada(s)
-                              </p>
-                            </div>
-                          </div>
+                {/* Cards de resultado por NF */}
+                {nfQueue.map(item => {
+                  const conf = !item._matchScore ? '' : item._matchScore >= 80 ? 'alta' : item._matchScore >= 40 ? 'media' : 'baixa';
+                  return (
+                    <div key={item.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+                      item.status==='saved'     ? 'border-green-200' :
+                      item.status==='error'     ? 'border-red-200'   :
+                      item.status==='analyzing' ? 'border-blue-200'  : 'border-gray-100'
+                    }`}>
+                      {/* Cabeçalho do card */}
+                      <div className={`px-4 py-2.5 flex items-center gap-3 ${
+                        item.status==='saved'     ? 'bg-green-50' :
+                        item.status==='error'     ? 'bg-red-50'   :
+                        item.status==='analyzing' ? 'bg-blue-50'  : 'bg-gray-50'
+                      } border-b border-gray-100`}>
+                        {item.status==='analyzing' && <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin flex-shrink-0"/>}
+                        {item.status==='saved'     && <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0"/>}
+                        {item.status==='error'     && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0"/>}
+                        {item.status==='pending'   && <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0"/>}
+                        {item.status==='done'||item.status==='saving' ? <FileText className="w-4 h-4 text-blue-500 flex-shrink-0"/> : null}
+                        <span className="text-xs font-bold text-gray-700 flex-1 truncate">{item.fileName}</span>
+                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          item.status==='saved'     ? 'bg-green-100 text-green-700' :
+                          item.status==='analyzing' ? 'bg-blue-100 text-blue-700'  :
+                          item.status==='error'     ? 'bg-red-100 text-red-700'    :
+                          item.status==='done'      ? 'bg-blue-50 text-blue-600'   : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {item.status==='pending'?'na fila':item.status==='analyzing'?'analisando…':item.status==='done'?'aguardando':item.status==='saving'?'salvando…':item.status==='saved'?'✓ salva':'erro'}
+                        </span>
+                        {!['analyzing','saving'].includes(item.status) && (
+                          <button type="button" onClick={() => setNfQueue(q => q.filter(f => f.id !== item.id))}
+                                  className="text-gray-300 hover:text-red-400 transition-colors ml-1">
+                            <X className="w-3.5 h-3.5"/>
+                          </button>
                         )}
                       </div>
 
-                      {/* Botões */}
-                      <div className="flex gap-3 pt-1">
-                        <button type="button" onClick={() => { setNfExtracted(null); setNfContractNr(''); }}
-                                className="px-4 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                          ← Reanalisar
-                        </button>
-                        <button type="button" onClick={handleNfCreate}
-                                disabled={!nfContractNr || nfSaving}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-white transition-all ${!nfContractNr || nfSaving ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 shadow-sm'}`}
-                                style={{background: GREEN}}>
-                          {nfSaving
-                            ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"/>Criando parcela…</>
-                            : <>✓ Criar parcela no contrato {nfContractNr}</>
-                          }
-                        </button>
-                      </div>
+                      {/* Corpo — só aparece quando done/saving/saved */}
+                      {['done','saving','saved'].includes(item.status) && item.extracted && (
+                        <div className="p-4 space-y-3">
+                          {/* Campos extraídos */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {[
+                              { label:'Nº NF',    value: item.extracted.numero },
+                              { label:'Emissão',  value: item.extracted.data_emissao },
+                              { label:'Valor',    value: item.extracted.valor ? `R$ ${Number(item.extracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null },
+                              { label:'Tomadora', value: item.extracted.tomadora_nome, wide: true },
+                            ].map(f => f.value ? (
+                              <div key={f.label} className={`bg-gray-50 rounded-lg p-2 ${f.wide ? 'col-span-2 sm:col-span-2' : ''}`}>
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{f.label}</p>
+                                <p className="text-[11px] font-bold text-gray-800 truncate">{f.value}</p>
+                              </div>
+                            ) : null)}
+                          </div>
+
+                          {/* Seletor de contrato */}
+                          {item.status !== 'saved' && (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Contrato</span>
+                                  {conf && <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                    conf==='alta'  ? 'bg-green-50 text-green-700 border-green-200' :
+                                    conf==='media' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                     'bg-orange-50 text-orange-700 border-orange-200'
+                                  }`}>{conf==='alta'?'✓ Alta confiança':conf==='media'?'⚠ Média':'⚠ Baixa'}</span>}
+                                </div>
+                                <select value={item.contractNr}
+                                        onChange={e => setNfQueue(q => q.map(f => f.id===item.id ? {...f, contractNr: e.target.value} : f))}
+                                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-semibold">
+                                  <option value="">— Selecione —</option>
+                                  {allCns.map(cn => {
+                                    const m = contractMeta[cn] || {};
+                                    return <option key={cn} value={cn}>{cn}{m.client ? ` (${m.client})` : ''}{m.contractorName ? ` — ${m.contractorName}` : ''}</option>;
+                                  })}
+                                </select>
+                              </div>
+                              <button type="button" onClick={() => handleCreateOne(item)}
+                                      disabled={!item.contractNr || item.status==='saving'}
+                                      className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all mt-4 ${!item.contractNr||item.status==='saving' ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 shadow-sm'}`}
+                                      style={{background: GREEN}}>
+                                {item.status==='saving'
+                                  ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Salvando…</>
+                                  : <>✓ Criar parcela</>}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Confirmação de salvo */}
+                          {item.status==='saved' && (
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-green-50 border border-green-200">
+                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0"/>
+                              <p className="text-xs font-bold text-green-700">Parcela criada no contrato <strong>{item.contractNr}</strong></p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Erro de análise */}
+                      {item.status==='error' && (
+                        <div className="px-4 py-3 flex items-center gap-2">
+                          <p className="text-xs text-red-600 flex-1">{item.errorMsg || 'Falha na análise.'}</p>
+                          <button type="button"
+                                  onClick={() => setNfQueue(q => q.map(f => f.id===item.id ? {...f, status:'pending', errorMsg:''} : f))}
+                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap">
+                            Tentar novamente
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })}
 
               </div>
             );
