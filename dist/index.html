@@ -3605,12 +3605,28 @@
         return map;
       }, [allMeta]);
 
-      // Anos com NFs cadastradas (filtro do painel admin)
+      // Anos disponíveis: derivados das datas de vigência dos contratos + datas de NFs
       const adminAvailableYears = useMemo(() => {
         const years = new Set([String(new Date().getFullYear())]);
         contracts.forEach(c => { if (c.nfDate) years.add(c.nfDate.slice(0,4)); });
+        Object.values(contractMeta).forEach(m => {
+          if (m.startDate) years.add(String(new Date(m.startDate+'T12:00:00').getFullYear()));
+          if (m.endDate)   years.add(String(new Date(m.endDate+'T12:00:00').getFullYear()));
+        });
         return [...years].sort((a,b) => Number(b) - Number(a));
-      }, [contracts]);
+      }, [contracts, contractMeta]);
+
+      // Helper: contrato estava vigente no ano Y?
+      // Usa startDate/endDate; sem datas, cai no fallback de NFs
+      function contractVigenteInYear(meta, yr) {
+        const y = Number(yr);
+        const startY = meta.startDate ? new Date(meta.startDate+'T12:00:00').getFullYear() : null;
+        const endY   = meta.endDate   ? new Date(meta.endDate+'T12:00:00').getFullYear()   : null;
+        if (startY !== null) {
+          return startY <= y && (endY === null || endY >= y);
+        }
+        return null; // sem datas → fallback
+      }
 
       // ── Tudo abaixo é filtrado pelo ano selecionado ──────────────────────────
 
@@ -3635,9 +3651,8 @@
         return { contractNumber: cn, ...meta, installments: installsYr, paid: paidYr, totalBilled: totalBilledYr, execRate: execRateYr };
       }), [uniqueNums, contractMeta, adminByYear]);
 
-      // KPIs financeiros do ano
+      // KPIs financeiros do ano (faturamento = NFs do ano; portfólio = contratos vigentes no ano)
       const totalBilledAll = allMetaYr.reduce((s, m) => s + m.totalBilled, 0);
-      const execRateAll    = totalContracted > 0 ? (totalBilledAll / totalContracted * 100) : 0;
 
       // Gráfico mensal — 12 meses do ano selecionado (apenas parcelas com pagamento concluído)
       const monthlyBilling = useMemo(() => {
@@ -3674,18 +3689,26 @@
         [allMetaYr]
       );
 
-      // Contratos com pelo menos 1 NF no ano selecionado (installments já está filtrado por ano em allMetaYr)
+      // Contratos vigentes no ano selecionado:
+      // Critério principal → startDate/endDate abrange o ano
+      // Fallback (sem datas) → tem ao menos 1 NF no ano
       const allMetaYrContracts = useMemo(() =>
-        allMetaYr.filter(m => m.installments.length > 0),
-        [allMetaYr]
+        allMetaYr.filter(m => {
+          const v = contractVigenteInYear(m, adminStatsYear);
+          if (v !== null) return v;          // tem datas → usa vigência
+          return m.installments.length > 0;  // sem datas → pelo menos 1 NF no ano
+        }),
+        [allMetaYr, adminStatsYear]
       );
 
-      // KPIs de portfólio — filtrados ao ano selecionado
+      // KPIs de portfólio — contratos vigentes no ano selecionado
       const contractsYrCount    = allMetaYrContracts.length;
       const contractedYrTotal   = allMetaYrContracts.reduce((s, m) => s + (m.globalValue || 0), 0);
       const activeCountYr       = allMetaYrContracts.filter(m => (m.situation||'ativo') === 'ativo').length;
       const suspendedCountYr    = allMetaYrContracts.filter(m => m.situation === 'suspenso').length;
       const closedCountYr       = allMetaYrContracts.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
+      // Taxa de execução: NFs pagas no ano / valor total dos contratos vigentes no ano
+      const execRateAll         = contractedYrTotal > 0 ? (totalBilledAll / contractedYrTotal * 100) : 0;
       const bySituationYr       = useMemo(() => {
         const map = {};
         allMetaYrContracts.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
@@ -3791,9 +3814,9 @@
               {/* ── Faixa de KPIs — clicáveis (exceto Taxa de Execução) ── */}
               <div className="pres-in" style={{animationDelay:'0.14s', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:'48px'}}>
                 {[
-                  { label:'Contratos',        value: String(uniqueNums.length),                      sub:`${activeCount} ativo${activeCount!==1?'s':''}`,  hi:false, action:'contracts' },
-                  { label:'Valor Contratado',  value: fmtCurrencyShort(totalContracted),              sub:'montante global',                                 hi:false, action:'value'     },
-                  { label:'Total Faturado',    value: fmtCurrencyShort(totalBilledAll),               sub:'acumulado até hoje',                              hi:true,  action:'billed'    },
+                  { label:'Contratos',        value: String(contractsYrCount),                       sub:`${activeCountYr} ativo${activeCountYr!==1?'s':''} em ${adminStatsYear}`,  hi:false, action:'contracts' },
+                  { label:'Valor Contratado',  value: fmtCurrencyShort(contractedYrTotal),            sub:`portfólio vigente em ${adminStatsYear}`,          hi:false, action:'value'     },
+                  { label:'Total Faturado',    value: fmtCurrencyShort(totalBilledAll),               sub:`NFs pagas em ${adminStatsYear}`,                  hi:true,  action:'billed'    },
                   { label:'Taxa de Execução',  value: `${execRateAll.toFixed(1).replace('.',',')}%`,  sub:'do contratado faturado',                          hi:execRateAll>=50, action:null },
                 ].map(({label, value, sub, hi, action}, i) => {
                   const isActive  = action && kpiOpen === action;
@@ -5153,18 +5176,32 @@
         });
       }, [uniqueContracts, contractSearch, contractMeta]);
 
-      // Anos com NFs cadastradas (para o filtro dos indicadores de parcelas)
+      // Anos disponíveis: vigência dos contratos + datas das NFs
       const availableYears = useMemo(() => {
         const years = new Set([String(new Date().getFullYear())]);
         contracts.forEach(c => { if (c.nfDate) years.add(c.nfDate.slice(0,4)); });
+        Object.values(contractMeta).forEach(m => {
+          if (m.startDate) years.add(String(new Date(m.startDate+'T12:00:00').getFullYear()));
+          if (m.endDate)   years.add(String(new Date(m.endDate+'T12:00:00').getFullYear()));
+        });
         return [...years].sort((a,b) => Number(b) - Number(a));
-      }, [contracts]);
+      }, [contracts, contractMeta]);
 
       const globalStats = useMemo(() => {
+        const yr = Number(statsYear);
         const byYear = contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === statsYear);
         const overdueList = byYear.filter(c => contractStatus(c) === 'overdue');
+        // Contratos vigentes no ano: usa startDate/endDate; sem datas, fallback para NFs no ano
+        const nfNums = new Set(byYear.map(c => c.contractNumber));
+        const contractsInYear = uniqueContracts.filter(c => {
+          const m = contractMeta[c.contractNumber] || {};
+          const startY = m.startDate ? new Date(m.startDate+'T12:00:00').getFullYear() : null;
+          const endY   = m.endDate   ? new Date(m.endDate+'T12:00:00').getFullYear()   : null;
+          if (startY !== null) return startY <= yr && (endY === null || endY >= yr);
+          return nfNums.has(c.contractNumber); // sem datas → pelo menos 1 NF no ano
+        });
         return {
-          total:       uniqueContracts.length,
+          total:       contractsInYear.length,
           onTime:      byYear.filter(c => contractStatus(c) === 'on-time').length,
           dueToday:    byYear.filter(c => contractStatus(c) === 'due-today').length,
           overdue:     overdueList.length,
@@ -5172,7 +5209,7 @@
           completed:   byYear.filter(c => contractStatus(c) === 'completed').length,
           issued:      byYear.length,
         };
-      }, [uniqueContracts, contracts, statsYear]);
+      }, [uniqueContracts, contracts, statsYear, contractMeta]);
 
       const homeAlerts = useMemo(() => {
         const t = new Date(); t.setHours(12,0,0,0);
@@ -6110,7 +6147,7 @@
                           <Clipboard className="w-4 h-4 text-blue-300 opacity-70" />
                         </div>
                         <p className="text-5xl font-black text-white leading-none mt-2 relative">{globalStats.total}</p>
-                        <p className="text-[10px] text-blue-300 mt-1 relative">cadastrados no sistema</p>
+                        <p className="text-[10px] text-blue-300 mt-1 relative">vigentes em {statsYear}</p>
                       </div>
                       <div className="bg-white px-4 py-2.5 flex items-center gap-2 flex-wrap border-t border-blue-50">
                         <span className="flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
