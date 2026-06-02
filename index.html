@@ -4581,6 +4581,7 @@
             const allDoneOrSaved = nfQueue.length > 0 && nfQueue.every(f => ['done','saved','error'].includes(f.status));
 
             return (
+              <>
               <div className="space-y-4">
 
                 {/* Cabeçalho + upload */}
@@ -4879,7 +4880,7 @@
                           style={{minHeight:0}} />
                 </div>
               )}
-
+              </>
             );
           })()}
 
