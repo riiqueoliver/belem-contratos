@@ -3541,8 +3541,10 @@
 
       // ── Lançar NF (multi-upload) ────────────────────────────
       // nfQueue: [{ id, fileName, pdfBase64, status:'pending'|'analyzing'|'done'|'error'|'saved', extracted, contractNr, errorMsg }]
-      const [nfQueue,       setNfQueue]       = useState([]);
-      const [nfProcessing,  setNfProcessing]  = useState(false);
+      const [nfQueue,        setNfQueue]        = useState([]);
+      const [nfProcessing,   setNfProcessing]   = useState(false);
+      const [nfPreview,      setNfPreview]      = useState(null); // { base64, fileName }
+      const [nfEditingField, setNfEditingField] = useState(null); // { itemId, field, draft }
 
       // Fullscreen API — entra/sai junto com o modo apresentação
       useEffect(() => {
@@ -4557,6 +4559,22 @@
               }
             }
 
+            // ── salva edição inline de um campo extraído ──
+            function saveFieldEdit(itemId, field, rawValue) {
+              setNfQueue(q => q.map(item => {
+                if (item.id !== itemId) return item;
+                const newExt = { ...item.extracted, [field]: rawValue };
+                // se editou a Tomadora, re-executa o matching
+                if (field === 'tomadora_nome') {
+                  newExt.data_emissao_iso = item.extracted.data_emissao_iso;
+                  const match = matchContract(newExt);
+                  return { ...item, extracted: newExt, contractNr: match.cn, _matchScore: match.score, _orgLabel: match.orgLabel };
+                }
+                return { ...item, extracted: newExt };
+              }));
+              setNfEditingField(null);
+            }
+
             const pendingCount   = nfQueue.filter(f => f.status === 'pending').length;
             const doneCount      = nfQueue.filter(f => f.status === 'done').length;
             const savedCount     = nfQueue.filter(f => f.status === 'saved').length;
@@ -4645,6 +4663,16 @@
                         {item.status==='pending'   && <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0"/>}
                         {item.status==='done'||item.status==='saving' ? <FileText className="w-4 h-4 text-blue-500 flex-shrink-0"/> : null}
                         <span className="text-xs font-bold text-gray-700 flex-1 truncate">{item.fileName}</span>
+                        {/* Botão visualizar PDF */}
+                        {item.status !== 'analyzing' && (
+                          <button type="button"
+                                  onClick={() => setNfPreview({ base64: item.pdfBase64, fileName: item.fileName })}
+                                  title="Visualizar PDF"
+                                  className="flex items-center gap-1 text-[10px] font-bold text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors flex-shrink-0">
+                            <Eye className="w-3.5 h-3.5"/>
+                            <span className="hidden sm:inline">Ver PDF</span>
+                          </button>
+                        )}
                         <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
                           item.status==='saved'     ? 'bg-green-100 text-green-700' :
                           item.status==='analyzing' ? 'bg-blue-100 text-blue-700'  :
@@ -4664,19 +4692,57 @@
                       {/* Corpo — só aparece quando done/saving/saved */}
                       {['done','saving','saved'].includes(item.status) && item.extracted && (
                         <div className="p-4 space-y-3">
-                          {/* Campos extraídos */}
+                          {/* Campos extraídos — duplo clique para editar */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {[
-                              { label:'Nº NF',    value: item.extracted.numero },
-                              { label:'Emissão',  value: item.extracted.data_emissao },
-                              { label:'Valor',    value: item.extracted.valor ? `R$ ${Number(item.extracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null },
-                              { label:'Tomadora', value: item.extracted.tomadora_nome, wide: true },
-                            ].map(f => f.value ? (
-                              <div key={f.label} className={`bg-gray-50 rounded-lg p-2 ${f.wide ? 'col-span-2 sm:col-span-2' : ''}`}>
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{f.label}</p>
-                                <p className="text-[11px] font-bold text-gray-800 truncate">{f.value}</p>
-                              </div>
-                            ) : null)}
+                            {(() => {
+                              const isEditable = item.status !== 'saved';
+                              const fields = [
+                                { label:'Nº NF',    field:'numero',        rawValue: item.extracted.numero,        display: item.extracted.numero },
+                                { label:'Emissão',  field:'data_emissao',  rawValue: item.extracted.data_emissao,  display: item.extracted.data_emissao },
+                                { label:'Valor',    field:'valor',         rawValue: String(item.extracted.valor||''), display: item.extracted.valor ? `R$ ${Number(item.extracted.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null },
+                                { label:'Tomadora', field:'tomadora_nome', rawValue: item.extracted.tomadora_nome, display: item.extracted.tomadora_nome, wide: true },
+                              ];
+                              return fields.map(f => (
+                                <div key={f.field}
+                                     className={`rounded-lg p-2 transition-colors ${f.wide ? 'col-span-2 sm:col-span-2' : ''} ${
+                                       isEditable
+                                         ? (nfEditingField?.itemId===item.id && nfEditingField?.field===f.field
+                                             ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset'
+                                             : 'bg-gray-50 hover:bg-blue-50/60 cursor-text')
+                                         : 'bg-gray-50'
+                                     }`}
+                                     onDoubleClick={() => {
+                                       if (!isEditable) return;
+                                       setNfEditingField({ itemId: item.id, field: f.field, draft: f.rawValue || '' });
+                                     }}>
+                                  <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5 flex items-center gap-1.5">
+                                    {f.label}
+                                    {isEditable && !(nfEditingField?.itemId===item.id && nfEditingField?.field===f.field) && (
+                                      <span className="text-[8px] font-normal text-gray-300 normal-case tracking-normal">2× editar</span>
+                                    )}
+                                    {nfEditingField?.itemId===item.id && nfEditingField?.field===f.field && (
+                                      <span className="text-[8px] font-normal text-blue-400 normal-case tracking-normal">Enter salva · Esc cancela</span>
+                                    )}
+                                  </p>
+                                  {nfEditingField?.itemId===item.id && nfEditingField?.field===f.field ? (
+                                    <input
+                                      autoFocus
+                                      value={nfEditingField.draft}
+                                      onChange={e => setNfEditingField(ef => ({...ef, draft: e.target.value}))}
+                                      onBlur={() => saveFieldEdit(item.id, f.field, nfEditingField.draft)}
+                                      onKeyDown={e => {
+                                        if (e.key==='Enter')  { e.preventDefault(); saveFieldEdit(item.id, f.field, nfEditingField.draft); }
+                                        if (e.key==='Escape') { e.preventDefault(); setNfEditingField(null); }
+                                      }}
+                                      className="w-full text-[11px] font-bold text-gray-800 bg-transparent border-0 outline-none p-0 placeholder-gray-300"
+                                      placeholder="—"
+                                    />
+                                  ) : (
+                                    <p className="text-[11px] font-bold text-gray-800 truncate">{f.display || <span className="text-gray-300 font-normal italic">não identificado</span>}</p>
+                                  )}
+                                </div>
+                              ));
+                            })()}
                           </div>
 
                           {/* Seletor de contrato */}
@@ -4788,6 +4854,32 @@
                 })}
 
               </div>
+
+              {/* ── Modal de pré-visualização do PDF ── */}
+              {nfPreview && (
+                <div className="fixed inset-0 z-[200] flex flex-col" style={{background:'rgba(0,0,0,0.88)'}}>
+                  {/* Barra superior */}
+                  <div className="flex items-center gap-3 px-4 py-3 bg-gray-900 flex-shrink-0">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-blue-600">
+                      <FileText className="w-4 h-4 text-white"/>
+                    </div>
+                    <span className="text-white text-sm font-bold flex-1 truncate">{nfPreview.fileName}</span>
+                    <a href={nfPreview.base64} download={nfPreview.fileName}
+                       className="flex items-center gap-1.5 text-[11px] font-bold text-blue-300 hover:text-blue-100 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                      <Download className="w-3.5 h-3.5"/> Baixar
+                    </a>
+                    <button type="button" onClick={() => setNfPreview(null)}
+                            className="flex items-center gap-1.5 text-[11px] font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                      <X className="w-4 h-4"/> Fechar
+                    </button>
+                  </div>
+                  {/* Iframe do PDF */}
+                  <iframe src={nfPreview.base64} title="Pré-visualização da NF"
+                          className="flex-1 w-full border-0"
+                          style={{minHeight:0}} />
+                </div>
+              )}
+
             );
           })()}
 
