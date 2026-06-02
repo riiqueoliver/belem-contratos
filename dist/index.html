@@ -370,10 +370,13 @@
     // Retorna a situação efetiva do contrato:
     // se salvo como "ativo" mas endDate já passou → "vencido"
     function effectiveSituation(meta) {
+      if (!meta) return 'ativo';
       const sit = meta.situation || 'ativo';
       if (sit === 'ativo' && meta.endDate) {
-        const end = new Date(meta.endDate + 'T12:00:00');
-        if (end < new Date()) return 'vencido';
+        try {
+          const end = new Date(meta.endDate + 'T12:00:00');
+          if (!isNaN(end.getTime()) && end < new Date()) return 'vencido';
+        } catch(e) {}
       }
       return sit;
     }
@@ -673,9 +676,11 @@
                       Parcela {contract.installment}/{contract.totalInstallments}
                     </span>
                   )}
-                  {(() => { const es = effectiveSituation(m); const sc = CONTRACT_SITUATION[es]; return sc ? (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.badge}`}>{sc.label}</span>
-                  ) : null; })()}
+                  {CONTRACT_SITUATION[effectiveSituation(m)] && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${CONTRACT_SITUATION[effectiveSituation(m)].badge}`}>
+                      {CONTRACT_SITUATION[effectiveSituation(m)].label}
+                    </span>
+                  )}
                   {m.modality && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
                       {m.modality}
@@ -1848,7 +1853,7 @@
                     <F label="Situação" k="situation">
                       <select value={form.situation} onChange={e => setForm({...form, situation: e.target.value})}
                               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        {Object.entries(CONTRACT_SITUATION).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                        {Object.entries(CONTRACT_SITUATION).filter(([k])=>k!=='vencido').map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </F>
                   </div>
@@ -6011,7 +6016,7 @@
                         <label className="block text-xs font-medium text-gray-600 mb-1.5">Situação</label>
                         <select value={form.situation} onChange={e => setForm({...form, situation: e.target.value})}
                                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                          {Object.entries(CONTRACT_SITUATION).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                          {Object.entries(CONTRACT_SITUATION).filter(([k])=>k!=='vencido').map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                         </select>
                       </div>
                     </div>
