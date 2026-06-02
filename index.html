@@ -3572,6 +3572,8 @@
         return [...new Set([...a, ...b])].sort();
       }, [contracts, contractMeta]);
 
+      // allMeta — metadados de todos os contratos + faturamento TOTAL (independente de ano)
+      // Usado para: situação dos contratos, alertas de vencimento, valor contratado total
       const allMeta = useMemo(() => uniqueNums.map(cn => {
         const meta = contractMeta[cn] || {};
         const installments = contracts.filter(c => c.contractNumber === cn);
@@ -3580,25 +3582,24 @@
         return { contractNumber: cn, ...meta, installments, totalBilled, execRate };
       }), [uniqueNums, contractMeta, contracts]);
 
-      // Financial KPIs
-      const totalContracted  = allMeta.reduce((s, m) => s + (m.globalValue || 0), 0);
-      const totalBilledAll   = allMeta.reduce((s, m) => s + m.totalBilled, 0);
-      const execRateAll      = totalContracted > 0 ? (totalBilledAll / totalContracted * 100) : 0;
-      const activeCount      = allMeta.filter(m => (m.situation||'ativo') === 'ativo').length;
-      const suspendedCount   = allMeta.filter(m => m.situation === 'suspenso').length;
-      const closedCount      = allMeta.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
+      // KPIs independentes de ano — portfólio e situação atual dos contratos
+      const totalContracted = allMeta.reduce((s, m) => s + (m.globalValue || 0), 0);
+      const activeCount     = allMeta.filter(m => (m.situation||'ativo') === 'ativo').length;
+      const suspendedCount  = allMeta.filter(m => m.situation === 'suspenso').length;
+      const closedCount     = allMeta.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
 
-      // Alert groups
-      const expiredList  = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; return new Date(m.endDate+'T12:00:00') < today; });
-      const exp7List     = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>=today && e<=in7; });
-      const exp30List    = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>in7 && e<=in30; });
-      const totalAlerts  = expiredList.length + exp7List.length + exp30List.length;
+      // Alertas de vencimento de contrato (independentes de ano)
+      const expiredList = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; return new Date(m.endDate+'T12:00:00') < today; });
+      const exp7List    = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>=today && e<=in7; });
+      const exp30List   = allMeta.filter(m => { if (!m.endDate || (m.situation||'ativo')!=='ativo') return false; const e=new Date(m.endDate+'T12:00:00'); return e>in7 && e<=in30; });
+      const totalAlerts = expiredList.length + exp7List.length + exp30List.length;
 
-      // Installment stats — totais (usados na Central de Alertas)
-      const allStatuses    = contracts.map(c => contractStatus(c));
-      const overdueCount   = allStatuses.filter(s => s === 'overdue').length;
-      const dueTodayCount  = allStatuses.filter(s => s === 'due-today').length;
-      const completedCount = allStatuses.filter(s => s === 'completed').length;
+      // Situação dos contratos (independente de ano)
+      const bySituation = useMemo(() => {
+        const map = {};
+        allMeta.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
+        return map;
+      }, [allMeta]);
 
       // Anos com NFs cadastradas (filtro do painel admin)
       const adminAvailableYears = useMemo(() => {
@@ -3607,51 +3608,64 @@
         return [...years].sort((a,b) => Number(b) - Number(a));
       }, [contracts]);
 
-      // Stats de parcelas filtradas pelo ano selecionado no admin
-      const adminByYear      = useMemo(() => contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === adminStatsYear), [contracts, adminStatsYear]);
-      const issuedYr         = adminByYear.length;
-      const overdueYr        = adminByYear.filter(c => contractStatus(c) === 'overdue').length;
-      const dueTodayYr       = adminByYear.filter(c => contractStatus(c) === 'due-today').length;
-      const completedYr      = adminByYear.filter(c => contractStatus(c) === 'completed').length;
+      // ── Tudo abaixo é filtrado pelo ano selecionado ──────────────────────────
 
-      // Monthly billing last 6 months
+      // Parcelas do ano selecionado
+      const adminByYear = useMemo(() =>
+        contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === adminStatsYear),
+        [contracts, adminStatsYear]
+      );
+      const issuedYr    = adminByYear.length;
+      const overdueYr   = adminByYear.filter(c => contractStatus(c) === 'overdue').length;
+      const dueTodayYr  = adminByYear.filter(c => contractStatus(c) === 'due-today').length;
+      const completedYr = adminByYear.filter(c => contractStatus(c) === 'completed').length;
+
+      // allMetaYr — faturamento de cada contrato filtrado pelo ano selecionado
+      const allMetaYr = useMemo(() => uniqueNums.map(cn => {
+        const meta = contractMeta[cn] || {};
+        const installsYr    = adminByYear.filter(c => c.contractNumber === cn);
+        const totalBilledYr = installsYr.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const execRateYr    = meta.globalValue > 0 ? Math.min((totalBilledYr / meta.globalValue) * 100, 100) : 0;
+        return { contractNumber: cn, ...meta, installments: installsYr, totalBilled: totalBilledYr, execRate: execRateYr };
+      }), [uniqueNums, contractMeta, adminByYear]);
+
+      // KPIs financeiros do ano
+      const totalBilledAll = allMetaYr.reduce((s, m) => s + m.totalBilled, 0);
+      const execRateAll    = totalContracted > 0 ? (totalBilledAll / totalContracted * 100) : 0;
+
+      // Gráfico mensal — 12 meses do ano selecionado
       const monthlyBilling = useMemo(() => {
         const map = {};
-        contracts.forEach(c => {
+        adminByYear.forEach(c => {
           if (!c.billingValue || !c.nfDate) return;
           const key = c.nfDate.slice(0,7);
           map[key] = (map[key]||0) + (parseFloat(c.billingValue)||0);
         });
         const result = [];
-        for (let i=5; i>=0; i--) {
-          const d = new Date(today.getFullYear(), today.getMonth()-i, 1);
-          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        for (let mo=0; mo<12; mo++) {
+          const d   = new Date(Number(adminStatsYear), mo, 1);
+          const key = `${adminStatsYear}-${String(mo+1).padStart(2,'0')}`;
           const label = d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
-          result.push({ key, label:`${label}/${String(d.getFullYear()).slice(2)}`, value: map[key]||0 });
+          result.push({ key, label, value: map[key]||0 });
         }
         return result;
-      }, [contracts]);
+      }, [adminByYear, adminStatsYear]);
       const maxMonthly = Math.max(...monthlyBilling.map(m=>m.value), 1);
 
-      // By unit (by value)
+      // Faturado por unidade no ano
       const byUnit = useMemo(() => {
         const map = {};
-        allMeta.forEach(m => { const u=m.unit||'Não informado'; map[u]=(map[u]||0)+(m.globalValue||0); });
+        allMetaYr.forEach(m => {
+          if (m.totalBilled > 0) { const u=m.unit||'Não informado'; map[u]=(map[u]||0)+m.totalBilled; }
+        });
         return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,7);
-      }, [allMeta]);
+      }, [allMetaYr]);
       const maxUnit = Math.max(...byUnit.map(([,v])=>v), 1);
 
-      // By situation
-      const bySituation = useMemo(() => {
-        const map = {};
-        allMeta.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
-        return map;
-      }, [allMeta]);
-
-      // Top 5 contracts
+      // Top 5 contratos por faturado no ano
       const topContracts = useMemo(() =>
-        [...allMeta].filter(m=>m.globalValue>0).sort((a,b)=>(b.globalValue||0)-(a.globalValue||0)).slice(0,5),
-        [allMeta]
+        [...allMetaYr].filter(m=>m.totalBilled>0).sort((a,b)=>b.totalBilled-a.totalBilled).slice(0,5),
+        [allMetaYr]
       );
 
       // Filtered table
@@ -4077,7 +4091,7 @@
                         expanded={expandedAlert==='exp30'} onToggle={() => setExpandedAlert(p => p==='exp30' ? null : 'exp30')}
                         contracts={exp30List} daysUntil={daysUntil} />
                     )}
-                    {(overdueCount > 0 || dueTodayCount > 0) && (
+                    {(overdueYr > 0 || dueTodayYr > 0) && (
                       <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 flex-shrink-0">
@@ -4085,19 +4099,19 @@
                           </span>
                           <div>
                             <p className="text-xs font-bold text-red-700">SLA de Parcelas</p>
-                            <p className="text-[10px] text-red-500">prazo de processamento</p>
+                            <p className="text-[10px] text-red-500">{adminStatsYear} · prazo de processamento</p>
                           </div>
                         </div>
                         <div className="flex gap-4">
-                          {overdueCount > 0 && (
+                          {overdueYr > 0 && (
                             <div>
-                              <p className="text-2xl font-black text-red-600">{overdueCount}</p>
-                              <p className="text-[10px] text-red-500">atrasada{overdueCount!==1?'s':''}</p>
+                              <p className="text-2xl font-black text-red-600">{overdueYr}</p>
+                              <p className="text-[10px] text-red-500">atrasada{overdueYr!==1?'s':''}</p>
                             </div>
                           )}
-                          {dueTodayCount > 0 && (
+                          {dueTodayYr > 0 && (
                             <div>
-                              <p className="text-2xl font-black text-yellow-600">{dueTodayCount}</p>
+                              <p className="text-2xl font-black text-yellow-600">{dueTodayYr}</p>
                               <p className="text-[10px] text-yellow-600">vence hoje</p>
                             </div>
                           )}
@@ -4134,13 +4148,13 @@
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>Faturamento Mensal</h3>
-                    <span className="text-[10px] text-gray-400 font-medium">últimos 6 meses</span>
+                    <span className="text-[10px] text-gray-400 font-medium">{adminStatsYear} · 12 meses</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mb-4">Soma dos valores faturados por mês de emissão da NF</p>
+                  <p className="text-[10px] text-gray-400 mb-4">Soma dos valores faturados por mês de emissão da NF em {adminStatsYear}</p>
                   <div className="flex items-end gap-2" style={{height:'160px'}}>
                     {monthlyBilling.map(m => {
                       const pct = (m.value / maxMonthly) * 100;
-                      const isCurr = m.key === todayKey;
+                      const isCurr = adminStatsYear === String(new Date().getFullYear()) && m.key === todayKey;
                       return (
                         <div key={m.key} className="flex flex-col items-center gap-1 flex-1 h-full justify-end group">
                           <div className="relative w-full flex flex-col justify-end" style={{height:'128px'}}>
@@ -4208,8 +4222,8 @@
               {/* Valor por unidade + Top contratos */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Valor Contratado por Unidade</h3>
-                  <p className="text-[10px] text-gray-400 mb-4">Ordenado pelo maior volume contratado</p>
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Faturado por Unidade</h3>
+                  <p className="text-[10px] text-gray-400 mb-4">Valores faturados por unidade/órgão em {adminStatsYear}</p>
                   {byUnit.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
                     <div className="space-y-3">
                       {byUnit.map(([unit, value], i) => {
@@ -4238,20 +4252,21 @@
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Top 5 — Maiores Contratos</h3>
-                  <p className="text-[10px] text-gray-400 mb-4">Cinza = valor total · Verde = valor faturado</p>
-                  {topContracts.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Top 5 — Mais Faturados</h3>
+                  <p className="text-[10px] text-gray-400 mb-4">Contratos com maior faturamento em {adminStatsYear} · Verde = faturado · Cinza = valor total do contrato</p>
+                  {topContracts.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhuma parcela faturada em {adminStatsYear}</p> : (
                     <div className="space-y-4">
                       {topContracts.map((m, i) => {
                         const rankColor = i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#cd7f32':BLUE;
-                        const barW  = (m.globalValue / (topContracts[0].globalValue||1)) * 100;
-                        const billW = (m.totalBilled  / (topContracts[0].globalValue||1)) * 100;
+                        const maxVal = topContracts[0].totalBilled || 1;
+                        const barW   = m.globalValue > 0 ? Math.min((m.globalValue / Math.max(topContracts.reduce((mx,x)=>Math.max(mx,x.globalValue||0),0),1)) * 100, 100) : 0;
+                        const billW  = (m.totalBilled / maxVal) * 100;
                         return (
                           <div key={m.contractNumber}>
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0" style={{background:rankColor}}>{i+1}</span>
-                              <span className="text-xs font-bold flex-1 truncate" style={{color:BLUE}}>{m.contractNumber}</span>
-                              <span className="text-xs font-bold text-gray-700 flex-shrink-0">{fmtCurrencyShort(m.globalValue)}</span>
+                              <span className="text-xs font-bold flex-1 truncate" style={{color:BLUE}}>{m.contractNumber}{m.unit ? ` · ${m.unit.toUpperCase()}` : ''}</span>
+                              <span className="text-xs font-bold flex-shrink-0" style={{color:GREEN}}>{fmtCurrencyShort(m.totalBilled)}</span>
                             </div>
                             <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
                               <div className="absolute inset-y-0 left-0 rounded-full bg-gray-200 transition-all duration-700" style={{width:`${barW}%`}} />
