@@ -3581,7 +3581,7 @@
         const meta         = contractMeta[cn] || {};
         const installments = contracts.filter(c => c.contractNumber === cn);
         const paid         = installments.filter(c => c.currentStep > TOTAL_STEPS);
-        const totalBilled  = paid.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const totalBilled  = paid.reduce((s, c) => s + (parseBRL(c.billingValue)), 0);
         const execRate     = meta.globalValue > 0 ? Math.min((totalBilled / meta.globalValue) * 100, 100) : 0;
         return { contractNumber: cn, ...meta, installments, paid, totalBilled, execRate };
       }), [uniqueNums, contractMeta, contracts]);
@@ -3630,7 +3630,7 @@
         const meta         = contractMeta[cn] || {};
         const installsYr   = adminByYear.filter(c => c.contractNumber === cn);
         const paidYr       = installsYr.filter(c => c.currentStep > TOTAL_STEPS);
-        const totalBilledYr = paidYr.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const totalBilledYr = paidYr.reduce((s, c) => s + (parseBRL(c.billingValue)), 0);
         const execRateYr   = meta.globalValue > 0 ? Math.min((totalBilledYr / meta.globalValue) * 100, 100) : 0;
         return { contractNumber: cn, ...meta, installments: installsYr, paid: paidYr, totalBilled: totalBilledYr, execRate: execRateYr };
       }), [uniqueNums, contractMeta, adminByYear]);
@@ -3645,7 +3645,7 @@
         adminByYear.filter(c => c.currentStep > TOTAL_STEPS).forEach(c => {
           if (!c.billingValue || !c.nfDate) return;
           const key = c.nfDate.slice(0,7);
-          map[key] = (map[key]||0) + (parseFloat(c.billingValue)||0);
+          map[key] = (map[key]||0) + parseBRL(c.billingValue);
         });
         const result = [];
         for (let mo=0; mo<12; mo++) {
