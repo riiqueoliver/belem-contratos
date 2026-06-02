@@ -3573,13 +3573,14 @@
       }, [contracts, contractMeta]);
 
       // allMeta — metadados de todos os contratos + faturamento TOTAL (independente de ano)
-      // Usado para: situação dos contratos, alertas de vencimento, valor contratado total
+      // totalBilled = soma dos billingValue apenas das parcelas com pagamento CONCLUÍDO (currentStep > TOTAL_STEPS)
       const allMeta = useMemo(() => uniqueNums.map(cn => {
-        const meta = contractMeta[cn] || {};
+        const meta         = contractMeta[cn] || {};
         const installments = contracts.filter(c => c.contractNumber === cn);
-        const totalBilled = installments.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
-        const execRate = meta.globalValue > 0 ? Math.min((totalBilled / meta.globalValue) * 100, 100) : 0;
-        return { contractNumber: cn, ...meta, installments, totalBilled, execRate };
+        const paid         = installments.filter(c => c.currentStep > TOTAL_STEPS);
+        const totalBilled  = paid.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const execRate     = meta.globalValue > 0 ? Math.min((totalBilled / meta.globalValue) * 100, 100) : 0;
+        return { contractNumber: cn, ...meta, installments, paid, totalBilled, execRate };
       }), [uniqueNums, contractMeta, contracts]);
 
       // KPIs independentes de ano — portfólio e situação atual dos contratos
@@ -3621,22 +3622,24 @@
       const completedYr = adminByYear.filter(c => contractStatus(c) === 'completed').length;
 
       // allMetaYr — faturamento de cada contrato filtrado pelo ano selecionado
+      // totalBilled = apenas parcelas com pagamento CONCLUÍDO (currentStep > TOTAL_STEPS)
       const allMetaYr = useMemo(() => uniqueNums.map(cn => {
-        const meta = contractMeta[cn] || {};
-        const installsYr    = adminByYear.filter(c => c.contractNumber === cn);
-        const totalBilledYr = installsYr.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
-        const execRateYr    = meta.globalValue > 0 ? Math.min((totalBilledYr / meta.globalValue) * 100, 100) : 0;
-        return { contractNumber: cn, ...meta, installments: installsYr, totalBilled: totalBilledYr, execRate: execRateYr };
+        const meta         = contractMeta[cn] || {};
+        const installsYr   = adminByYear.filter(c => c.contractNumber === cn);
+        const paidYr       = installsYr.filter(c => c.currentStep > TOTAL_STEPS);
+        const totalBilledYr = paidYr.reduce((s, c) => s + (parseFloat(c.billingValue) || 0), 0);
+        const execRateYr   = meta.globalValue > 0 ? Math.min((totalBilledYr / meta.globalValue) * 100, 100) : 0;
+        return { contractNumber: cn, ...meta, installments: installsYr, paid: paidYr, totalBilled: totalBilledYr, execRate: execRateYr };
       }), [uniqueNums, contractMeta, adminByYear]);
 
       // KPIs financeiros do ano
       const totalBilledAll = allMetaYr.reduce((s, m) => s + m.totalBilled, 0);
       const execRateAll    = totalContracted > 0 ? (totalBilledAll / totalContracted * 100) : 0;
 
-      // Gráfico mensal — 12 meses do ano selecionado
+      // Gráfico mensal — 12 meses do ano selecionado (apenas parcelas com pagamento concluído)
       const monthlyBilling = useMemo(() => {
         const map = {};
-        adminByYear.forEach(c => {
+        adminByYear.filter(c => c.currentStep > TOTAL_STEPS).forEach(c => {
           if (!c.billingValue || !c.nfDate) return;
           const key = c.nfDate.slice(0,7);
           map[key] = (map[key]||0) + (parseFloat(c.billingValue)||0);
@@ -4134,8 +4137,8 @@
                   sub={`${activeCount} ativo${activeCount!==1?'s':''} · ${suspendedCount} suspenso${suspendedCount!==1?'s':''}`} />
                 <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(totalContracted)} color="#1e40af"
                   sub={`em ${uniqueNums.length} contrato${uniqueNums.length!==1?'s':''}`} />
-                <DashKpiCard icon={<CheckCircle />} label="Total Faturado" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
-                  sub={`${completedYr} parcela${completedYr!==1?'s':''} concluída${completedYr!==1?'s':''} em ${adminStatsYear}`} />
+                <DashKpiCard icon={<CheckCircle />} label="Total Pago" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
+                  sub={`${completedYr} parcela${completedYr!==1?'s':''} c/ pagamento concluído em ${adminStatsYear}`} />
                 <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
                   value={`${execRateAll.toFixed(1).replace('.',',')}%`}
                   color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
@@ -4150,7 +4153,7 @@
                     <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>Faturamento Mensal</h3>
                     <span className="text-[10px] text-gray-400 font-medium">{adminStatsYear} · 12 meses</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mb-4">Soma dos valores faturados por mês de emissão da NF em {adminStatsYear}</p>
+                  <p className="text-[10px] text-gray-400 mb-4">Valores pagos (etapa Pagamento concluída) por mês em {adminStatsYear}</p>
                   <div className="flex items-end gap-2" style={{height:'160px'}}>
                     {monthlyBilling.map(m => {
                       const pct = (m.value / maxMonthly) * 100;
@@ -4309,7 +4312,7 @@
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-left" style={{background:'#f8fafc'}}>
-                          {['Contrato','Objeto','Contratada','Valor','Faturado','Execução','Vigência','Situação','Unidade'].map(h => (
+                          {['Contrato','Objeto','Contratada','Valor Contratado','Pago (etapa concluída)','Execução','Vigência','Situação','Unidade'].map(h => (
                             <th key={h} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-100">{h}</th>
                           ))}
                         </tr>
