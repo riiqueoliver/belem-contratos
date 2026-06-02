@@ -361,11 +361,22 @@
       paga:        { label:'Paga',        badge:'bg-green-100 text-green-700 border-green-200', dot:'bg-green-500'  },
     };
     const CONTRACT_SITUATION = {
-      ativo:      { label:'Ativo',      badge:'bg-green-100 text-green-700 border-green-200'    },
-      suspenso:   { label:'Suspenso',   badge:'bg-yellow-100 text-yellow-800 border-yellow-200' },
-      encerrado:  { label:'Encerrado',  badge:'bg-gray-100 text-gray-600 border-gray-200'       },
-      rescindido: { label:'Rescindido', badge:'bg-red-100 text-red-700 border-red-200'          },
+      ativo:      { label:'Ativo',      badge:'bg-green-100 text-green-700 border-green-200'       },
+      vencido:    { label:'Vencido',    badge:'bg-red-100 text-red-700 border-red-200'             },
+      suspenso:   { label:'Suspenso',   badge:'bg-yellow-100 text-yellow-800 border-yellow-200'    },
+      encerrado:  { label:'Encerrado',  badge:'bg-gray-100 text-gray-600 border-gray-200'          },
+      rescindido: { label:'Rescindido', badge:'bg-red-100 text-red-700 border-red-200'             },
     };
+    // Retorna a situação efetiva do contrato:
+    // se salvo como "ativo" mas endDate já passou → "vencido"
+    function effectiveSituation(meta) {
+      const sit = meta.situation || 'ativo';
+      if (sit === 'ativo' && meta.endDate) {
+        const end = new Date(meta.endDate + 'T12:00:00');
+        if (end < new Date()) return 'vencido';
+      }
+      return sit;
+    }
     const MODALITIES = ['Dispensa','Inexigibilidade','Pregão Eletrônico','Concorrência','Tomada de Preços','Convite','RDC','Outro'];
     const UNITS = ['DTI','DSI','DAF','SECOM','SEFIN','SEMEC','SESMA','SEMMA','APMB','Presidência','Outro'];
 
@@ -662,11 +673,9 @@
                       Parcela {contract.installment}/{contract.totalInstallments}
                     </span>
                   )}
-                  {m.situation && CONTRACT_SITUATION[m.situation] && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${CONTRACT_SITUATION[m.situation].badge}`}>
-                      {CONTRACT_SITUATION[m.situation].label}
-                    </span>
-                  )}
+                  {(() => { const es = effectiveSituation(m); const sc = CONTRACT_SITUATION[es]; return sc ? (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.badge}`}>{sc.label}</span>
+                  ) : null; })()}
                   {m.modality && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
                       {m.modality}
@@ -1665,7 +1674,7 @@
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {unique.map((c, idx) => {
                 const m    = contractMeta[c.contractNumber] || {};
-                const sit  = CONTRACT_SITUATION[m.situation || 'ativo'];
+                const sit  = CONTRACT_SITUATION[effectiveSituation(m)];
                 const installments = contracts.filter(x => x.contractNumber === c.contractNumber);
                 const lvl  = contractAlertLevel(c.contractNumber);
                 const ast  = ALERT_STYLES[lvl];
@@ -2008,7 +2017,7 @@
        CARD DE RESUMO DO CONTRATO (tela principal)
     ═══════════════════════════════════════════════════════ */
     function ContractSummaryCard({ contractNumber, meta, allInstallments, onClick }) {
-      const situation = meta.situation || 'ativo';
+      const situation = effectiveSituation(meta);
       const sitCfg = CONTRACT_SITUATION[situation] || CONTRACT_SITUATION.ativo;
       const total    = allInstallments.length;
       const overdue  = allInstallments.filter(c => contractStatus(c) === 'overdue').length;
@@ -2125,7 +2134,7 @@
       const installments = contracts
         .filter(c => c.contractNumber === contractNumber)
         .sort((a, b) => a.nfDate.localeCompare(b.nfDate));
-      const sitCfg   = CONTRACT_SITUATION[meta.situation || 'ativo'] || CONTRACT_SITUATION.ativo;
+      const sitCfg   = CONTRACT_SITUATION[effectiveSituation(meta)] || CONTRACT_SITUATION.ativo;
       const additives = (contractAdditives || {})[contractNumber] || [];
 
       // ── handlers ──
@@ -3588,7 +3597,7 @@
 
       // KPIs independentes de ano — portfólio e situação atual dos contratos
       const totalContracted = allMeta.reduce((s, m) => s + (m.globalValue || 0), 0);
-      const activeCount     = allMeta.filter(m => (m.situation||'ativo') === 'ativo').length;
+      const activeCount     = allMeta.filter(m => effectiveSituation(m) === 'ativo').length;
       const suspendedCount  = allMeta.filter(m => m.situation === 'suspenso').length;
       const closedCount     = allMeta.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
 
@@ -3601,7 +3610,7 @@
       // Situação dos contratos (independente de ano)
       const bySituation = useMemo(() => {
         const map = {};
-        allMeta.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
+        allMeta.forEach(m => { const s=effectiveSituation(m); map[s]=(map[s]||0)+1; });
         return map;
       }, [allMeta]);
 
@@ -3704,14 +3713,14 @@
       // KPIs de portfólio — contratos vigentes no ano selecionado
       const contractsYrCount    = allMetaYrContracts.length;
       const contractedYrTotal   = allMetaYrContracts.reduce((s, m) => s + (m.globalValue || 0), 0);
-      const activeCountYr       = allMetaYrContracts.filter(m => (m.situation||'ativo') === 'ativo').length;
+      const activeCountYr       = allMetaYrContracts.filter(m => effectiveSituation(m) === 'ativo').length;
       const suspendedCountYr    = allMetaYrContracts.filter(m => m.situation === 'suspenso').length;
       const closedCountYr       = allMetaYrContracts.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
       // Taxa de execução: NFs pagas no ano / valor total dos contratos vigentes no ano
       const execRateAll         = contractedYrTotal > 0 ? (totalBilledAll / contractedYrTotal * 100) : 0;
       const bySituationYr       = useMemo(() => {
         const map = {};
-        allMetaYrContracts.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
+        allMetaYrContracts.forEach(m => { const s=effectiveSituation(m); map[s]=(map[s]||0)+1; });
         return map;
       }, [allMetaYrContracts]);
 
@@ -3741,7 +3750,7 @@
         const rows = allMeta.map(m => [
           m.contractNumber, m.processNumber||'', m.object||'', m.contractorName||'', m.contractorCnpj||'',
           m.globalValue||0, m.startDate||'', m.endDate||'',
-          CONTRACT_SITUATION[m.situation||'ativo']?.label||'',
+          CONTRACT_SITUATION[effectiveSituation(m)]?.label||'',
           m.modality||'', m.manager||'', m.fiscalPrimary||'', m.fiscalSubstitute||'',
           m.unit||'', m.client||'', m.installments.length, m.totalBilled, `${m.execRate.toFixed(1)}%`,
         ]);
@@ -3949,7 +3958,7 @@
                           {Object.entries(CONTRACT_SITUATION).map(([key, val], si) => {
                             const count = bySituation[key] || 0;
                             const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
-                            const clr   = key==='ativo' ? '#059669' : key==='suspenso' ? '#D97706' : key==='encerrado' ? 'rgba(0,0,0,0.22)' : '#DC2626';
+                            const clr   = key==='ativo' ? '#059669' : key==='suspenso' ? '#D97706' : key==='encerrado' ? 'rgba(0,0,0,0.22)' : key==='vencido' ? '#EF4444' : '#DC2626';
                             return (
                               <div key={key}>
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'7px'}}>
@@ -4233,7 +4242,7 @@
                       {Object.entries(CONTRACT_SITUATION).map(([key, val]) => {
                         const count = bySituationYr[key] || 0;
                         const pct   = contractsYrCount > 0 ? (count / contractsYrCount) * 100 : 0;
-                        const barColor = key==='ativo' ? GREEN : key==='suspenso' ? '#f59e0b' : key==='encerrado' ? '#64748b' : '#ef4444';
+                        const barColor = key==='ativo' ? GREEN : key==='suspenso' ? '#f59e0b' : key==='encerrado' ? '#64748b' : key==='vencido' ? '#ef4444' : '#dc2626';
                         return (
                           <div key={key}>
                             <div className="flex items-center justify-between mb-1.5">
@@ -4376,7 +4385,7 @@
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {filteredMeta.map(m => {
-                          const sit     = CONTRACT_SITUATION[m.situation || 'ativo'];
+                          const sit     = CONTRACT_SITUATION[effectiveSituation(m)];
                           const endDate = m.endDate ? new Date(m.endDate+'T12:00:00') : null;
                           const expiring = endDate && endDate >= today && endDate <= in30;
                           const expired  = endDate && endDate < today && (m.situation||'ativo') === 'ativo';
