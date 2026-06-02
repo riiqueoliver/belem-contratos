@@ -3674,18 +3674,37 @@
         [allMetaYr]
       );
 
-      // Filtered table
+      // Contratos com pelo menos 1 NF no ano selecionado (installments já está filtrado por ano em allMetaYr)
+      const allMetaYrContracts = useMemo(() =>
+        allMetaYr.filter(m => m.installments.length > 0),
+        [allMetaYr]
+      );
+
+      // KPIs de portfólio — filtrados ao ano selecionado
+      const contractsYrCount    = allMetaYrContracts.length;
+      const contractedYrTotal   = allMetaYrContracts.reduce((s, m) => s + (m.globalValue || 0), 0);
+      const activeCountYr       = allMetaYrContracts.filter(m => (m.situation||'ativo') === 'ativo').length;
+      const suspendedCountYr    = allMetaYrContracts.filter(m => m.situation === 'suspenso').length;
+      const closedCountYr       = allMetaYrContracts.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
+      const bySituationYr       = useMemo(() => {
+        const map = {};
+        allMetaYrContracts.forEach(m => { const s=m.situation||'ativo'; map[s]=(map[s]||0)+1; });
+        return map;
+      }, [allMetaYrContracts]);
+
+      // Tabela de contratos — filtrada ao ano + busca textual
       const filteredMeta = useMemo(() => {
         const q = filter.toLowerCase();
-        if (!q) return allMeta;
-        return allMeta.filter(m =>
+        const base = allMetaYrContracts;
+        if (!q) return base;
+        return base.filter(m =>
           m.contractNumber.toLowerCase().includes(q) ||
           (m.object||'').toLowerCase().includes(q) ||
           (m.contractorName||'').toLowerCase().includes(q) ||
           (m.unit||'').toLowerCase().includes(q) ||
           (m.client||'').toLowerCase().includes(q)
         );
-      }, [allMeta, filter]);
+      }, [allMetaYrContracts, filter]);
 
       function daysUntil(dateStr) {
         if (!dateStr) return null;
@@ -4136,17 +4155,17 @@
               </div>
               {/* KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <DashKpiCard icon={<Clipboard />} label="Total de Contratos" value={uniqueNums.length} color={BLUE}
-                  sub={`${activeCount} ativo${activeCount!==1?'s':''} · ${suspendedCount} suspenso${suspendedCount!==1?'s':''}`} />
-                <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(totalContracted)} color="#1e40af"
-                  sub={`em ${uniqueNums.length} contrato${uniqueNums.length!==1?'s':''}`} />
+                <DashKpiCard icon={<Clipboard />} label="Contratos Ativos" value={contractsYrCount} color={BLUE}
+                  sub={`${activeCountYr} ativo${activeCountYr!==1?'s':''} · ${suspendedCountYr} suspenso${suspendedCountYr!==1?'s':''} em ${adminStatsYear}`} />
+                <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(contractedYrTotal)} color="#1e40af"
+                  sub={`${contractsYrCount} contrato${contractsYrCount!==1?'s':''} com NFs em ${adminStatsYear}`} />
                 <DashKpiCard icon={<CheckCircle />} label="Total Pago" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
                   sub={`${completedYr} parcela${completedYr!==1?'s':''} c/ pagamento concluído em ${adminStatsYear}`} />
                 <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
                   value={`${execRateAll.toFixed(1).replace('.',',')}%`}
                   color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
                   progressBar={execRateAll}
-                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(totalContracted - totalBilledAll)} a faturar`} />
+                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(contractedYrTotal - totalBilledAll)} a receber`} />
               </div>
 
               {/* Gráfico mensal + Situação */}
@@ -4184,12 +4203,13 @@
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-4" style={{color:BLUE}}>Situação dos Contratos</h3>
-                  {uniqueNums.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Situação dos Contratos</h3>
+                  <p className="text-[10px] text-gray-400 mb-3">Contratos com NFs em {adminStatsYear}</p>
+                  {contractsYrCount === 0 ? <p className="text-xs text-gray-400 italic">Nenhum contrato com NFs em {adminStatsYear}</p> : (
                     <div className="space-y-3 flex-1">
                       {Object.entries(CONTRACT_SITUATION).map(([key, val]) => {
-                        const count = bySituation[key] || 0;
-                        const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
+                        const count = bySituationYr[key] || 0;
+                        const pct   = contractsYrCount > 0 ? (count / contractsYrCount) * 100 : 0;
                         const barColor = key==='ativo' ? GREEN : key==='suspenso' ? '#f59e0b' : key==='encerrado' ? '#64748b' : '#ef4444';
                         return (
                           <div key={key}>
@@ -4210,15 +4230,15 @@
                   )}
                   <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
                     <div className="p-2 rounded-xl" style={{background:'#f0fdf4'}}>
-                      <p className="text-lg font-black" style={{color:GREEN}}>{activeCount}</p>
+                      <p className="text-lg font-black" style={{color:GREEN}}>{activeCountYr}</p>
                       <p className="text-[9px] text-green-600 font-semibold">Ativos</p>
                     </div>
                     <div className="p-2 rounded-xl bg-yellow-50">
-                      <p className="text-lg font-black text-yellow-600">{suspendedCount}</p>
+                      <p className="text-lg font-black text-yellow-600">{suspendedCountYr}</p>
                       <p className="text-[9px] text-yellow-600 font-semibold">Suspensos</p>
                     </div>
                     <div className="p-2 rounded-xl bg-gray-50">
-                      <p className="text-lg font-black text-gray-500">{closedCount}</p>
+                      <p className="text-lg font-black text-gray-500">{closedCountYr}</p>
                       <p className="text-[9px] text-gray-500 font-semibold">Encerrados</p>
                     </div>
                   </div>
@@ -4298,7 +4318,18 @@
             <div className="space-y-4">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
-                  <h3 className="text-xs font-black uppercase tracking-widest flex-1" style={{color:BLUE}}>Todos os Contratos</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>Contratos · {adminStatsYear}</h3>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{contractsYrCount} contrato{contractsYrCount!==1?'s':''} com NFs em {adminStatsYear}</p>
+                  </div>
+                  <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-2.5 py-1 bg-gray-50">
+                    <Calendar className="w-3 h-3 text-gray-400"/>
+                    <select value={adminStatsYear} onChange={e => setAdminStatsYear(e.target.value)}
+                            className="text-[11px] font-bold bg-transparent focus:outline-none cursor-pointer"
+                            style={{color:BLUE}}>
+                      {adminAvailableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filtrar…"
@@ -4308,7 +4339,7 @@
                 {filteredMeta.length === 0 ? (
                   <div className="text-center py-12 text-gray-400 text-sm">
                     <Clipboard className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    {filter ? 'Nenhum resultado para a busca.' : 'Nenhum contrato cadastrado ainda.'}
+                    {filter ? 'Nenhum resultado para a busca.' : `Nenhum contrato com NFs em ${adminStatsYear}.`}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
