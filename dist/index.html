@@ -4063,13 +4063,13 @@
               </div>
 
               {/* Central de Alertas */}
-              {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0 || overdueCount > 0 || dueTodayCount > 0) && (
+              {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0 || overdueYr > 0 || dueTodayYr > 0) && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#fef9f0'}}>
                     <Bell className="w-4 h-4 text-amber-500" />
                     <h2 className="text-xs font-black uppercase tracking-widest text-amber-700">Central de Alertas</h2>
                     <span className="ml-auto text-[10px] text-amber-500 font-semibold">
-                      {expiredList.length + exp7List.length + exp30List.length + overdueCount + dueTodayCount} item{(expiredList.length + exp7List.length + exp30List.length + overdueCount + dueTodayCount) !== 1 ? 's' : ''} de atenção
+                      {expiredList.length + exp7List.length + exp30List.length + overdueYr + dueTodayYr} item{(expiredList.length + exp7List.length + exp30List.length + overdueYr + dueTodayYr) !== 1 ? 's' : ''} de atenção
                     </span>
                   </div>
                   <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
