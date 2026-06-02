@@ -267,8 +267,11 @@
     function fmtCurrencyShort(v) {
       const n = Number(v);
       if (!n) return '—';
-      if (n >= 1000000) return `R$ ${(n/1000000).toFixed(1).replace('.',',')}M`;
-      if (n >= 1000)    return `R$ ${(n/1000).toFixed(0)}k`;
+      if (n >= 1000000) {
+        // 1M, 1,1M, 2,5M …  (1 casa decimal; remove ,0 para deixar mais limpo)
+        const m = (n / 1000000).toFixed(1).replace('.', ',');
+        return `R$ ${m.endsWith(',0') ? m.slice(0, -2) : m}M`;
+      }
       return fmtCurrency(n);
     }
     function monthKey(contract) { return contract.nfDate.slice(0, 7); }
