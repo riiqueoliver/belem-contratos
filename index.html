@@ -5117,6 +5117,226 @@
     }
 
     /* ═══════════════════════════════════════════════════════
+       NF LIST VIEW — todas as NFs emitidas de um ano
+    ═══════════════════════════════════════════════════════ */
+    function NfListView({ installments, statsYear, contractMeta, onBack, onOpenContract }) {
+      const [search,   setSearch]   = useState('');
+      const [sortField, setSortField] = useState('nfDate');
+      const [sortDir,   setSortDir]   = useState('desc');
+
+      const STEP_LABELS = ['', 'Emissão NF', 'Relatório', 'Assinaturas', 'Pagamento'];
+      const STATUS_CFG = {
+        completed: { label:'Pago',        cls:'bg-green-100 text-green-700 border-green-200'  },
+        'on-time': { label:'No Prazo',    cls:'bg-blue-100 text-blue-700 border-blue-200'     },
+        'due-today':{ label:'Vence Hoje', cls:'bg-amber-100 text-amber-700 border-amber-200'  },
+        overdue:   { label:'Atrasado',    cls:'bg-red-100 text-red-700 border-red-200'        },
+      };
+
+      const yearList = useMemo(() =>
+        installments.filter(c => c.nfDate && c.nfDate.slice(0,4) === String(statsYear)),
+        [installments, statsYear]
+      );
+
+      const counts = useMemo(() => ({
+        completed: yearList.filter(c => contractStatus(c) === 'completed').length,
+        onTime:    yearList.filter(c => contractStatus(c) === 'on-time').length,
+        dueToday:  yearList.filter(c => contractStatus(c) === 'due-today').length,
+        overdue:   yearList.filter(c => contractStatus(c) === 'overdue').length,
+      }), [yearList]);
+
+      const filtered = useMemo(() => {
+        if (!search.trim()) return yearList;
+        const q = search.toLowerCase();
+        return yearList.filter(c =>
+          (c.contractNumber||'').toLowerCase().includes(q) ||
+          (c.nfNumber||'').toLowerCase().includes(q) ||
+          ((contractMeta[c.contractNumber]||{}).contractorName||'').toLowerCase().includes(q)
+        );
+      }, [yearList, search, contractMeta]);
+
+      const sorted = useMemo(() => {
+        return [...filtered].sort((a,b) => {
+          let va = '', vb = '';
+          if (sortField === 'nfDate')          { va = a.nfDate||'';         vb = b.nfDate||''; }
+          else if (sortField === 'contractNumber'){ va = a.contractNumber||''; vb = b.contractNumber||''; }
+          else if (sortField === 'status')     { va = contractStatus(a);    vb = contractStatus(b); }
+          else if (sortField === 'nfNumber')   { va = a.nfNumber||'';       vb = b.nfNumber||''; }
+          return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+      }, [filtered, sortField, sortDir]);
+
+      function toggleSort(field) {
+        if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        else { setSortField(field); setSortDir('asc'); }
+      }
+      function sortIcon(field) {
+        if (sortField !== field) return <span className="opacity-30">↕</span>;
+        return <span>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+      }
+
+      return (
+        <div className="space-y-4">
+          {/* ── Header ── */}
+          <div className="flex items-center gap-3">
+            <button onClick={onBack}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors flex-shrink-0">
+              <ChevronRight className="w-4 h-4 text-gray-500" style={{transform:'rotate(180deg)'}} />
+            </button>
+            <div>
+              <h2 className="text-lg font-black text-gray-800">Notas Fiscais Emitidas</h2>
+              <p className="text-xs text-gray-400">
+                Ano de referência: <strong>{statsYear}</strong> · {yearList.length} parcela{yearList.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+
+          {/* ── Pills de resumo ── */}
+          {yearList.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {counts.overdue > 0 && (
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
+                  ⚠ {counts.overdue} atrasada{counts.overdue !== 1 ? 's' : ''}
+                </span>
+              )}
+              {counts.dueToday > 0 && (
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                  ! {counts.dueToday} vence{counts.dueToday !== 1 ? 'm' : ''} hoje
+                </span>
+              )}
+              {counts.onTime > 0 && (
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                  ✓ {counts.onTime} no prazo
+                </span>
+              )}
+              {counts.completed > 0 && (
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                  ✓ {counts.completed} paga{counts.completed !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* ── Busca ── */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+                   placeholder="Buscar por NF, contrato ou empresa…"
+                   className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
+          </div>
+
+          {/* ── Tabela ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+
+            {/* cabeçalho */}
+            <div className="hidden md:grid text-[10px] font-black uppercase tracking-widest text-gray-400
+                            bg-gray-50 border-b border-gray-100 px-4 py-2.5 gap-3"
+                 style={{gridTemplateColumns:'1.1fr 1.4fr 0.8fr 0.9fr 1.1fr 0.8fr 28px'}}>
+              <button className="text-left flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => toggleSort('contractNumber')}>
+                Contrato {sortIcon('contractNumber')}
+              </button>
+              <span>Empresa</span>
+              <button className="text-left flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => toggleSort('nfNumber')}>
+                NF Nº {sortIcon('nfNumber')}
+              </button>
+              <button className="text-left flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => toggleSort('nfDate')}>
+                Emissão {sortIcon('nfDate')}
+              </button>
+              <span>Competência</span>
+              <button className="text-left flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => toggleSort('status')}>
+                Status {sortIcon('status')}
+              </button>
+              <span></span>
+            </div>
+
+            {sorted.length === 0 ? (
+              <div className="py-16 text-center">
+                <Layers className="w-8 h-8 text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Nenhuma nota encontrada{search ? ' para a busca' : ` em ${statsYear}`}.</p>
+              </div>
+            ) : sorted.map((c, idx) => {
+              const st    = contractStatus(c);
+              const stCfg = STATUS_CFG[st] || STATUS_CFG['on-time'];
+              const meta  = contractMeta[c.contractNumber] || {};
+              const step  = Math.min(c.currentStep, TOTAL_STEPS);
+              const stepLabel = c.currentStep > TOTAL_STEPS ? '' : (STEP_LABELS[step] || '');
+              const nfDateFmt = c.nfDate
+                ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR')
+                : '—';
+              const refMonthFmt = c.refMonth
+                ? new Date(c.refMonth + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                : '—';
+              const isLast = idx === sorted.length - 1;
+
+              return (
+                <div key={c.id || idx}
+                     className={`flex md:grid items-center px-4 py-3 gap-3 cursor-pointer
+                                 hover:bg-blue-50/50 transition-colors group
+                                 ${!isLast ? 'border-b border-gray-50' : ''}`}
+                     style={{gridTemplateColumns:'1.1fr 1.4fr 0.8fr 0.9fr 1.1fr 0.8fr 28px'}}
+                     onClick={() => onOpenContract(c.contractNumber)}>
+
+                  {/* contrato */}
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-black leading-tight truncate" style={{color: BLUE}}>
+                      {c.contractNumber}
+                    </p>
+                    {stepLabel && (
+                      <p className="text-[9px] text-gray-400 mt-0.5">{stepLabel}</p>
+                    )}
+                  </div>
+
+                  {/* empresa */}
+                  <p className="text-[11px] text-gray-600 truncate hidden md:block">
+                    {meta.contractorName || <span className="text-gray-300 italic">—</span>}
+                  </p>
+
+                  {/* NF nº */}
+                  <p className="text-[12px] font-semibold text-gray-700 hidden md:block">
+                    {c.nfNumber || <span className="text-gray-300 italic text-[10px]">sem nº</span>}
+                  </p>
+
+                  {/* data emissão */}
+                  <p className="text-[11px] text-gray-500 hidden md:block">{nfDateFmt}</p>
+
+                  {/* competência */}
+                  <p className="text-[11px] text-gray-500 capitalize hidden md:block">{refMonthFmt}</p>
+
+                  {/* status */}
+                  <div className="flex-shrink-0 md:flex md:items-center">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${stCfg.cls}`}>
+                      {stCfg.label}
+                    </span>
+                  </div>
+
+                  {/* chevron */}
+                  <div className="flex-shrink-0 flex items-center justify-center hidden md:flex">
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* rodapé totalizador */}
+            {sorted.length > 0 && (
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-[10px] text-gray-400">
+                  {sorted.length} de {yearList.length} registros
+                </p>
+                <p className="text-[10px] font-bold text-gray-500">
+                  {counts.completed} paga{counts.completed !== 1 ? 's' : ''} · {counts.overdue} atrasada{counts.overdue !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
        MAIN APP
     ═══════════════════════════════════════════════════════ */
     function App() {
@@ -5256,6 +5476,7 @@
 
       // ── Estado da página de detalhe ──
       const [activeContractNumber, setActiveContractNumber] = useState(null);
+      const [showNfListView,       setShowNfListView]       = useState(false);
       const [contractSearch,       setContractSearch]       = useState('');
       const [statsYear,            setStatsYear]            = useState(String(new Date().getFullYear()));
       const [showOverduePanel,     setShowOverduePanel]     = useState(false);
@@ -5464,6 +5685,8 @@
         setShowForm(false);
       }
       function handleCloseContractDetail() { setActiveContractNumber(null); }
+      function handleOpenNfList()  { setShowNfListView(true); setActiveContractNumber(null); }
+      function handleCloseNfList() { setShowNfListView(false); }
       function handleGoHome() {
         setActiveContractNumber(null);
         setShowForm(false);
@@ -6138,7 +6361,16 @@
               </div>
             )}
 
-            {activeContractNumber ? (
+            {showNfListView ? (
+              /* ── PÁGINA DE NFs EMITIDAS ── */
+              <NfListView
+                installments={contracts}
+                statsYear={statsYear}
+                contractMeta={contractMeta}
+                onBack={handleCloseNfList}
+                onOpenContract={cn => { handleCloseNfList(); handleOpenContractDetail(cn); }}
+              />
+            ) : activeContractNumber ? (
               /* ── PÁGINA DE DETALHE DO CONTRATO ── */
               <ContractDetailView
                 contractNumber={activeContractNumber}
@@ -6278,7 +6510,9 @@
                     </div>
 
                     {/* ── Parcelas Emitidas ── */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col justify-between">
+                    <div onClick={globalStats.issued > 0 ? handleOpenNfList : undefined}
+                         className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col justify-between transition-all duration-150
+                                     ${globalStats.issued > 0 ? 'cursor-pointer hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5' : ''}`}>
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Emitidas</p>
                         <span className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-100">
@@ -6287,7 +6521,14 @@
                       </div>
                       <div>
                         <p className="text-4xl font-black text-slate-700 leading-none">{globalStats.issued}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">parcelas cadastradas</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <p className="text-[10px] text-gray-400">parcelas cadastradas</p>
+                          {globalStats.issued > 0 && (
+                            <span className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+                              · ver todas <ChevronRight className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {globalStats.issued > 0 && (
                         <div className="mt-3 h-1 bg-slate-100 rounded-full overflow-hidden">
