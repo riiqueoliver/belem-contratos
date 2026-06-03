@@ -575,6 +575,8 @@
 
     /* ── Geração do Relatório de Gestão ── */
     async function generateRelatorio(installment, meta) {
+      // Garante que JSZip esteja carregado (lazy)
+      if (typeof window._loadExportLibs === 'function') await window._loadExportLibs();
       if (typeof JSZip === 'undefined') {
         alert('JSZip não carregado. Recarregue a página e tente novamente.');
         return;
@@ -3936,7 +3938,9 @@
         return Math.round((new Date(dateStr+'T12:00:00') - today) / (1000*60*60*24));
       }
 
-      function handleExport() {
+      async function handleExport() {
+        // Lazy-carrega XLSX se ainda não disponível
+        if (typeof window._loadExportLibs === 'function') await window._loadExportLibs();
         const XLSX = window.XLSX;
         if (!XLSX) { alert('Biblioteca Excel não carregada. Aguarde e tente novamente.'); return; }
         const wb = XLSX.utils.book_new();
