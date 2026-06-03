@@ -656,6 +656,7 @@
       const [open, setOpen] = useState(false);
       const [editingNf, setEditingNf] = useState(false);
       const [nfDraft, setNfDraft] = useState(contract.nfNumber || '');
+      const [paymentDate, setPaymentDate] = useState('');
       const st    = contractStatus(contract);
       const cfg   = CFG[st] || CFG.pending;
       const alert = st === 'overdue' || st === 'due-today';
@@ -794,6 +795,25 @@
               <div className="h-px bg-gray-100 mx-5" />
               <Stepper contract={contract} />
 
+              {/* Campo de data de pagamento — só aparece no step 4 */}
+              {contract.currentStep === TOTAL_STEPS && (
+                <div className="px-5 pb-3">
+                  <div className="rounded-xl border-2 border-green-200 bg-green-50 p-3">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-green-700 mb-1.5">
+                      Data de Pagamento <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={paymentDate}
+                      max={new Date().toISOString().slice(0,10)}
+                      onChange={e => setPaymentDate(e.target.value)}
+                      className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
+                    />
+                    <p className="text-[10px] text-green-600 mt-1">Preencha a data para liberar a conclusão.</p>
+                  </div>
+                </div>
+              )}
+
               <div className="px-5 pb-4 flex gap-2 flex-wrap">
                 {canUndo && (
                   <button onClick={() => onUndo(contract.id)}
@@ -805,12 +825,18 @@
                   </button>
                 )}
                 {contract.currentStep <= TOTAL_STEPS && (
-                  <button onClick={() => onAdvance(contract.id)}
-                          className="flex-1 flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition-opacity hover:opacity-90"
-                          style={{background: BLUE}}>
+                  <button
+                    onClick={() => onAdvance(contract.id, contract.currentStep === TOTAL_STEPS ? paymentDate : undefined)}
+                    disabled={contract.currentStep === TOTAL_STEPS && !paymentDate}
+                    className={`flex-1 flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all ${
+                      contract.currentStep === TOTAL_STEPS && !paymentDate
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-dashed border-gray-300'
+                        : 'text-white hover:opacity-90'
+                    }`}
+                    style={!(contract.currentStep === TOTAL_STEPS && !paymentDate) ? {background: GREEN} : {}}>
                     <CheckCircle className="w-4 h-4" />
                     Concluir etapa e avançar
-                    <ArrowRight className="w-4 h-4" />
+                    {!(contract.currentStep === TOTAL_STEPS && !paymentDate) && <ArrowRight className="w-4 h-4" />}
                   </button>
                 )}
                 <button onClick={() => onDelete(contract.contractNumber)}
@@ -2112,6 +2138,7 @@
       const [openIdx,     setOpenIdx]     = useState(null);
       const [nfEditing,   setNfEditing]   = useState(null);
       const [nfDraft,     setNfDraft]     = useState('');
+      const [paymentDrafts, setPaymentDrafts] = useState({}); // { [contractId]: 'YYYY-MM-DD' }
       // ── form nova parcela ──
       const emptyAddForm = () => {
         const today = new Date();
@@ -3139,8 +3166,10 @@
                   const canUndo   = c.completedSteps.length > 1;
                   // Bloquear avanço da etapa 1 (Emissão NF) sem PDF anexado
                   // PDF é obrigatório em qualquer etapa para prosseguir
-                  const needsPdf  = !hasPdf && !isDone;
-                  const canAdvance = !needsPdf && !isDone;
+                  const needsPdf   = !hasPdf && !isDone;
+                  const isPayStep  = c.currentStep === TOTAL_STEPS && !isDone;
+                  const payDraft   = paymentDrafts[c.id] || '';
+                  const canAdvance = !needsPdf && !isDone && (!isPayStep || !!payDraft);
 
                   return (
                     <div key={c.id} className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden border-l-[5px] ${cfg.left}`}>
@@ -3436,33 +3465,55 @@
                           {/* ── Botões de ação ── */}
                           {isDone ? (
                             <div className="px-5 pb-4">
-                              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm font-semibold text-blue-700">
-                                <CheckCircle className="w-4 h-4" /> Tramitação concluída com sucesso
+                              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-sm font-semibold text-green-700">
+                                <CheckCircle className="w-4 h-4" />
+                                Tramitação concluída
+                                {c.paymentDate && ` · Pago em ${new Date(c.paymentDate+'T12:00:00').toLocaleDateString('pt-BR')}`}
                               </div>
                             </div>
                           ) : (
-                            <div className="px-5 pb-4 flex gap-2 flex-wrap">
-                              {canUndo && (
-                                <button onClick={() => onUndo(c.id)}
-                                        className="flex items-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-xl border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
-                                  <RotateCcw className="w-4 h-4" /> Desfazer
-                                </button>
+                            <>
+                              {/* Campo de data de pagamento — só step 4 */}
+                              {isPayStep && (
+                                <div className="px-5 pb-3">
+                                  <div className="rounded-xl border-2 border-green-200 bg-green-50 p-3">
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-green-700 mb-1.5">
+                                      Data de Pagamento <span className="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={payDraft}
+                                      max={new Date().toISOString().slice(0,10)}
+                                      onChange={e => setPaymentDrafts(prev => ({...prev, [c.id]: e.target.value}))}
+                                      className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
+                                    />
+                                    <p className="text-[10px] text-green-600 mt-1">Preencha a data para liberar a conclusão.</p>
+                                  </div>
+                                </div>
                               )}
-                              <button
-                                onClick={() => { if (canAdvance) onAdvance(c.id); }}
-                                disabled={!canAdvance}
-                                title={needsPdf ? 'Anexe o PDF da Nota Fiscal para concluir esta etapa' : ''}
-                                className={`flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl transition-all ${
-                                  canAdvance
-                                    ? 'text-white shadow-sm hover:opacity-90'
-                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-dashed border-gray-300'
-                                }`}
-                                style={canAdvance ? {background: BLUE} : {}}>
-                                <CheckCircle className="w-4 h-4" />
-                                {needsPdf ? 'Anexe o PDF da NF para avançar' : 'Concluir etapa e avançar'}
-                                {canAdvance && <ArrowRight className="w-4 h-4" />}
-                              </button>
-                            </div>
+                              <div className="px-5 pb-4 flex gap-2 flex-wrap">
+                                {canUndo && (
+                                  <button onClick={() => onUndo(c.id)}
+                                          className="flex items-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-xl border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
+                                    <RotateCcw className="w-4 h-4" /> Desfazer
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => { if (canAdvance) onAdvance(c.id, isPayStep ? payDraft : undefined); }}
+                                  disabled={!canAdvance}
+                                  title={needsPdf ? 'Anexe o PDF da Nota Fiscal para concluir esta etapa' : isPayStep && !payDraft ? 'Preencha a data de pagamento' : ''}
+                                  className={`flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl transition-all ${
+                                    canAdvance
+                                      ? 'text-white shadow-sm hover:opacity-90'
+                                      : 'bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-dashed border-gray-300'
+                                  }`}
+                                  style={canAdvance ? {background: GREEN} : {}}>
+                                  <CheckCircle className="w-4 h-4" />
+                                  {needsPdf ? 'Anexe o PDF da NF para avançar' : 'Concluir etapa e avançar'}
+                                  {canAdvance && <ArrowRight className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </>
                           )}
 
                           {/* ── Excluir Parcela ── */}
@@ -5066,7 +5117,6 @@
       const [showForm,      setShowForm]      = useState(false);
       const [savingContract, setSavingContract] = useState(false);
       const [showContacts,  setShowContacts]  = useState(false);
-      const [paymentDateModal, setPaymentDateModal] = useState(null); // null | { id, date:'YYYY-MM-DD' }
       const [toasts,        setToasts]        = useState([]);
       const [form, setForm] = useState({
         contractNumber:'', processNumber:'', object:'', modality:'',
@@ -5677,31 +5727,17 @@
         }
       }
 
-      async function handleAdvance(id) {
+      async function handleAdvance(id, paymentDate) {
         const c = contracts.find(x => x.id === id);
         if (!c) return;
-        // Etapa 4 (Pagamento) → abre modal para registrar data de consolidação
-        if (c.currentStep === TOTAL_STEPS) {
-          setPaymentDateModal({ id, date: new Date().toISOString().slice(0, 10) });
-          return;
-        }
-        await db.collection('contracts').doc(String(id)).update({
+        const update = {
           completedSteps: [...c.completedSteps, c.currentStep],
           currentStep: c.currentStep + 1,
-        });
-      }
-
-      async function handleConfirmPayment() {
-        const { id, date } = paymentDateModal;
-        const c = contracts.find(x => x.id === id);
-        if (!c) { setPaymentDateModal(null); return; }
-        setPaymentDateModal(null);
-        await db.collection('contracts').doc(String(id)).update({
-          completedSteps: [...c.completedSteps, c.currentStep],
-          currentStep: c.currentStep + 1,
-          paymentDate: date,
-        });
-        addToast(`✅ Pagamento de ${c.contractNumber} consolidado em ${new Date(date+'T12:00:00').toLocaleDateString('pt-BR')}`);
+        };
+        if (paymentDate) update.paymentDate = paymentDate;
+        await db.collection('contracts').doc(String(id)).update(update);
+        if (paymentDate)
+          addToast(`✅ Pagamento de ${c.contractNumber} consolidado em ${new Date(paymentDate+'T12:00:00').toLocaleDateString('pt-BR')}`);
       }
 
       async function handleUpdateNfNumber(id, value) {
@@ -6323,65 +6359,6 @@
                 )}
               </>
             )}
-
-            {/* ── Modal: Data de Pagamento ── */}
-            {paymentDateModal && (() => {
-              const mc = contracts.find(x => x.id === paymentDateModal.id);
-              return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-                    {/* Header */}
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3" style={{background:`linear-gradient(135deg,${GREEN} 0%,#2d7a28 100%)`}}>
-                      <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="w-5 h-5 text-white" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-white/70 uppercase tracking-widest">Etapa 4 — Pagamento</p>
-                        <p className="text-base font-black text-white leading-tight">Confirmar Pagamento</p>
-                      </div>
-                    </div>
-                    {/* Body */}
-                    <div className="px-6 py-5">
-                      {mc && (
-                        <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Parcela</p>
-                          <p className="text-sm font-bold" style={{color:BLUE}}>{mc.contractNumber} · {mc.installment}/{mc.totalInstallments}</p>
-                          {mc.billingValue && <p className="text-xs text-gray-500 mt-0.5">Valor: <span className="font-semibold text-gray-700">{mc.billingValue}</span></p>}
-                        </div>
-                      )}
-                      <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                        Data de Consolidação do Pagamento <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={paymentDateModal.date}
-                        max={new Date().toISOString().slice(0,10)}
-                        onChange={e => setPaymentDateModal(p => ({...p, date: e.target.value}))}
-                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:border-green-400"
-                        style={{'--tw-ring-color': GREEN}}
-                      />
-                      <p className="text-[10px] text-gray-400 mt-1.5">Informe a data em que o pagamento foi efetivamente recebido/consolidado.</p>
-                    </div>
-                    {/* Footer */}
-                    <div className="px-6 pb-5 flex gap-2">
-                      <button
-                        onClick={() => setPaymentDateModal(null)}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-bold border-2 border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleConfirmPayment}
-                        disabled={!paymentDateModal.date}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
-                        style={{background: GREEN}}>
-                        <CheckCircle className="w-4 h-4" />
-                        Confirmar Pagamento
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
             <div className="text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2">
               <p>Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)</p>
