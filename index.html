@@ -371,6 +371,35 @@
       encerrado:  { label:'Encerrado',  badge:'bg-gray-100 text-gray-600 border-gray-200'          },
       rescindido: { label:'Rescindido', badge:'bg-red-100 text-red-700 border-red-200'             },
     };
+    /* ── Mapa de siglas de órgãos/secretarias ── */
+    const UNIT_SIGLA_MAP = [
+      [/\bsefin\b|finan[cç]as?/i,                         'SEFIN'      ],
+      [/\bsecom\b|comunica[cç][aã]o/i,                    'SECOM'      ],
+      [/\bsemma\b|meio[\s-]ambiente/i,                    'SEMMA'      ],
+      [/\bsesma\b|sa[uú]de/i,                             'SESMA'      ],
+      [/\bbelemprev\b|previd[eê]ncia/i,                   'BELEMPREV'  ],
+      [/\bsemec\b|educa[cç][aã]o/i,                       'SEMEC'      ],
+      [/\bapmb\b|procurador/i,                            'APMB'       ],
+      [/\bseurb\b|urbanismo/i,                            'SEURB'      ],
+      [/\bsecon\b|controladoria/i,                        'SECON'      ],
+      [/\bsemas\b|assist[eê]ncia social/i,                'SEMAS'      ],
+      [/\bsegsed\b|seguran[cç]a/i,                        'SEGSED'     ],
+      [/\bsemosp\b|obras/i,                               'SEMOSP'     ],
+      [/\bfunpapa\b/i,                                    'FUNPAPA'    ],
+      [/\bcosanpa\b/i,                                    'COSANPA'    ],
+      [/\bgabinete\b/i,                                   'GABINETE'   ],
+    ];
+    function getUnitSigla(unit) {
+      if (!unit) return '';
+      const str = unit.trim();
+      for (const [pattern, sigla] of UNIT_SIGLA_MAP) {
+        if (pattern.test(str)) return sigla;
+      }
+      // Já é curta (sigla já digitada) → retorna em maiúsculas
+      const up = str.toUpperCase();
+      return up.length <= 12 ? up : up.slice(0, 10) + '…';
+    }
+
     // Retorna a situação efetiva do contrato:
     // se salvo como "ativo" mas endDate já passou → "vencido"
     function effectiveSituation(meta) {
@@ -2095,11 +2124,13 @@
           {/* Área clicável — abre detalhe */}
           <div className="flex flex-1 items-center min-w-0 cursor-pointer" onClick={onClick}>
 
-            {/* Nº Contrato + Unidade */}
+            {/* Nº Contrato + Sigla */}
             <div className="pl-4 pr-3 py-3.5 flex-shrink-0 w-40 lg:w-48">
               <p className="text-[13px] font-black leading-tight tracking-tight" style={{color: BLUE}}>{contractNumber}</p>
               {meta.unit
-                ? <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5 truncate">{meta.unit}</p>
+                ? <span className="inline-block mt-1 text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-500 border border-blue-100">
+                    {getUnitSigla(meta.unit)}
+                  </span>
                 : <p className="text-[9px] text-gray-200 mt-0.5">—</p>}
             </div>
 
