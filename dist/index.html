@@ -5511,7 +5511,11 @@ function AdminDashboard({
         doc.rect(0, 34, PW, 2, 'F');
         if (logoDataUrl) {
           try {
-            doc.addImage(logoDataUrl, 'PNG', ML, 4, 34, 28, undefined, 'FAST');
+            const imgProps = doc.getImageProperties(logoDataUrl);
+            const logoW = 34;
+            const logoH = imgProps.height / imgProps.width * logoW;
+            const logoY = Math.max(2, (36 - logoH) / 2);
+            doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'FAST');
           } catch (e) {
             drawTextLogo();
           }
@@ -5651,11 +5655,11 @@ function AdminDashboard({
       const tableBody = allMetaYrContracts.map(m => {
         const sit = effectiveSituation(m);
         const exec = m.globalValue > 0 ? Math.min(m.totalBilled / m.globalValue * 100, 100) : 0;
-        return [m.contractNumber, (m.contractorName || '—').substring(0, 40), m.unit ? getUnitSigla(m.unit) : '—', fmtBRL(m.globalValue), m.totalBilled > 0 ? fmtBRL(m.totalBilled) : '—', exec > 0 ? `${exec.toFixed(1)}%` : '—', SIT_LABEL[sit] || sit];
+        return [m.contractNumber, (m.unit || '—').substring(0, 45), (m.contractorName || '—').substring(0, 38), fmtBRL(m.globalValue), m.totalBilled > 0 ? fmtBRL(m.totalBilled) : '—', exec > 0 ? `${exec.toFixed(1)}%` : '—', SIT_LABEL[sit] || sit];
       });
       doc.autoTable({
         startY: y,
-        head: [['Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado (Exercício)', '% Exec.', 'Situação']],
+        head: [['Nº Contrato', 'Órgão Contratante', 'Contratada', 'Valor Global', 'Executado (Exercício)', '% Exec.', 'Situação']],
         body: tableBody,
         margin: {
           left: ML,
@@ -5686,30 +5690,29 @@ function AdminDashboard({
         },
         columnStyles: {
           0: {
-            cellWidth: 24,
+            cellWidth: 22,
             fontStyle: 'bold'
           },
           1: {
-            cellWidth: 52
+            cellWidth: 44
           },
           2: {
-            cellWidth: 18,
-            halign: 'center'
+            cellWidth: 38
           },
           3: {
-            cellWidth: 28,
+            cellWidth: 26,
             halign: 'right'
           },
           4: {
-            cellWidth: 28,
+            cellWidth: 26,
             halign: 'right'
           },
           5: {
-            cellWidth: 14,
+            cellWidth: 12,
             halign: 'center'
           },
           6: {
-            cellWidth: 18,
+            cellWidth: 14,
             halign: 'center'
           }
         },
@@ -5850,17 +5853,17 @@ function AdminDashboard({
         y += 10;
         doc.autoTable({
           startY: y,
-          head: [['#', 'Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado', '% Exec.']],
+          head: [['#', 'Nº Contrato', 'Órgão Contratante', 'Contratada', 'Valor Global', 'Executado', '% Exec.']],
           body: topContracts.map((m, i) => {
             const exec = m.globalValue > 0 ? Math.min(m.totalBilled / m.globalValue * 100, 100) : 0;
-            return [String(i + 1), m.contractNumber, (m.contractorName || '—').substring(0, 35), m.unit ? getUnitSigla(m.unit) : '—', fmtBRL(m.globalValue), fmtBRL(m.totalBilled), `${exec.toFixed(1)}%`];
+            return [String(i + 1), m.contractNumber, (m.unit || '—').substring(0, 35), (m.contractorName || '—').substring(0, 30), fmtBRL(m.globalValue), fmtBRL(m.totalBilled), `${exec.toFixed(1)}%`];
           }),
           margin: {
             left: ML,
             right: MR
           },
           styles: {
-            fontSize: 7.5,
+            fontSize: 7,
             cellPadding: {
               top: 2.5,
               bottom: 2.5,
@@ -5876,39 +5879,38 @@ function AdminDashboard({
             fillColor: GREEN_C,
             textColor: WHITE,
             fontStyle: 'bold',
-            fontSize: 7.5
+            fontSize: 7
           },
           alternateRowStyles: {
             fillColor: [251, 252, 254]
           },
           columnStyles: {
             0: {
-              cellWidth: 8,
+              cellWidth: 7,
               halign: 'center',
               fontStyle: 'bold',
               textColor: NAVY
             },
             1: {
-              cellWidth: 24,
+              cellWidth: 22,
               fontStyle: 'bold'
             },
             2: {
-              cellWidth: 50
+              cellWidth: 40
             },
             3: {
-              cellWidth: 18,
-              halign: 'center'
+              cellWidth: 35
             },
             4: {
-              cellWidth: 28,
+              cellWidth: 26,
               halign: 'right'
             },
             5: {
-              cellWidth: 28,
+              cellWidth: 26,
               halign: 'right'
             },
             6: {
-              cellWidth: 16,
+              cellWidth: 14,
               halign: 'center',
               fontStyle: 'bold',
               textColor: GREEN_C
@@ -7045,7 +7047,7 @@ function AdminDashboard({
     style: {
       background: '#f8fafc'
     }
-  }, ['Contrato', 'Objeto', 'Contratada', 'Valor Contratado', 'Pago (etapa concluída)', 'Execução', 'Vigência', 'Situação', 'Unidade'].map(h => React.createElement("th", {
+  }, ['Contrato', 'Órgão / Unidade', 'Objeto', 'Contratada', 'Valor Contratado', 'Pago (etapa concluída)', 'Execução', 'Vigência', 'Situação'].map(h => React.createElement("th", {
     key: h,
     className: "px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-100"
   }, h)))), React.createElement("tbody", {
@@ -7064,6 +7066,12 @@ function AdminDashboard({
         color: BLUE
       }
     }, m.contractNumber), React.createElement("td", {
+      className: "px-3 py-2.5 whitespace-nowrap"
+    }, m.unit ? React.createElement("span", {
+      className: "text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded"
+    }, getUnitSigla(m.unit)) : React.createElement("span", {
+      className: "text-gray-300"
+    }, "\u2014")), React.createElement("td", {
       className: "px-3 py-2.5 text-gray-600 max-w-xs"
     }, React.createElement("div", {
       style: {
@@ -7103,9 +7111,7 @@ function AdminDashboard({
       className: "px-3 py-2.5 whitespace-nowrap"
     }, sit && React.createElement("span", {
       className: `text-[10px] font-bold px-2 py-0.5 rounded-full border ${sit.badge}`
-    }, sit.label)), React.createElement("td", {
-      className: "px-3 py-2.5 text-gray-600 whitespace-nowrap"
-    }, m.unit || '—'));
+    }, sit.label)));
   })))))), tab === 'usuarios' && React.createElement("div", {
     className: "space-y-4"
   }, pendingUsers && pendingUsers.length > 0 && React.createElement("div", {

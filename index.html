@@ -4080,7 +4080,14 @@
           doc.rect(0, 34, PW, 2, 'F');
           // Logo
           if (logoDataUrl) {
-            try { doc.addImage(logoDataUrl, 'PNG', ML, 4, 34, 28, undefined, 'FAST'); }
+            try {
+                // Mantém proporção original do logo — sem achatamento
+                const imgProps = doc.getImageProperties(logoDataUrl);
+                const logoW = 34;
+                const logoH = (imgProps.height / imgProps.width) * logoW;
+                const logoY = Math.max(2, (36 - logoH) / 2); // centralizado verticalmente no header
+                doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'FAST');
+              }
             catch(e) { drawTextLogo(); }
           } else { drawTextLogo(); }
           function drawTextLogo() {
@@ -4199,13 +4206,14 @@
         y += 10;
 
         // ── Tabela de contratos ─────────────────────────────────
+        // Colunas: Nº | Órgão Contratante (unit) | Contratada (empresa) | Valor | Executado | % | Situação
         const tableBody = allMetaYrContracts.map(m => {
           const sit  = effectiveSituation(m);
           const exec = m.globalValue > 0 ? Math.min((m.totalBilled / m.globalValue) * 100, 100) : 0;
           return [
             m.contractNumber,
-            (m.contractorName || '—').substring(0, 40),
-            m.unit ? getUnitSigla(m.unit) : '—',
+            (m.unit || '—').substring(0, 45),           // Órgão Contratante (secretaria)
+            (m.contractorName || '—').substring(0, 38), // Empresa contratada
             fmtBRL(m.globalValue),
             m.totalBilled > 0 ? fmtBRL(m.totalBilled) : '—',
             exec > 0 ? `${exec.toFixed(1)}%` : '—',
@@ -4215,7 +4223,7 @@
 
         doc.autoTable({
           startY: y,
-          head: [['Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado (Exercício)', '% Exec.', 'Situação']],
+          head: [['Nº Contrato', 'Órgão Contratante', 'Contratada', 'Valor Global', 'Executado (Exercício)', '% Exec.', 'Situação']],
           body: tableBody,
           margin: { left: ML, right: MR },
           styles: {
@@ -4229,13 +4237,13 @@
           },
           alternateRowStyles: { fillColor: [251, 252, 254] },
           columnStyles: {
-            0: { cellWidth: 24, fontStyle:'bold' },
-            1: { cellWidth: 52 },
-            2: { cellWidth: 18, halign:'center' },
-            3: { cellWidth: 28, halign:'right' },
-            4: { cellWidth: 28, halign:'right' },
-            5: { cellWidth: 14, halign:'center' },
-            6: { cellWidth: 18, halign:'center' },
+            0: { cellWidth: 22, fontStyle:'bold' },
+            1: { cellWidth: 44 },                  // Órgão Contratante
+            2: { cellWidth: 38 },                  // Contratada
+            3: { cellWidth: 26, halign:'right' },
+            4: { cellWidth: 26, halign:'right' },
+            5: { cellWidth: 12, halign:'center' },
+            6: { cellWidth: 14, halign:'center' },
           },
           didParseCell: data => {
             if (data.section !== 'body') return;
@@ -4387,14 +4395,14 @@
 
           doc.autoTable({
             startY: y,
-            head: [['#', 'Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado', '% Exec.']],
+            head: [['#', 'Nº Contrato', 'Órgão Contratante', 'Contratada', 'Valor Global', 'Executado', '% Exec.']],
             body: topContracts.map((m, i) => {
               const exec = m.globalValue > 0 ? Math.min((m.totalBilled/m.globalValue)*100,100) : 0;
               return [
                 String(i+1),
                 m.contractNumber,
-                (m.contractorName||'—').substring(0,35),
-                m.unit ? getUnitSigla(m.unit) : '—',
+                (m.unit||'—').substring(0,35),           // Órgão Contratante (secretaria)
+                (m.contractorName||'—').substring(0,30), // Empresa contratada
                 fmtBRL(m.globalValue),
                 fmtBRL(m.totalBilled),
                 `${exec.toFixed(1)}%`,
@@ -4402,21 +4410,21 @@
             }),
             margin: { left: ML, right: MR },
             styles: {
-              fontSize: 7.5, cellPadding: { top:2.5, bottom:2.5, left:3, right:3 },
+              fontSize: 7, cellPadding: { top:2.5, bottom:2.5, left:3, right:3 },
               font:'helvetica', textColor:DGRAY, lineColor:MGRAY, lineWidth:0.25,
             },
             headStyles: {
-              fillColor:GREEN_C, textColor:WHITE, fontStyle:'bold', fontSize:7.5,
+              fillColor:GREEN_C, textColor:WHITE, fontStyle:'bold', fontSize:7,
             },
             alternateRowStyles: { fillColor:[251, 252, 254] },
             columnStyles: {
-              0: { cellWidth:8,  halign:'center', fontStyle:'bold', textColor:NAVY },
-              1: { cellWidth:24, fontStyle:'bold' },
-              2: { cellWidth:50 },
-              3: { cellWidth:18, halign:'center' },
-              4: { cellWidth:28, halign:'right' },
-              5: { cellWidth:28, halign:'right' },
-              6: { cellWidth:16, halign:'center', fontStyle:'bold', textColor:GREEN_C },
+              0: { cellWidth:7,  halign:'center', fontStyle:'bold', textColor:NAVY },
+              1: { cellWidth:22, fontStyle:'bold' },
+              2: { cellWidth:40 },                        // Órgão
+              3: { cellWidth:35 },                        // Contratada
+              4: { cellWidth:26, halign:'right' },
+              5: { cellWidth:26, halign:'right' },
+              6: { cellWidth:14, halign:'center', fontStyle:'bold', textColor:GREEN_C },
             },
           });
         }
@@ -5055,7 +5063,7 @@
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-left" style={{background:'#f8fafc'}}>
-                          {['Contrato','Objeto','Contratada','Valor Contratado','Pago (etapa concluída)','Execução','Vigência','Situação','Unidade'].map(h => (
+                          {['Contrato','Órgão / Unidade','Objeto','Contratada','Valor Contratado','Pago (etapa concluída)','Execução','Vigência','Situação'].map(h => (
                             <th key={h} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-100">{h}</th>
                           ))}
                         </tr>
@@ -5069,6 +5077,11 @@
                           return (
                             <tr key={m.contractNumber} className="hover:bg-slate-50">
                               <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{color:BLUE}}>{m.contractNumber}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {m.unit
+                                  ? <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded">{getUnitSigla(m.unit)}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
                               <td className="px-3 py-2.5 text-gray-600 max-w-xs">
                                 <div style={{overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{m.object||'—'}</div>
                               </td>
@@ -5095,7 +5108,6 @@
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 {sit && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sit.badge}`}>{sit.label}</span>}
                               </td>
-                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{m.unit||'—'}</td>
                             </tr>
                           );
                         })}
