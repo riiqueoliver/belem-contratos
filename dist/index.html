@@ -5512,10 +5512,10 @@ function AdminDashboard({
         if (logoDataUrl) {
           try {
             const imgProps = doc.getImageProperties(logoDataUrl);
-            const logoW = 34;
+            const logoW = 58;
             const logoH = imgProps.height / imgProps.width * logoW;
-            const logoY = Math.max(2, (36 - logoH) / 2);
-            doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'FAST');
+            const logoY = Math.max(1, (36 - logoH) / 2);
+            doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'NONE');
           } catch (e) {
             drawTextLogo();
           }
