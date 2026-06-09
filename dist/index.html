@@ -6082,6 +6082,7 @@ function AdminDashboard({
         doc.text(`Todas as ${issuedYr} parcelas emitidas estão dentro do prazo ou concluídas.`, ML + 9, y + 13.5);
         y += 24;
       } else {
+        const totalOverdueValue = overdueInstalls.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
         const overdueBody = overdueInstalls.map(c => {
           const meta = contractMeta[c.contractNumber] || {};
           const organ = getUnitSigla(meta.unit || '') || (meta.unit || '—').substring(0, 20);
@@ -6168,6 +6169,18 @@ function AdminDashboard({
               drawPageHeader();
             }
           }
+        });
+        const totalBarY = doc.lastAutoTable.finalY + 2;
+        const totalBarH = 10;
+        doc.setFillColor(185, 40, 40);
+        doc.roundedRect(ML, totalBarY, CW, totalBarH, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...WHITE);
+        doc.text(`TOTAL EM ATRASO — ${overdueInstalls.length} parcela${overdueInstalls.length !== 1 ? 's' : ''}`, ML + 5, totalBarY + 6.5);
+        doc.setFontSize(9);
+        doc.text(fmtBRL(totalOverdueValue), PW - MR - 5, totalBarY + 6.5, {
+          align: 'right'
         });
       }
       if (overdueInstalls.length > 0) {
