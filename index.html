@@ -4025,20 +4025,24 @@
 
         try {
 
-        // ── 2. Carrega o logo como base64 ───────────────────────
-        let logoDataUrl = null;
-        try {
-          const resp = await fetch('belemdigital-logo.png');
-          if (resp.ok) {
+        // ── 2. Carrega os logos como base64 ──────────────────────
+        async function fetchLogoBase64(url) {
+          try {
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
             const blob = await resp.blob();
-            logoDataUrl = await new Promise(res => {
+            return await new Promise(res => {
               const reader = new FileReader();
               reader.onloadend = () => res(reader.result);
               reader.onerror  = () => res(null);
               reader.readAsDataURL(blob);
             });
-          }
-        } catch(e) {}
+          } catch(e) { return null; }
+        }
+        const [logoDataUrl, sgcLogoDataUrl] = await Promise.all([
+          fetchLogoBase64('belemdigital-logo.png'),
+          fetchLogoBase64('sgc-logo.png'),
+        ]);
 
         // ── 3. Helpers de formatação ─────────────────────────────
         const fmtBRL = v => {
@@ -4072,46 +4076,71 @@
 
         // ── 6. Função de cabeçalho por página ────────────────────
         function drawPageHeader() {
-          // Fundo azul
+          // Fundo azul navy
           doc.setFillColor(...NAVY);
-          doc.rect(0, 0, PW, 36, 'F');
-          // Faixa verde
+          doc.rect(0, 0, PW, 38, 'F');
+          // Faixa verde na base
           doc.setFillColor(...GREEN_C);
-          doc.rect(0, 34, PW, 2, 'F');
-          // Logo
+          doc.rect(0, 36, PW, 2, 'F');
+
+          let nextLogoX = ML;
+
+          // ── Logo Belém Digital (esquerda) ──────────────────────
           if (logoDataUrl) {
             try {
-                // Mantém proporção original do logo — sem achatamento
-                const imgProps = doc.getImageProperties(logoDataUrl);
-                const logoW = 34;
-                const logoH = (imgProps.height / imgProps.width) * logoW;
-                const logoY = Math.max(2, (36 - logoH) / 2); // centralizado verticalmente no header
-                doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'FAST');
-              }
-            catch(e) { drawTextLogo(); }
-          } else { drawTextLogo(); }
-          function drawTextLogo() {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...WHITE);
-            doc.text('BELÉM DIGITAL', ML + 1, 18);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.setTextColor(160, 190, 230);
-            doc.text('Prefeitura Municipal de Belém', ML + 1, 24);
+              const p = doc.getImageProperties(logoDataUrl);
+              const w = 38, h = (p.height / p.width) * w;
+              const ly = Math.max(3, (38 - h) / 2);
+              doc.addImage(logoDataUrl, 'PNG', ML, ly, w, h, undefined, 'FAST');
+              nextLogoX = ML + w + 5;
+            } catch(e) {
+              doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
+              doc.text('BELÉM DIGITAL', ML + 1, 17);
+              doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,190,230);
+              doc.text('Prefeitura Municipal de Belém', ML + 1, 23);
+              nextLogoX = ML + 44;
+            }
+          } else {
+            doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
+            doc.text('BELÉM DIGITAL', ML + 1, 17);
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,190,230);
+            doc.text('Prefeitura Municipal de Belém', ML + 1, 23);
+            nextLogoX = ML + 44;
           }
-          // Título e subtítulo (direita)
+
+          // ── Divisor vertical sutil entre logos ─────────────────
+          doc.setDrawColor(60, 90, 140);
+          doc.setLineWidth(0.4);
+          doc.line(nextLogoX, 8, nextLogoX, 30);
+
+          // ── Logo SGC (ao lado do BD) ────────────────────────────
+          if (sgcLogoDataUrl) {
+            try {
+              const p2 = doc.getImageProperties(sgcLogoDataUrl);
+              const w2 = 24, h2 = (p2.height / p2.width) * w2;
+              const ly2 = Math.max(3, (38 - h2) / 2);
+              doc.addImage(sgcLogoDataUrl, 'PNG', nextLogoX + 4, ly2, w2, h2, undefined, 'FAST');
+            } catch(e) {
+              doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(140,170,220);
+              doc.text('SGC', nextLogoX + 5, 21);
+            }
+          } else {
+            doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(140,170,220);
+            doc.text('SGC', nextLogoX + 5, 21);
+          }
+
+          // ── Título e subtítulo (direita) ───────────────────────
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(14);
+          doc.setFontSize(13);
           doc.setTextColor(...WHITE);
           doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 14, { align:'right' });
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8.5);
+          doc.setFontSize(8);
           doc.setTextColor(170, 200, 240);
-          doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 21, { align:'right' });
-          doc.setFontSize(7.5);
+          doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 22, { align:'right' });
+          doc.setFontSize(7);
           doc.setTextColor(120, 160, 210);
-          doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 27, { align:'right' });
+          doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 29, { align:'right' });
         }
 
         // ── 7. Função de rodapé ──────────────────────────────────
@@ -4156,7 +4185,7 @@
         // ════════════════ PÁGINA 1 ════════════════════════════════
 
         drawPageHeader();
-        let y = 44;
+        let y = 46;
 
         // ── Sumário executivo header ────────────────────────────
         doc.setFillColor(235, 240, 250);
@@ -4275,7 +4304,7 @@
 
         doc.addPage();
         drawPageHeader();
-        y = 44;
+        y = 46;
 
         // ── Seção: Faturamento mensal ────────────────────────────
         doc.setFillColor(...NAVY);
@@ -4425,6 +4454,206 @@
               4: { cellWidth:26, halign:'right' },
               5: { cellWidth:26, halign:'right' },
               6: { cellWidth:14, halign:'center', fontStyle:'bold', textColor:GREEN_C },
+            },
+          });
+        }
+
+        // ════════════════ PÁGINA 3: ANÁLISE DE PARCELAS ══════════
+
+        doc.addPage();
+        drawPageHeader();
+        y = 46;
+
+        // ── Helpers locais ────────────────────────────────────────
+        const fmtDate = s => {
+          if (!s) return '—';
+          const parts = s.split('-');
+          return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : s;
+        };
+        const STEP_NAMES_PDF = ['', 'Emissão NF', 'Rel. Gestão', 'Assinaturas', 'Pagamento'];
+        function calcDaysLate(c) {
+          const dl = stepDeadline(c.nfDate, c.currentStep);
+          if (!dl) return 0;
+          const now = new Date(); now.setHours(12,0,0,0);
+          return Math.max(0, Math.round((now - dl) / 86400000));
+        }
+
+        // ── Dados de parcelas ─────────────────────────────────────
+        const overdueInstalls = adminByYear.filter(c => contractStatus(c) === 'overdue')
+          .sort((a, b) => calcDaysLate(b) - calcDaysLate(a)); // mais atrasadas primeiro
+        const onTimeInstalls  = adminByYear.filter(c => contractStatus(c) === 'on-time').length;
+        const inProgressCount = Math.max(issuedYr - completedYr - overdueYr - onTimeInstalls, 0);
+
+        // ── Cabeçalho da seção ────────────────────────────────────
+        doc.setFillColor(235, 240, 250);
+        doc.roundedRect(ML, y, CW, 7, 1, 1, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...NAVY);
+        doc.text('ANÁLISE DE PARCELAS', ML + 4, y + 4.8);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 120, 150);
+        doc.text(`Exercício ${adminStatsYear} · Situação em ${todayFmt}`, PW - MR, y + 4.8, { align:'right' });
+        y += 11;
+
+        // ── 4 KPIs resumo ─────────────────────────────────────────
+        const parKpiW = (CW - 3 * 3) / 4;
+        const parKpiH = 24;
+        const parKpiData = [
+          { label:'Total Emitidas',  value:String(issuedYr),    sub:`no exercício ${adminStatsYear}`,    accent:NAVY    },
+          { label:'Pagas / Concluídas', value:String(completedYr), sub:'etapas concluídas',             accent:GREEN_C },
+          { label:'Em Andamento',    value:String(onTimeInstalls + inProgressCount), sub:'dentro do prazo', accent:[80,110,190] },
+          { label:'Em Atraso',       value:String(overdueYr),   sub:'requerem atenção',                 accent:RED_C   },
+        ];
+        parKpiData.forEach((k, i) => {
+          const px = ML + i * (parKpiW + 3);
+          doc.setFillColor(...LGRAY);
+          doc.roundedRect(px, y, parKpiW, parKpiH, 1.5, 1.5, 'F');
+          doc.setFillColor(...k.accent);
+          doc.roundedRect(px, y, 2.5, parKpiH, 1, 1, 'F');
+          doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(110,120,140);
+          doc.text(k.label.toUpperCase(), px + 6, y + 6.5);
+          doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...k.accent);
+          doc.text(k.value, px + 6, y + 18);
+          doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(150,160,175);
+          doc.text(k.sub, px + 6, y + 22);
+        });
+        y += parKpiH + 8;
+
+        // ── Seção: Parcelas em Atraso — Detalhamento ──────────────
+        doc.setFillColor(...RED_C);
+        doc.rect(ML, y, CW, 6.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...WHITE);
+        doc.text('PARCELAS EM ATRASO — DETALHAMENTO', ML + 4, y + 4.4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(255, 200, 200);
+        doc.text(`${overdueYr} parcela${overdueYr !== 1 ? 's' : ''} em atraso`, PW - MR, y + 4.4, { align:'right' });
+        y += 10;
+
+        if (overdueInstalls.length === 0) {
+          // Nenhuma parcela atrasada — mensagem de sucesso
+          doc.setFillColor(236, 253, 245);
+          doc.roundedRect(ML, y, CW, 18, 2, 2, 'F');
+          doc.setFillColor(...GREEN_C);
+          doc.roundedRect(ML, y, 3, 18, 1, 1, 'F');
+          doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...GREEN_C);
+          doc.text('Nenhuma parcela em atraso neste exercício.', ML + 9, y + 7.5);
+          doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(60,140,80);
+          doc.text(`Todas as ${issuedYr} parcelas emitidas estão dentro do prazo ou concluídas.`, ML + 9, y + 13.5);
+          y += 24;
+        } else {
+          // Tabela de parcelas atrasadas
+          const overdueBody = overdueInstalls.map(c => {
+            const meta    = contractMeta[c.contractNumber] || {};
+            const organ   = getUnitSigla(meta.unit || '') || (meta.unit||'—').substring(0,20);
+            const dl      = stepDeadline(c.nfDate, c.currentStep);
+            const dlStr   = dl ? fmtDate(dl.toISOString().slice(0,10)) : '—';
+            const dias    = calcDaysLate(c);
+            const etapa   = STEP_NAMES_PDF[c.currentStep] || `Etapa ${c.currentStep}`;
+            return [
+              c.contractNumber,
+              organ,
+              c.nfNumber || '—',
+              fmtDate(c.nfDate),
+              etapa,
+              dlStr,
+              dias > 0 ? `${dias}d` : '—',
+              parseBRL(c.billingValue) > 0 ? fmtBRL(parseBRL(c.billingValue)) : '—',
+            ];
+          });
+
+          doc.autoTable({
+            startY: y,
+            head: [['Nº Contrato','Órgão','Nº NF','Data Emissão','Etapa','Prazo','Atraso','Valor NF']],
+            body: overdueBody,
+            margin: { left: ML, right: MR },
+            styles: {
+              fontSize: 7, cellPadding: { top:2, bottom:2, left:3, right:3 },
+              font:'helvetica', textColor:DGRAY, lineColor:MGRAY, lineWidth:0.25,
+            },
+            headStyles: {
+              fillColor:[160, 30, 30], textColor:WHITE, fontStyle:'bold', fontSize:7.5,
+            },
+            alternateRowStyles: { fillColor:[255, 250, 250] },
+            columnStyles: {
+              0: { cellWidth:26, fontStyle:'bold' },
+              1: { cellWidth:20, halign:'center' },
+              2: { cellWidth:22 },
+              3: { cellWidth:22, halign:'center' },
+              4: { cellWidth:26 },
+              5: { cellWidth:22, halign:'center' },
+              6: { cellWidth:14, halign:'center', fontStyle:'bold', textColor:RED_C },
+              7: { cellWidth:30, halign:'right' },
+            },
+            didParseCell: data => {
+              if (data.section !== 'body') return;
+              if (data.column.index === 6) {
+                const days = parseInt(data.cell.raw);
+                if (days > 30)       data.cell.styles.textColor = [140, 20, 20];
+                else if (days > 10)  data.cell.styles.textColor = RED_C;
+                else                 data.cell.styles.textColor = AMBER_C;
+              }
+            },
+            didDrawPage: data => {
+              if (data.pageNumber > 1) { doc.setPage(data.pageNumber); drawPageHeader(); }
+            },
+          });
+        }
+
+        // ── Resumo por Órgão (se houver atrasos) ─────────────────
+        if (overdueInstalls.length > 0) {
+          const byOrgan = {};
+          overdueInstalls.forEach(c => {
+            const meta  = contractMeta[c.contractNumber] || {};
+            const organ = getUnitSigla(meta.unit || '') || (meta.unit||'—').substring(0,20);
+            if (!byOrgan[organ]) byOrgan[organ] = { count:0, value:0, contracts: new Set() };
+            byOrgan[organ].count++;
+            byOrgan[organ].value += parseBRL(c.billingValue) || 0;
+            byOrgan[organ].contracts.add(c.contractNumber);
+          });
+          const organRows = Object.entries(byOrgan)
+            .sort((a,b) => b[1].count - a[1].count)
+            .map(([org, d]) => [
+              org,
+              String(d.count),
+              String(d.contracts.size),
+              d.value > 0 ? fmtBRL(d.value) : '—',
+            ]);
+
+          const afterTableY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 8 : y + 10;
+
+          doc.setFillColor(...NAVY);
+          doc.rect(ML, afterTableY, CW, 6.5, 'F');
+          doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...WHITE);
+          doc.text('ATRASOS POR ÓRGÃO / SECRETARIA', ML + 4, afterTableY + 4.4);
+          doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(160,190,230);
+          doc.text(`${Object.keys(byOrgan).length} órgão(s) com pendências`, PW - MR, afterTableY + 4.4, { align:'right' });
+
+          doc.autoTable({
+            startY: afterTableY + 10,
+            head: [['Órgão / Secretaria','Parcelas Atrasadas','Contratos Afetados','Valor em Atraso']],
+            body: organRows,
+            margin: { left: ML, right: MR },
+            styles: {
+              fontSize: 7.5, cellPadding: { top:2.5, bottom:2.5, left:3, right:3 },
+              font:'helvetica', textColor:DGRAY, lineColor:MGRAY, lineWidth:0.25,
+            },
+            headStyles: {
+              fillColor:[30, 60, 115], textColor:WHITE, fontStyle:'bold', fontSize:8,
+            },
+            alternateRowStyles: { fillColor:[248, 250, 255] },
+            columnStyles: {
+              0: { cellWidth:70, fontStyle:'bold' },
+              1: { cellWidth:36, halign:'center', fontStyle:'bold', textColor:RED_C },
+              2: { cellWidth:36, halign:'center' },
+              3: { cellWidth:40, halign:'right' },
+            },
+            didDrawPage: data => {
+              if (data.pageNumber > 1) { doc.setPage(data.pageNumber); drawPageHeader(); }
             },
           });
         }
