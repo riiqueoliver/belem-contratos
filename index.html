@@ -214,6 +214,7 @@
     const Trash2        = ({className}) => <SVG className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></SVG>;
     const Edit2         = ({className}) => <SVG className={className}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></SVG>;
     const MoreVertical  = ({className}) => <SVG className={className}><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></SVG>;
+    const FilePdf       = ({className}) => <SVG className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15v2m3-4v4m3-2v2"/></SVG>;
     const UserPlus      = ({className}) => <SVG className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></SVG>;
     const Phone         = ({className}) => <SVG className={className}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></SVG>;
     const Repeat        = ({className}) => <SVG className={className}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></SVG>;
@@ -3969,6 +3970,444 @@
         XLSX.writeFile(wb, `contratos-belem-digital-${new Date().toISOString().slice(0,10)}.xlsx`);
       }
 
+      /* ═══════════════════════════════════════════════════════════
+         GERAR RELATÓRIO INSTITUCIONAL PDF
+      ═══════════════════════════════════════════════════════════ */
+      async function generateAdminPDF() {
+        // ── 1. Lazy-load jsPDF + autotable ──────────────────────
+        if (!window._jspdfReady) {
+          if (!window._jspdfPromise) {
+            window._jspdfPromise = new Promise((resolve, reject) => {
+              let loaded = 0;
+              const urls = [
+                'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+                'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+              ];
+              urls.forEach(src => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = () => { if (++loaded === urls.length) { window._jspdfReady = true; resolve(); } };
+                s.onerror = () => reject(new Error('Falha ao carregar jsPDF'));
+                document.head.appendChild(s);
+              });
+            });
+          }
+          try { await window._jspdfPromise; }
+          catch(e) { addToast('❌ Erro ao carregar biblioteca PDF. Verifique sua conexão.'); return; }
+        }
+        const { jsPDF } = window.jspdf;
+        if (!jsPDF) { addToast('❌ jsPDF não disponível.'); return; }
+
+        addToast('⏳ Gerando relatório PDF…');
+
+        // ── 2. Carrega o logo como base64 ───────────────────────
+        let logoDataUrl = null;
+        try {
+          const resp = await fetch('belemdigital-logo.png');
+          if (resp.ok) {
+            const blob = await resp.blob();
+            logoDataUrl = await new Promise(res => {
+              const reader = new FileReader();
+              reader.onloadend = () => res(reader.result);
+              reader.onerror  = () => res(null);
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch(e) {}
+
+        // ── 3. Helpers de formatação ─────────────────────────────
+        const fmtBRL = v => {
+          if (!v || v === 0) return '—';
+          return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+        };
+        const fmtShort = v => {
+          if (!v || v === 0) return '—';
+          if (v >= 1e6) return `R$ ${(v/1e6).toFixed(2).replace('.',',')}M`;
+          if (v >= 1e3) return `R$ ${(v/1e3).toFixed(0).replace('.',',')} K`;
+          return fmtBRL(v);
+        };
+        const SIT_LABEL = { ativo:'Ativo', vencido:'Vencido', suspenso:'Suspenso', encerrado:'Encerrado', rescindido:'Rescindido' };
+
+        // ── 4. Paleta institucional ──────────────────────────────
+        const NAVY  = [11, 43, 94];
+        const GREEN_C = [58, 138, 53];
+        const LGRAY = [248, 249, 251];
+        const MGRAY = [220, 225, 235];
+        const DGRAY = [55, 65, 81];
+        const WHITE = [255, 255, 255];
+        const AMBER_C = [180, 110, 10];
+        const RED_C   = [185, 40, 40];
+
+        // ── 5. Setup do documento ────────────────────────────────
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const PW = 210, PH = 297;
+        const ML = 14, MR = 14;
+        const CW = PW - ML - MR;
+        const todayFmt = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+
+        // ── 6. Função de cabeçalho por página ────────────────────
+        function drawPageHeader() {
+          // Fundo azul
+          doc.setFillColor(...NAVY);
+          doc.rect(0, 0, PW, 36, 'F');
+          // Faixa verde
+          doc.setFillColor(...GREEN_C);
+          doc.rect(0, 34, PW, 2, 'F');
+          // Logo
+          if (logoDataUrl) {
+            try { doc.addImage(logoDataUrl, 'PNG', ML, 4, 34, 28, undefined, 'FAST'); }
+            catch(e) { drawTextLogo(); }
+          } else { drawTextLogo(); }
+          function drawTextLogo() {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.setTextColor(...WHITE);
+            doc.text('BELÉM DIGITAL', ML + 1, 18);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(160, 190, 230);
+            doc.text('Prefeitura Municipal de Belém', ML + 1, 24);
+          }
+          // Título e subtítulo (direita)
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.setTextColor(...WHITE);
+          doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 14, { align:'right' });
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(170, 200, 240);
+          doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 21, { align:'right' });
+          doc.setFontSize(7.5);
+          doc.setTextColor(120, 160, 210);
+          doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 27, { align:'right' });
+        }
+
+        // ── 7. Função de rodapé ──────────────────────────────────
+        function drawPageFooter(pageNum, totalPages) {
+          doc.setFillColor(...LGRAY);
+          doc.rect(0, PH - 11, PW, 11, 'F');
+          doc.setDrawColor(...MGRAY);
+          doc.setLineWidth(0.3);
+          doc.line(ML, PH - 11, PW - MR, PH - 11);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7);
+          doc.setTextColor(120, 130, 150);
+          doc.text('Belém Digital · Prefeitura Municipal de Belém · Sistema de Gestão de Contratos', ML, PH - 4.5);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${pageNum} / ${totalPages}`, PW - MR, PH - 4.5, { align:'right' });
+        }
+
+        // ── 8. Função: caixa KPI ─────────────────────────────────
+        function drawKpiBox(x, y, w, h, label, value, sub, accentColor) {
+          doc.setFillColor(...LGRAY);
+          doc.roundedRect(x, y, w, h, 1.5, 1.5, 'F');
+          doc.setFillColor(...accentColor);
+          doc.roundedRect(x, y, 2.5, h, 1, 1, 'F');
+          // Label
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6.5);
+          doc.setTextColor(110, 120, 140);
+          doc.text(label.toUpperCase(), x + 6, y + 6.5);
+          // Value
+          const fontSize = value.length > 12 ? 11 : value.length > 8 ? 13 : 16;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(fontSize);
+          doc.setTextColor(...DGRAY);
+          doc.text(value, x + 6, y + 15);
+          // Sub
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6);
+          doc.setTextColor(150, 160, 175);
+          doc.text(sub, x + 6, y + 19.5);
+        }
+
+        // ════════════════ PÁGINA 1 ════════════════════════════════
+
+        drawPageHeader();
+        let y = 44;
+
+        // ── Sumário executivo header ────────────────────────────
+        doc.setFillColor(235, 240, 250);
+        doc.roundedRect(ML, y, CW, 7, 1, 1, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...NAVY);
+        doc.text('SUMÁRIO EXECUTIVO', ML + 4, y + 4.8);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 120, 150);
+        doc.text(`Período de referência: Exercício ${adminStatsYear}`, PW - MR, y + 4.8, { align:'right' });
+        y += 11;
+
+        // ── 6 KPIs em grid 3×2 ──────────────────────────────────
+        const kpiW = (CW - 2 * 3) / 3;
+        const kpiH = 23;
+        const kpiGap = 3;
+        const kpiData = [
+          { label:'Contratos Vigentes',    value:String(contractsYrCount),          sub:`no exercício ${adminStatsYear}`,     accent:NAVY },
+          { label:'Contratos Ativos',      value:String(activeCountYr),             sub:'situação ativa',                     accent:GREEN_C },
+          { label:'Valor Total Contratado',value:fmtShort(contractedYrTotal),       sub:'portfólio do exercício',             accent:NAVY },
+          { label:'Valor Executado',       value:fmtShort(totalBilledAll),          sub:'NFs pagas no exercício',             accent:GREEN_C },
+          { label:'Taxa de Execução',      value:`${execRateAll.toFixed(1)}%`,      sub:'executado / contratado',             accent: execRateAll >= 60 ? GREEN_C : execRateAll >= 30 ? AMBER_C : RED_C },
+          { label:'Parcelas no Exercício', value:`${issuedYr}  emitidas`,           sub:`${completedYr} pagas · ${overdueYr} atrasadas`, accent:NAVY },
+        ];
+
+        kpiData.forEach((k, i) => {
+          const col = i % 3;
+          const row = Math.floor(i / 3);
+          drawKpiBox(ML + col*(kpiW+kpiGap), y + row*(kpiH+3), kpiW, kpiH, k.label, k.value, k.sub, k.accent);
+        });
+
+        y += 2*(kpiH+3) + 6;
+
+        // ── Divisor de seção ────────────────────────────────────
+        doc.setFillColor(...NAVY);
+        doc.rect(ML, y, CW, 6.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...WHITE);
+        doc.text(`CONTRATOS VIGENTES — EXERCÍCIO ${adminStatsYear}`, ML + 4, y + 4.4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(160, 190, 230);
+        doc.text(`${allMetaYrContracts.length} contratos`, PW - MR, y + 4.4, { align:'right' });
+        y += 10;
+
+        // ── Tabela de contratos ─────────────────────────────────
+        const tableBody = allMetaYrContracts.map(m => {
+          const sit  = effectiveSituation(m);
+          const exec = m.globalValue > 0 ? Math.min((m.totalBilled / m.globalValue) * 100, 100) : 0;
+          return [
+            m.contractNumber,
+            (m.contractorName || '—').substring(0, 40),
+            m.unit ? getUnitSigla(m.unit) : '—',
+            fmtBRL(m.globalValue),
+            m.totalBilled > 0 ? fmtBRL(m.totalBilled) : '—',
+            exec > 0 ? `${exec.toFixed(1)}%` : '—',
+            SIT_LABEL[sit] || sit,
+          ];
+        });
+
+        doc.autoTable({
+          startY: y,
+          head: [['Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado (Exercício)', '% Exec.', 'Situação']],
+          body: tableBody,
+          margin: { left: ML, right: MR },
+          styles: {
+            fontSize: 7, cellPadding: { top:2, bottom:2, left:3, right:3 },
+            font: 'helvetica', textColor: DGRAY,
+            lineColor: MGRAY, lineWidth: 0.25,
+          },
+          headStyles: {
+            fillColor: [30, 60, 115], textColor: WHITE,
+            fontStyle: 'bold', fontSize: 7.5, halign:'left',
+          },
+          alternateRowStyles: { fillColor: [251, 252, 254] },
+          columnStyles: {
+            0: { cellWidth: 24, fontStyle:'bold' },
+            1: { cellWidth: 52 },
+            2: { cellWidth: 18, halign:'center' },
+            3: { cellWidth: 28, halign:'right' },
+            4: { cellWidth: 28, halign:'right' },
+            5: { cellWidth: 14, halign:'center' },
+            6: { cellWidth: 18, halign:'center' },
+          },
+          didParseCell: data => {
+            if (data.section !== 'body') return;
+            if (data.column.index === 6) {
+              const sit = data.cell.raw;
+              data.cell.styles.fontStyle = 'bold';
+              if (sit === 'Ativo')     data.cell.styles.textColor = GREEN_C;
+              if (sit === 'Vencido' || sit === 'Rescindido') data.cell.styles.textColor = RED_C;
+              if (sit === 'Suspenso') data.cell.styles.textColor = AMBER_C;
+            }
+            if (data.column.index === 5) {
+              const pct = parseFloat(data.cell.raw);
+              data.cell.styles.fontStyle = 'bold';
+              if (pct >= 80) data.cell.styles.textColor = GREEN_C;
+              else if (pct >= 40) data.cell.styles.textColor = AMBER_C;
+              else if (pct > 0)  data.cell.styles.textColor = RED_C;
+            }
+          },
+          didDrawPage: data => {
+            // Header em cada nova página criada pelo autoTable
+            if (data.pageNumber > 1) {
+              doc.setPage(data.pageNumber);
+              drawPageHeader();
+            }
+          },
+        });
+
+        // ════════════════ PÁGINA 2: ANÁLISE MENSAL ═══════════════
+
+        doc.addPage();
+        drawPageHeader();
+        y = 44;
+
+        // ── Seção: Faturamento mensal ────────────────────────────
+        doc.setFillColor(...NAVY);
+        doc.rect(ML, y, CW, 6.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...WHITE);
+        doc.text(`FATURAMENTO MENSAL — EXERCÍCIO ${adminStatsYear}`, ML + 4, y + 4.4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(160, 190, 230);
+        doc.text('Valores pagos por competência (NFs concluídas)', PW - MR, y + 4.4, { align:'right' });
+        y += 10;
+
+        // ── Gráfico de barras ────────────────────────────────────
+        const maxV   = Math.max(...monthlyBilling.map(m => m.value), 1);
+        const chartH = 62;
+        const chartW = CW;
+        const barPad = 2.5;
+        const nBars  = 12;
+        const barW   = (chartW - barPad * (nBars + 1)) / nBars;
+
+        // Fundo do gráfico
+        doc.setFillColor(...LGRAY);
+        doc.roundedRect(ML, y, chartW, chartH + 16, 2, 2, 'F');
+
+        // Linhas de grade horizontais + rótulos de valor
+        for (let g = 0; g <= 4; g++) {
+          const lineY = y + 6 + (chartH - 10) * (1 - g/4);
+          doc.setDrawColor(...MGRAY);
+          doc.setLineWidth(0.25);
+          doc.line(ML + 2, lineY, ML + chartW - 2, lineY);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(5.5);
+          doc.setTextColor(140, 150, 165);
+          doc.text(fmtShort((maxV * g) / 4), ML + 3, lineY - 1);
+        }
+
+        // Barras
+        monthlyBilling.forEach((m, i) => {
+          const bx = ML + barPad + i * (barW + barPad);
+          const maxBarH = chartH - 10;
+          const barH = m.value > 0 ? Math.max((m.value / maxV) * maxBarH, 1.5) : 0;
+          const by   = y + 6 + maxBarH - barH;
+
+          if (m.value > 0) {
+            // Gradiente simulado: barra principal escura, topo mais claro
+            doc.setFillColor(...NAVY);
+            doc.roundedRect(bx, by, barW, barH, 1, 1, 'F');
+            // Faixa verde no topo da barra
+            doc.setFillColor(...GREEN_C);
+            doc.roundedRect(bx, by, barW, Math.min(2, barH), 1, 1, 'F');
+            // Valor acima da barra se couber
+            if (barH > 10) {
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(5);
+              doc.setTextColor(...WHITE);
+              doc.text(fmtShort(m.value), bx + barW/2, by + 6.5, { align:'center' });
+            }
+          } else {
+            doc.setFillColor(210, 215, 225);
+            doc.roundedRect(bx, y + 6 + maxBarH - 1.5, barW, 1.5, 0.5, 0.5, 'F');
+          }
+          // Mês
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(6);
+          doc.setTextColor(m.value > 0 ? DGRAY[0] : 160, m.value > 0 ? DGRAY[1] : 160, m.value > 0 ? DGRAY[2] : 160);
+          doc.text(m.label.toUpperCase(), bx + barW/2, y + chartH + 6, { align:'center' });
+        });
+
+        y += chartH + 20;
+
+        // ── Seção: Parcelas do exercício ────────────────────────
+        doc.setFillColor(...NAVY);
+        doc.rect(ML, y, CW, 6.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...WHITE);
+        doc.text(`PARCELAS — EXERCÍCIO ${adminStatsYear}`, ML + 4, y + 4.4);
+        y += 10;
+
+        const parData = [
+          { label:'Emitidas',   value:issuedYr,                             accent:NAVY      },
+          { label:'Pagas',      value:completedYr,                          accent:GREEN_C   },
+          { label:'Atrasadas',  value:overdueYr,                            accent:RED_C     },
+          { label:'Em andamento',value:Math.max(issuedYr-completedYr-overdueYr,0), accent:[80,110,190] },
+        ];
+
+        const pW = (CW - 3 * 3) / 4;
+        parData.forEach((p, i) => {
+          const px = ML + i * (pW + 3);
+          doc.setFillColor(...LGRAY);
+          doc.roundedRect(px, y, pW, 20, 1.5, 1.5, 'F');
+          doc.setFillColor(...p.accent);
+          doc.roundedRect(px, y, 2.5, 20, 1, 1, 'F');
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6.5);
+          doc.setTextColor(110, 120, 140);
+          doc.text(p.label.toUpperCase(), px + 6, y + 7);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(20);
+          doc.setTextColor(...p.accent);
+          doc.text(String(p.value), px + 6, y + 16.5);
+        });
+
+        y += 26;
+
+        // ── Top contratos por valor executado ─────────────────
+        if (topContracts.length > 0) {
+          doc.setFillColor(...NAVY);
+          doc.rect(ML, y, CW, 6.5, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(...WHITE);
+          doc.text('TOP CONTRATOS POR VALOR EXECUTADO NO EXERCÍCIO', ML + 4, y + 4.4);
+          y += 10;
+
+          doc.autoTable({
+            startY: y,
+            head: [['#', 'Nº Contrato', 'Contratante', 'Órgão', 'Valor Global', 'Executado', '% Exec.']],
+            body: topContracts.map((m, i) => {
+              const exec = m.globalValue > 0 ? Math.min((m.totalBilled/m.globalValue)*100,100) : 0;
+              return [
+                String(i+1),
+                m.contractNumber,
+                (m.contractorName||'—').substring(0,35),
+                m.unit ? getUnitSigla(m.unit) : '—',
+                fmtBRL(m.globalValue),
+                fmtBRL(m.totalBilled),
+                `${exec.toFixed(1)}%`,
+              ];
+            }),
+            margin: { left: ML, right: MR },
+            styles: {
+              fontSize: 7.5, cellPadding: { top:2.5, bottom:2.5, left:3, right:3 },
+              font:'helvetica', textColor:DGRAY, lineColor:MGRAY, lineWidth:0.25,
+            },
+            headStyles: {
+              fillColor:GREEN_C, textColor:WHITE, fontStyle:'bold', fontSize:7.5,
+            },
+            alternateRowStyles: { fillColor:[251, 252, 254] },
+            columnStyles: {
+              0: { cellWidth:8,  halign:'center', fontStyle:'bold', textColor:NAVY },
+              1: { cellWidth:24, fontStyle:'bold' },
+              2: { cellWidth:50 },
+              3: { cellWidth:18, halign:'center' },
+              4: { cellWidth:28, halign:'right' },
+              5: { cellWidth:28, halign:'right' },
+              6: { cellWidth:16, halign:'center', fontStyle:'bold', textColor:GREEN_C },
+            },
+          });
+        }
+
+        // ── Rodapés em todas as páginas ──────────────────────────
+        const totalPgs = doc.internal.getNumberOfPages();
+        for (let p = 1; p <= totalPgs; p++) {
+          doc.setPage(p);
+          drawPageFooter(p, totalPgs);
+        }
+
+        // ── Salva ────────────────────────────────────────────────
+        doc.save(`relatorio-gestao-contratos-${adminStatsYear}.pdf`);
+        addToast(`✅ Relatório ${adminStatsYear} gerado com sucesso!`);
+      }
+
       if (!open) return null;
 
       const todayKey = today.toISOString().slice(0,7);
@@ -4255,6 +4694,10 @@
                 <button onClick={() => setPresentMode(true)}
                         className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
                   <Maximize2 className="w-4 h-4" />Apresentação
+                </button>
+                <button onClick={generateAdminPDF}
+                        className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
+                  <FilePdf className="w-4 h-4" />Emitir Relatório
                 </button>
                 <button onClick={handleExport}
                         className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
