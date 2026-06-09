@@ -5463,7 +5463,7 @@ function AdminDashboard({
           return null;
         }
       }
-      const [logoDataUrl, sgcLogoDataUrl] = await Promise.all([fetchLogoBase64('belemdigital-logo.png'), fetchLogoBase64('sgc-logo.png')]);
+      const [bdLogoDataUrl, sgcLogoDataUrl] = await Promise.all([fetchLogoBase64('logo.png'), fetchLogoBase64('belemdigital-logo.png')]);
       const fmtBRL = v => {
         if (!v || v === 0) return '—';
         return 'R$ ' + Number(v).toLocaleString('pt-BR', {
@@ -5512,63 +5512,71 @@ function AdminDashboard({
         doc.rect(0, 0, PW, 38, 'F');
         doc.setFillColor(...GREEN_C);
         doc.rect(0, 36, PW, 2, 'F');
-        let nextLogoX = ML;
-        if (logoDataUrl) {
+        let dividerX = ML + 48;
+        if (bdLogoDataUrl) {
           try {
-            const p = doc.getImageProperties(logoDataUrl);
-            const w = 38,
-              h = p.height / p.width * w;
-            const ly = Math.max(3, (38 - h) / 2);
-            doc.addImage(logoDataUrl, 'PNG', ML, ly, w, h, undefined, 'FAST');
-            nextLogoX = ML + w + 5;
+            const p = doc.getImageProperties(bdLogoDataUrl);
+            const bdW = 48,
+              bdH = p.height / p.width * bdW;
+            const bdY = Math.max(2, (38 - bdH) / 2);
+            doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bd', 'NONE');
+            dividerX = ML + bdW + 5;
           } catch (e) {
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(9);
+            doc.setFontSize(10);
             doc.setTextColor(...WHITE);
-            doc.text('BELÉM DIGITAL', ML + 1, 17);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(6.5);
-            doc.setTextColor(160, 190, 230);
-            doc.text('Prefeitura Municipal de Belém', ML + 1, 23);
-            nextLogoX = ML + 44;
+            doc.text('BELÉM DIGITAL', ML, 20, {
+              baseline: 'middle'
+            });
+            dividerX = ML + 50;
           }
         } else {
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
+          doc.setFontSize(10);
           doc.setTextColor(...WHITE);
-          doc.text('BELÉM DIGITAL', ML + 1, 17);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6.5);
-          doc.setTextColor(160, 190, 230);
-          doc.text('Prefeitura Municipal de Belém', ML + 1, 23);
-          nextLogoX = ML + 44;
+          doc.text('BELÉM DIGITAL', ML, 20, {
+            baseline: 'middle'
+          });
+          dividerX = ML + 50;
         }
-        doc.setDrawColor(60, 90, 140);
-        doc.setLineWidth(0.4);
-        doc.line(nextLogoX, 8, nextLogoX, 30);
+        doc.setDrawColor(40, 70, 120);
+        doc.setLineWidth(0.5);
+        doc.line(dividerX, 7, dividerX, 31);
+        const pillX = dividerX + 5;
+        const pillW = 50;
+        const pillH = 22;
+        const pillY = (38 - pillH) / 2;
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(pillX, pillY, pillW, pillH, 2.5, 2.5, 'F');
         if (sgcLogoDataUrl) {
           try {
             const p2 = doc.getImageProperties(sgcLogoDataUrl);
-            const w2 = 24,
-              h2 = p2.height / p2.width * w2;
-            const ly2 = Math.max(3, (38 - h2) / 2);
-            doc.addImage(sgcLogoDataUrl, 'PNG', nextLogoX + 4, ly2, w2, h2, undefined, 'FAST');
+            const sgcPad = 4;
+            const sgcW = pillW - sgcPad * 2;
+            const sgcH = p2.height / p2.width * sgcW;
+            const sgcX = pillX + sgcPad;
+            const sgcY = pillY + (pillH - sgcH) / 2;
+            doc.addImage(sgcLogoDataUrl, 'PNG', sgcX, sgcY, sgcW, sgcH, 'sgc', 'NONE');
           } catch (e) {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
-            doc.setTextColor(140, 170, 220);
-            doc.text('SGC', nextLogoX + 5, 21);
+            doc.setTextColor(...NAVY);
+            doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, {
+              align: 'center'
+            });
           }
         } else {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(7);
-          doc.setTextColor(140, 170, 220);
-          doc.text('SGC', nextLogoX + 5, 21);
+          doc.setTextColor(...NAVY);
+          doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, {
+            align: 'center'
+          });
         }
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
         doc.setTextColor(...WHITE);
-        doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 14, {
+        doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 13, {
           align: 'right'
         });
         doc.setFont('helvetica', 'normal');
@@ -5579,7 +5587,7 @@ function AdminDashboard({
         });
         doc.setFontSize(7);
         doc.setTextColor(120, 160, 210);
-        doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 29, {
+        doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 30, {
           align: 'right'
         });
       }
