@@ -5448,56 +5448,19 @@ function AdminDashboard({
       return;
     }
     try {
-      const bdLogoDataUrl = await (async () => {
-        try {
-          const resp = await fetch('logo.png');
-          if (!resp.ok) return null;
+      let logoDataUrl = null;
+      try {
+        const resp = await fetch('belemdigital-logo.png');
+        if (resp.ok) {
           const blob = await resp.blob();
-          const imgUrl = URL.createObjectURL(blob);
-          return await new Promise(res => {
-            const img = new Image();
-            img.onload = () => {
-              const c1 = document.createElement('canvas');
-              c1.width = img.naturalWidth;
-              c1.height = img.naturalHeight;
-              const ctx1 = c1.getContext('2d');
-              ctx1.drawImage(img, 0, 0);
-              const id = ctx1.getImageData(0, 0, c1.width, c1.height);
-              const d = id.data;
-              for (let i = 0; i < d.length; i += 4) {
-                if (d[i + 3] < 30) continue;
-                const r = d[i],
-                  g = d[i + 1],
-                  b = d[i + 2];
-                const isGreen = g > r + 40 && g > b + 40;
-                if (!isGreen && r > 160 && g > 160 && b > 160) {
-                  const t = Math.min(1, (r - 160) / 95);
-                  d[i] = Math.round(r * (1 - t) + 11 * t);
-                  d[i + 1] = Math.round(g * (1 - t) + 43 * t);
-                  d[i + 2] = Math.round(b * (1 - t) + 94 * t);
-                }
-              }
-              ctx1.putImageData(id, 0, 0);
-              const c2 = document.createElement('canvas');
-              c2.width = c1.width;
-              c2.height = c1.height;
-              const ctx2 = c2.getContext('2d');
-              ctx2.fillStyle = '#FFFFFF';
-              ctx2.fillRect(0, 0, c2.width, c2.height);
-              ctx2.drawImage(c1, 0, 0);
-              URL.revokeObjectURL(imgUrl);
-              res(c2.toDataURL('image/jpeg', 0.98));
-            };
-            img.onerror = () => {
-              URL.revokeObjectURL(imgUrl);
-              res(null);
-            };
-            img.src = imgUrl;
+          logoDataUrl = await new Promise(res => {
+            const reader = new FileReader();
+            reader.onloadend = () => res(reader.result);
+            reader.onerror = () => res(null);
+            reader.readAsDataURL(blob);
           });
-        } catch (e) {
-          return null;
         }
-      })();
+      } catch (e) {}
       const fmtBRL = v => {
         if (!v || v === 0) return '—';
         return 'R$ ' + Number(v).toLocaleString('pt-BR', {
@@ -5542,48 +5505,48 @@ function AdminDashboard({
         year: 'numeric'
       });
       function drawPageHeader() {
-        doc.setFillColor(255, 255, 255);
-        doc.rect(0, 0, PW, 38, 'F');
         doc.setFillColor(...NAVY);
-        doc.rect(0, 0, PW, 1.5, 'F');
+        doc.rect(0, 0, PW, 36, 'F');
         doc.setFillColor(...GREEN_C);
-        doc.rect(0, 36, PW, 2, 'F');
-        doc.setFillColor(220, 225, 235);
-        doc.rect(0, 35.5, PW, 0.5, 'F');
-        if (bdLogoDataUrl) {
+        doc.rect(0, 34, PW, 2, 'F');
+        if (logoDataUrl) {
           try {
-            const p = doc.getImageProperties(bdLogoDataUrl);
-            const bdW = 50,
-              bdH = p.height / p.width * bdW;
-            const bdY = Math.max(3, (36 - bdH) / 2);
-            doc.addImage(bdLogoDataUrl, 'JPEG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
+            const imgProps = doc.getImageProperties(logoDataUrl);
+            const logoW = 34;
+            const logoH = imgProps.height / imgProps.width * logoW;
+            const logoY = Math.max(2, (36 - logoH) / 2);
+            doc.addImage(logoDataUrl, 'PNG', ML, logoY, logoW, logoH, undefined, 'FAST');
           } catch (e) {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(...NAVY);
-            doc.text('BELÉM DIGITAL', ML, 20);
+            drawTextLogo();
           }
         } else {
+          drawTextLogo();
+        }
+        function drawTextLogo() {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(10);
-          doc.setTextColor(...NAVY);
-          doc.text('BELÉM DIGITAL', ML, 20);
+          doc.setTextColor(...WHITE);
+          doc.text('GESTÃO DE CONTRATOS', ML + 1, 18);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7);
+          doc.setTextColor(160, 190, 230);
+          doc.text('Belém Digital', ML + 1, 24);
         }
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
-        doc.setTextColor(...NAVY);
-        doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 13, {
+        doc.setFontSize(14);
+        doc.setTextColor(...WHITE);
+        doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 14, {
           align: 'right'
         });
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(60, 90, 140);
-        doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 22, {
+        doc.setFontSize(8.5);
+        doc.setTextColor(170, 200, 240);
+        doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 21, {
           align: 'right'
         });
-        doc.setFontSize(7);
-        doc.setTextColor(100, 130, 175);
-        doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 30, {
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 160, 210);
+        doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 27, {
           align: 'right'
         });
       }
@@ -5622,7 +5585,7 @@ function AdminDashboard({
         doc.text(sub, x + 6, y + 19.5);
       }
       drawPageHeader();
-      let y = 46;
+      let y = 44;
       doc.setFillColor(235, 240, 250);
       doc.roundedRect(ML, y, CW, 7, 1, 1, 'F');
       doc.setFont('helvetica', 'bold');
@@ -5777,7 +5740,7 @@ function AdminDashboard({
       });
       doc.addPage();
       drawPageHeader();
-      y = 46;
+      y = 44;
       doc.setFillColor(...NAVY);
       doc.rect(ML, y, CW, 6.5, 'F');
       doc.setFont('helvetica', 'bold');
@@ -5957,7 +5920,7 @@ function AdminDashboard({
       }
       doc.addPage();
       drawPageHeader();
-      y = 46;
+      y = 44;
       const fmtDate = s => {
         if (!s) return '—';
         const parts = s.split('-');
