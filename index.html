@@ -2232,6 +2232,7 @@
                                   onBack, onSaveEdit, onAdvance, onUndo, onUpdateNfNumber,
                                   onNotify, onSavePdf, onDeletePdf, onAddInstallment, apiKey,
                                   onDeleteInstallment, onSaveContractPdf, onDeleteContractPdf,
+                                  currentUser, onUpdateNfData,
                                   addToast }) {
 
       function buildForm() {
@@ -2262,6 +2263,9 @@
       const [nfEditing,   setNfEditing]   = useState(null);
       const [nfDraft,     setNfDraft]     = useState('');
       const [paymentDrafts, setPaymentDrafts] = useState({}); // { [contractId]: 'YYYY-MM-DD' }
+      const [nfCardEditing, setNfCardEditing] = useState(null); // id da parcela cujo card NF está em edição
+      const [nfCardDraft,   setNfCardDraft]   = useState({});   // { refMonth, nfDate, nfNumber, billingValue, gdoc }
+      const canEditNf = currentUser?.role === 'admin';
       // ── form nova parcela ──
       const emptyAddForm = () => {
         const today = new Date();
@@ -3371,60 +3375,148 @@
                         <div className="border-t-2 border-gray-100">
 
                           {/* ── Grid de dados da NF ── */}
-                          <div className="px-5 pt-4 pb-3 bg-white border-b border-gray-100">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5">
-                              <FileText className="w-3 h-3" /> Dados da Nota Fiscal
-                            </p>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                              {/* Competência */}
-                              <div className="rounded-xl p-3 border border-blue-100 bg-blue-50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-400 mb-1">Competência</p>
-                                <p className="text-sm font-bold text-blue-800 capitalize leading-tight">
-                                  {monthLong(c.refMonth || c.nfDate.slice(0,7))}
-                                </p>
-                              </div>
-                              {/* Data de Emissão */}
-                              <div className="rounded-xl p-3 border border-gray-100 bg-gray-50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Data de Emissão</p>
-                                <p className="text-sm font-semibold text-gray-700 leading-tight">
-                                  {c.nfDate ? new Date(c.nfDate+'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                                </p>
-                              </div>
-                              {/* Nº NF */}
-                              <div className="rounded-xl p-3 border border-gray-100 bg-gray-50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Nº da NF</p>
-                                <p className="text-sm font-bold leading-tight" style={{color: c.nfNumber ? GREEN : '#d1d5db'}}>
-                                  {c.nfNumber || '—'}
-                                </p>
-                              </div>
-                              {/* Valor */}
-                              <div className="rounded-xl p-3 border border-green-100 bg-green-50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-green-500 mb-1">Valor Faturado</p>
-                                <p className="text-sm font-bold text-green-700 leading-tight">
-                                  {c.billingValue ? `R$ ${c.billingValue}` : '—'}
-                                </p>
-                              </div>
-                              {/* Parcela */}
-                              <div className="rounded-xl p-3 border border-gray-100 bg-gray-50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Parcela</p>
-                                <p className="text-sm font-bold text-gray-700 leading-tight">
-                                  {c.installment}<span className="text-gray-300 text-xs font-normal"> / {c.totalInstallments}</span>
-                                </p>
-                              </div>
-                              {/* Gdoc */}
-                              {c.gdoc ? (
-                                <div className="rounded-xl p-3 border border-purple-100 bg-purple-50">
-                                  <p className="text-[9px] font-bold uppercase tracking-wider text-purple-400 mb-1">Gdoc</p>
-                                  <p className="text-xs font-semibold text-purple-700 leading-tight break-all">{c.gdoc}</p>
+                          {(() => {
+                            const isEditingCard = nfCardEditing === c.id;
+                            const draft = nfCardDraft;
+
+                            function startNfCardEdit() {
+                              setNfCardDraft({
+                                refMonth:     c.refMonth || c.nfDate.slice(0,7),
+                                nfDate:       c.nfDate   || '',
+                                nfNumber:     c.nfNumber  || '',
+                                billingValue: c.billingValue || '',
+                                gdoc:         c.gdoc     || '',
+                              });
+                              setNfCardEditing(c.id);
+                            }
+
+                            async function saveNfCard() {
+                              const payload = {
+                                refMonth:     draft.refMonth     || null,
+                                nfDate:       draft.nfDate       || null,
+                                nfNumber:     (draft.nfNumber    || '').trim(),
+                                billingValue: draft.billingValue  || '',
+                                gdoc:         (draft.gdoc        || '').trim(),
+                              };
+                              // nfDate fallback: se não preenchida, usa refMonth + '-01'
+                              if (!payload.nfDate && payload.refMonth) payload.nfDate = payload.refMonth + '-01';
+                              await onUpdateNfData(c.id, payload);
+                              setNfCardEditing(null);
+                            }
+
+                            function cancelNfCard() { setNfCardEditing(null); }
+
+                            return (
+                              <div className="px-5 pt-4 pb-3 bg-white border-b border-gray-100">
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+                                    <FileText className="w-3 h-3" /> Dados da Nota Fiscal
+                                  </p>
+                                  {canEditNf && !isEditingCard && (
+                                    <button onClick={startNfCardEdit}
+                                            className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors"
+                                            style={{borderColor:'#0B2B5E', color:'#0B2B5E'}}
+                                            title="Editar dados da NF">
+                                      <Edit2 className="w-3 h-3" /> Editar
+                                    </button>
+                                  )}
+                                  {canEditNf && isEditingCard && (
+                                    <div className="flex gap-1.5">
+                                      <button onClick={saveNfCard}
+                                              className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg text-white transition-colors"
+                                              style={{background: GREEN}}>
+                                        <CheckCircle className="w-3 h-3" /> Salvar
+                                      </button>
+                                      <button onClick={cancelNfCard}
+                                              className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
+                                        <X className="w-3 h-3" /> Cancelar
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <div className="rounded-xl p-3 border border-gray-100 bg-gray-50">
-                                  <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Gdoc</p>
-                                  <p className="text-xs text-gray-300 italic">—</p>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                  {/* Competência */}
+                                  <div className={`rounded-xl p-3 border ${isEditingCard ? 'border-blue-300 bg-blue-50' : 'border-blue-100 bg-blue-50'}`}>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-400 mb-1">Competência</p>
+                                    {isEditingCard ? (
+                                      <input type="month" value={draft.refMonth}
+                                             onChange={e => setNfCardDraft(d => ({...d, refMonth: e.target.value}))}
+                                             className="w-full text-xs font-bold text-blue-800 bg-transparent border-b border-blue-300 focus:outline-none focus:border-blue-500 pb-0.5" />
+                                    ) : (
+                                      <p className="text-sm font-bold text-blue-800 capitalize leading-tight">
+                                        {monthLong(c.refMonth || c.nfDate.slice(0,7))}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {/* Data de Emissão */}
+                                  <div className={`rounded-xl p-3 border ${isEditingCard ? 'border-gray-300 bg-gray-50' : 'border-gray-100 bg-gray-50'}`}>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Data de Emissão</p>
+                                    {isEditingCard ? (
+                                      <input type="date" value={draft.nfDate}
+                                             onChange={e => setNfCardDraft(d => ({...d, nfDate: e.target.value}))}
+                                             className="w-full text-xs font-semibold text-gray-700 bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 pb-0.5" />
+                                    ) : (
+                                      <p className="text-sm font-semibold text-gray-700 leading-tight">
+                                        {c.nfDate ? new Date(c.nfDate+'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {/* Nº NF */}
+                                  <div className={`rounded-xl p-3 border ${isEditingCard ? 'border-gray-300 bg-gray-50' : 'border-gray-100 bg-gray-50'}`}>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Nº da NF</p>
+                                    {isEditingCard ? (
+                                      <input type="text" value={draft.nfNumber}
+                                             onChange={e => setNfCardDraft(d => ({...d, nfNumber: e.target.value}))}
+                                             placeholder="NF-000123"
+                                             className="w-full text-xs font-bold bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 pb-0.5"
+                                             style={{color: GREEN}} />
+                                    ) : (
+                                      <p className="text-sm font-bold leading-tight" style={{color: c.nfNumber ? GREEN : '#d1d5db'}}>
+                                        {c.nfNumber || '—'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {/* Valor Faturado */}
+                                  <div className={`rounded-xl p-3 border ${isEditingCard ? 'border-green-300 bg-green-50' : 'border-green-100 bg-green-50'}`}>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-green-500 mb-1">Valor Faturado</p>
+                                    {isEditingCard ? (
+                                      <input type="text" value={draft.billingValue}
+                                             onChange={e => setNfCardDraft(d => ({...d, billingValue: maskBRL(e.target.value)}))}
+                                             onBlur={e => setNfCardDraft(d => ({...d, billingValue: formatBRL(e.target.value)}))}
+                                             placeholder="0,00"
+                                             className="w-full text-xs font-bold text-green-700 bg-transparent border-b border-green-300 focus:outline-none focus:border-green-500 pb-0.5" />
+                                    ) : (
+                                      <p className="text-sm font-bold text-green-700 leading-tight">
+                                        {c.billingValue ? `R$ ${c.billingValue}` : '—'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {/* Parcela (sempre só leitura) */}
+                                  <div className="rounded-xl p-3 border border-gray-100 bg-gray-50">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Parcela</p>
+                                    <p className="text-sm font-bold text-gray-700 leading-tight">
+                                      {c.installment}<span className="text-gray-300 text-xs font-normal"> / {c.totalInstallments}</span>
+                                    </p>
+                                  </div>
+                                  {/* Gdoc */}
+                                  <div className={`rounded-xl p-3 border ${isEditingCard ? 'border-purple-200 bg-purple-50' : c.gdoc ? 'border-purple-100 bg-purple-50' : 'border-gray-100 bg-gray-50'}`}>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-purple-400 mb-1">Gdoc</p>
+                                    {isEditingCard ? (
+                                      <input type="text" value={draft.gdoc}
+                                             onChange={e => setNfCardDraft(d => ({...d, gdoc: e.target.value}))}
+                                             placeholder="Nº do Gdoc"
+                                             className="w-full text-xs font-semibold text-purple-700 bg-transparent border-b border-purple-300 focus:outline-none focus:border-purple-500 pb-0.5" />
+                                    ) : c.gdoc ? (
+                                      <p className="text-xs font-semibold text-purple-700 leading-tight break-all">{c.gdoc}</p>
+                                    ) : (
+                                      <p className="text-xs text-gray-300 italic">—</p>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Meta info */}
                           <div className="px-5 py-3 bg-slate-50 border-b border-gray-100 flex flex-wrap gap-4 items-center text-xs text-gray-500">
@@ -6863,6 +6955,11 @@
         await db.collection('contracts').doc(String(id)).update({ nfNumber: (value || '').trim() });
       }
 
+      async function handleUpdateNfData(id, data) {
+        await db.collection('contracts').doc(String(id)).update(data);
+        addToast('✅ Dados da NF atualizados com sucesso.');
+      }
+
       async function handleUndo(id) {
         const c = contracts.find(x => x.id === id);
         if (!c || c.completedSteps.length <= 1) return;
@@ -7260,6 +7357,8 @@
                 onDeleteAdditive={handleDeleteAdditive}
                 addToast={addToast}
                 apiKey={apiKey}
+                currentUser={currentUser}
+                onUpdateNfData={handleUpdateNfData}
               />
             ) : (
               <>

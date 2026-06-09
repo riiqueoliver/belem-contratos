@@ -3444,6 +3444,8 @@ function ContractDetailView({
   onDeleteInstallment,
   onSaveContractPdf,
   onDeleteContractPdf,
+  currentUser,
+  onUpdateNfData,
   addToast
 }) {
   function buildForm() {
@@ -3476,6 +3478,9 @@ function ContractDetailView({
   const [nfEditing, setNfEditing] = useState(null);
   const [nfDraft, setNfDraft] = useState('');
   const [paymentDrafts, setPaymentDrafts] = useState({});
+  const [nfCardEditing, setNfCardEditing] = useState(null);
+  const [nfCardDraft, setNfCardDraft] = useState({});
+  const canEditNf = currentUser?.role === 'admin';
   const emptyAddForm = () => {
     const today = new Date();
     return {
@@ -4760,62 +4765,164 @@ function ContractDetailView({
       className: "w-3.5 h-3.5 text-gray-500"
     })))), isOpen && React.createElement("div", {
       className: "border-t-2 border-gray-100"
-    }, React.createElement("div", {
-      className: "px-5 pt-4 pb-3 bg-white border-b border-gray-100"
-    }, React.createElement("p", {
-      className: "text-[9px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5"
-    }, React.createElement(FileText, {
-      className: "w-3 h-3"
-    }), " Dados da Nota Fiscal"), React.createElement("div", {
-      className: "grid grid-cols-2 sm:grid-cols-3 gap-2.5"
-    }, React.createElement("div", {
-      className: "rounded-xl p-3 border border-blue-100 bg-blue-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-blue-400 mb-1"
-    }, "Compet\xEAncia"), React.createElement("p", {
-      className: "text-sm font-bold text-blue-800 capitalize leading-tight"
-    }, monthLong(c.refMonth || c.nfDate.slice(0, 7)))), React.createElement("div", {
-      className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
-    }, "Data de Emiss\xE3o"), React.createElement("p", {
-      className: "text-sm font-semibold text-gray-700 leading-tight"
-    }, c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—')), React.createElement("div", {
-      className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
-    }, "N\xBA da NF"), React.createElement("p", {
-      className: "text-sm font-bold leading-tight",
-      style: {
-        color: c.nfNumber ? GREEN : '#d1d5db'
+    }, (() => {
+      const isEditingCard = nfCardEditing === c.id;
+      const draft = nfCardDraft;
+      function startNfCardEdit() {
+        setNfCardDraft({
+          refMonth: c.refMonth || c.nfDate.slice(0, 7),
+          nfDate: c.nfDate || '',
+          nfNumber: c.nfNumber || '',
+          billingValue: c.billingValue || '',
+          gdoc: c.gdoc || ''
+        });
+        setNfCardEditing(c.id);
       }
-    }, c.nfNumber || '—')), React.createElement("div", {
-      className: "rounded-xl p-3 border border-green-100 bg-green-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-green-500 mb-1"
-    }, "Valor Faturado"), React.createElement("p", {
-      className: "text-sm font-bold text-green-700 leading-tight"
-    }, c.billingValue ? `R$ ${c.billingValue}` : '—')), React.createElement("div", {
-      className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
-    }, "Parcela"), React.createElement("p", {
-      className: "text-sm font-bold text-gray-700 leading-tight"
-    }, c.installment, React.createElement("span", {
-      className: "text-gray-300 text-xs font-normal"
-    }, " / ", c.totalInstallments))), c.gdoc ? React.createElement("div", {
-      className: "rounded-xl p-3 border border-purple-100 bg-purple-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-purple-400 mb-1"
-    }, "Gdoc"), React.createElement("p", {
-      className: "text-xs font-semibold text-purple-700 leading-tight break-all"
-    }, c.gdoc)) : React.createElement("div", {
-      className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
-    }, React.createElement("p", {
-      className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
-    }, "Gdoc"), React.createElement("p", {
-      className: "text-xs text-gray-300 italic"
-    }, "\u2014")))), React.createElement("div", {
+      async function saveNfCard() {
+        const payload = {
+          refMonth: draft.refMonth || null,
+          nfDate: draft.nfDate || null,
+          nfNumber: (draft.nfNumber || '').trim(),
+          billingValue: draft.billingValue || '',
+          gdoc: (draft.gdoc || '').trim()
+        };
+        if (!payload.nfDate && payload.refMonth) payload.nfDate = payload.refMonth + '-01';
+        await onUpdateNfData(c.id, payload);
+        setNfCardEditing(null);
+      }
+      function cancelNfCard() {
+        setNfCardEditing(null);
+      }
+      return React.createElement("div", {
+        className: "px-5 pt-4 pb-3 bg-white border-b border-gray-100"
+      }, React.createElement("div", {
+        className: "flex items-center justify-between mb-3"
+      }, React.createElement("p", {
+        className: "text-[9px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5"
+      }, React.createElement(FileText, {
+        className: "w-3 h-3"
+      }), " Dados da Nota Fiscal"), canEditNf && !isEditingCard && React.createElement("button", {
+        onClick: startNfCardEdit,
+        className: "flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors",
+        style: {
+          borderColor: '#0B2B5E',
+          color: '#0B2B5E'
+        },
+        title: "Editar dados da NF"
+      }, React.createElement(Edit2, {
+        className: "w-3 h-3"
+      }), " Editar"), canEditNf && isEditingCard && React.createElement("div", {
+        className: "flex gap-1.5"
+      }, React.createElement("button", {
+        onClick: saveNfCard,
+        className: "flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg text-white transition-colors",
+        style: {
+          background: GREEN
+        }
+      }, React.createElement(CheckCircle, {
+        className: "w-3 h-3"
+      }), " Salvar"), React.createElement("button", {
+        onClick: cancelNfCard,
+        className: "flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+      }, React.createElement(X, {
+        className: "w-3 h-3"
+      }), " Cancelar"))), React.createElement("div", {
+        className: "grid grid-cols-2 sm:grid-cols-3 gap-2.5"
+      }, React.createElement("div", {
+        className: `rounded-xl p-3 border ${isEditingCard ? 'border-blue-300 bg-blue-50' : 'border-blue-100 bg-blue-50'}`
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-blue-400 mb-1"
+      }, "Compet\xEAncia"), isEditingCard ? React.createElement("input", {
+        type: "month",
+        value: draft.refMonth,
+        onChange: e => setNfCardDraft(d => ({
+          ...d,
+          refMonth: e.target.value
+        })),
+        className: "w-full text-xs font-bold text-blue-800 bg-transparent border-b border-blue-300 focus:outline-none focus:border-blue-500 pb-0.5"
+      }) : React.createElement("p", {
+        className: "text-sm font-bold text-blue-800 capitalize leading-tight"
+      }, monthLong(c.refMonth || c.nfDate.slice(0, 7)))), React.createElement("div", {
+        className: `rounded-xl p-3 border ${isEditingCard ? 'border-gray-300 bg-gray-50' : 'border-gray-100 bg-gray-50'}`
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+      }, "Data de Emiss\xE3o"), isEditingCard ? React.createElement("input", {
+        type: "date",
+        value: draft.nfDate,
+        onChange: e => setNfCardDraft(d => ({
+          ...d,
+          nfDate: e.target.value
+        })),
+        className: "w-full text-xs font-semibold text-gray-700 bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 pb-0.5"
+      }) : React.createElement("p", {
+        className: "text-sm font-semibold text-gray-700 leading-tight"
+      }, c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—')), React.createElement("div", {
+        className: `rounded-xl p-3 border ${isEditingCard ? 'border-gray-300 bg-gray-50' : 'border-gray-100 bg-gray-50'}`
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+      }, "N\xBA da NF"), isEditingCard ? React.createElement("input", {
+        type: "text",
+        value: draft.nfNumber,
+        onChange: e => setNfCardDraft(d => ({
+          ...d,
+          nfNumber: e.target.value
+        })),
+        placeholder: "NF-000123",
+        className: "w-full text-xs font-bold bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 pb-0.5",
+        style: {
+          color: GREEN
+        }
+      }) : React.createElement("p", {
+        className: "text-sm font-bold leading-tight",
+        style: {
+          color: c.nfNumber ? GREEN : '#d1d5db'
+        }
+      }, c.nfNumber || '—')), React.createElement("div", {
+        className: `rounded-xl p-3 border ${isEditingCard ? 'border-green-300 bg-green-50' : 'border-green-100 bg-green-50'}`
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-green-500 mb-1"
+      }, "Valor Faturado"), isEditingCard ? React.createElement("input", {
+        type: "text",
+        value: draft.billingValue,
+        onChange: e => setNfCardDraft(d => ({
+          ...d,
+          billingValue: maskBRL(e.target.value)
+        })),
+        onBlur: e => setNfCardDraft(d => ({
+          ...d,
+          billingValue: formatBRL(e.target.value)
+        })),
+        placeholder: "0,00",
+        className: "w-full text-xs font-bold text-green-700 bg-transparent border-b border-green-300 focus:outline-none focus:border-green-500 pb-0.5"
+      }) : React.createElement("p", {
+        className: "text-sm font-bold text-green-700 leading-tight"
+      }, c.billingValue ? `R$ ${c.billingValue}` : '—')), React.createElement("div", {
+        className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+      }, "Parcela"), React.createElement("p", {
+        className: "text-sm font-bold text-gray-700 leading-tight"
+      }, c.installment, React.createElement("span", {
+        className: "text-gray-300 text-xs font-normal"
+      }, " / ", c.totalInstallments))), React.createElement("div", {
+        className: `rounded-xl p-3 border ${isEditingCard ? 'border-purple-200 bg-purple-50' : c.gdoc ? 'border-purple-100 bg-purple-50' : 'border-gray-100 bg-gray-50'}`
+      }, React.createElement("p", {
+        className: "text-[9px] font-bold uppercase tracking-wider text-purple-400 mb-1"
+      }, "Gdoc"), isEditingCard ? React.createElement("input", {
+        type: "text",
+        value: draft.gdoc,
+        onChange: e => setNfCardDraft(d => ({
+          ...d,
+          gdoc: e.target.value
+        })),
+        placeholder: "N\xBA do Gdoc",
+        className: "w-full text-xs font-semibold text-purple-700 bg-transparent border-b border-purple-300 focus:outline-none focus:border-purple-500 pb-0.5"
+      }) : c.gdoc ? React.createElement("p", {
+        className: "text-xs font-semibold text-purple-700 leading-tight break-all"
+      }, c.gdoc) : React.createElement("p", {
+        className: "text-xs text-gray-300 italic"
+      }, "\u2014"))));
+    })(), React.createElement("div", {
       className: "px-5 py-3 bg-slate-50 border-b border-gray-100 flex flex-wrap gap-4 items-center text-xs text-gray-500"
     }, React.createElement("span", {
       className: "flex items-center gap-1.5"
@@ -9037,6 +9144,10 @@ function App() {
       nfNumber: (value || '').trim()
     });
   }
+  async function handleUpdateNfData(id, data) {
+    await db.collection('contracts').doc(String(id)).update(data);
+    addToast('✅ Dados da NF atualizados com sucesso.');
+  }
   async function handleUndo(id) {
     const c = contracts.find(x => x.id === id);
     if (!c || c.completedSteps.length <= 1) return;
@@ -9596,7 +9707,9 @@ function App() {
     onSaveAdditive: handleSaveAdditives,
     onDeleteAdditive: handleDeleteAdditive,
     addToast: addToast,
-    apiKey: apiKey
+    apiKey: apiKey,
+    currentUser: currentUser,
+    onUpdateNfData: handleUpdateNfData
   }) : React.createElement(React.Fragment, null, React.createElement("div", {
     className: "rounded-2xl overflow-hidden shadow-sm border border-blue-100",
     style: {
