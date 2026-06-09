@@ -4025,22 +4025,35 @@
 
         try {
 
-        // ── 2. Carrega os logos como base64 ──────────────────────
-        async function fetchLogoBase64(url) {
+        // ── 2. Carrega o logo e compõe sobre fundo navy via canvas ─
+        // Isso resolve o problema do jsPDF com transparência PNG:
+        // PNG transparente + texto branco → jsPDF preenche transparência com branco
+        // → texto branco sobre branco = invisível.
+        // Solução: compor no canvas sobre a mesma cor do header, exportar como JPEG.
+        const bdLogoDataUrl = await (async () => {
           try {
-            const resp = await fetch(url);
+            const resp = await fetch('logo.png');
             if (!resp.ok) return null;
             const blob = await resp.blob();
+            const imgUrl = URL.createObjectURL(blob);
             return await new Promise(res => {
-              const reader = new FileReader();
-              reader.onloadend = () => res(reader.result);
-              reader.onerror  = () => res(null);
-              reader.readAsDataURL(blob);
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width  = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#0B2B5E'; // mesmo NAVY do header
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                URL.revokeObjectURL(imgUrl);
+                res(canvas.toDataURL('image/jpeg', 0.98));
+              };
+              img.onerror = () => { URL.revokeObjectURL(imgUrl); res(null); };
+              img.src = imgUrl;
             });
           } catch(e) { return null; }
-        }
-        // logo.png = Belém Digital (versão branca, para fundo navy)
-        const bdLogoDataUrl = await fetchLogoBase64('logo.png');
+        })();
 
         // ── 3. Helpers de formatação ─────────────────────────────
         const fmtBRL = v => {
@@ -4087,7 +4100,7 @@
               const p = doc.getImageProperties(bdLogoDataUrl);
               const bdW = 46, bdH = (p.height / p.width) * bdW;
               const bdY = Math.max(2, (38 - bdH) / 2);
-              doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
+              doc.addImage(bdLogoDataUrl, 'JPEG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
             } catch(e) {
               doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
               doc.text('BELÉM DIGITAL', ML, 20);
