@@ -3974,31 +3974,56 @@
          GERAR RELATÓRIO INSTITUCIONAL PDF
       ═══════════════════════════════════════════════════════════ */
       async function generateAdminPDF() {
-        // ── 1. Lazy-load jsPDF + autotable ──────────────────────
-        if (!window._jspdfReady) {
-          if (!window._jspdfPromise) {
-            window._jspdfPromise = new Promise((resolve, reject) => {
-              let loaded = 0;
-              const urls = [
-                'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-                'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
-              ];
-              urls.forEach(src => {
-                const s = document.createElement('script');
-                s.src = src;
-                s.onload = () => { if (++loaded === urls.length) { window._jspdfReady = true; resolve(); } };
-                s.onerror = () => reject(new Error('Falha ao carregar jsPDF'));
-                document.head.appendChild(s);
-              });
-            });
-          }
-          try { await window._jspdfPromise; }
-          catch(e) { addToast('❌ Erro ao carregar biblioteca PDF. Verifique sua conexão.'); return; }
+        // ── 1. Abre a janela IMEDIATAMENTE (gesto do usuário) ────
+        // Isso é crítico: window.open após await é bloqueado por popup blockers.
+        // Abrindo antes do primeiro await, o browser aceita como ação do usuário.
+        const previewWin = window.open('about:blank', '_blank');
+        if (previewWin) {
+          previewWin.document.write(`<!DOCTYPE html><html><head><title>Gerando relatório…</title>
+            <style>body{margin:0;display:flex;align-items:center;justify-content:center;
+            height:100vh;font-family:Helvetica,Arial,sans-serif;background:#f0f4f8}
+            .spin{width:44px;height:44px;border:4px solid #0B2B5E;border-top-color:transparent;
+            border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}
+            @keyframes s{to{transform:rotate(360deg)}}
+            p{color:#0B2B5E;font-weight:bold;font-size:15px}</style></head>
+            <body><div><div class="spin"></div><p>Gerando relatório…</p></div></body></html>`);
+          previewWin.document.close();
         }
-        const { jsPDF } = window.jspdf;
-        if (!jsPDF) { addToast('❌ jsPDF não disponível.'); return; }
 
-        addToast('⏳ Gerando relatório PDF…');
+        // ── 2. Lazy-load jsPDF → depois autotable (sequencial!) ─
+        if (!window._jspdfReady) {
+          window._jspdfPromise = window._jspdfPromise || new Promise((resolve, reject) => {
+            function loadScript(url, cb) {
+              const s = document.createElement('script');
+              s.src = url;
+              s.onload = cb;
+              s.onerror = () => reject(new Error('Falha ao carregar ' + url));
+              document.head.appendChild(s);
+            }
+            loadScript(
+              'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+              () => loadScript(
+                'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+                () => { window._jspdfReady = true; resolve(); }
+              )
+            );
+          });
+          try { await window._jspdfPromise; }
+          catch(e) {
+            if (previewWin) previewWin.close();
+            addToast('❌ Erro ao carregar biblioteca PDF. Verifique sua conexão.');
+            return;
+          }
+        }
+
+        const { jsPDF } = window.jspdf || {};
+        if (!jsPDF) {
+          if (previewWin) previewWin.close();
+          addToast('❌ jsPDF não disponível.');
+          return;
+        }
+
+        try {
 
         // ── 2. Carrega o logo como base64 ───────────────────────
         let logoDataUrl = null;
@@ -4403,11 +4428,21 @@
           drawPageFooter(p, totalPgs);
         }
 
-        // ── Salva ────────────────────────────────────────────────
-        // Abre o PDF no visualizador nativo do browser (pré-visualização + botão de download)
+        // ── Exibe na janela já aberta ou faz download como fallback ──
         const blobUrl = doc.output('bloburl');
-        window.open(blobUrl, '_blank');
-        addToast(`✅ Relatório ${adminStatsYear} aberto para visualização.`);
+        if (previewWin && !previewWin.closed) {
+          previewWin.location.href = blobUrl;
+        } else {
+          // Fallback: download direto (caso popup tenha sido fechado pelo usuário)
+          doc.save(`relatorio-gestao-contratos-${adminStatsYear}.pdf`);
+        }
+        addToast(`✅ Relatório ${adminStatsYear} gerado com sucesso!`);
+
+        } catch(err) {
+          console.error('Erro na geração do PDF:', err);
+          if (previewWin && !previewWin.closed) previewWin.close();
+          addToast(`❌ Erro ao gerar relatório: ${err.message || 'verifique o console.'}`);
+        }
       }
 
       if (!open) return null;
