@@ -4025,11 +4025,10 @@
 
         try {
 
-        // ── 2. Carrega o logo e compõe sobre fundo navy via canvas ─
-        // Isso resolve o problema do jsPDF com transparência PNG:
-        // PNG transparente + texto branco → jsPDF preenche transparência com branco
-        // → texto branco sobre branco = invisível.
-        // Solução: compor no canvas sobre a mesma cor do header, exportar como JPEG.
+        // ── 2. Carrega o logo sobre fundo BRANCO via canvas ────────
+        // logo.png = versão branca (texto branco + ícone verde, fundo transparente).
+        // jsPDF não suporta transparência PNG → converte pixels brancos do logo em
+        // navy (#0B2B5E) antes de renderizar sobre fundo branco do header.
         const bdLogoDataUrl = await (async () => {
           try {
             const resp = await fetch('logo.png');
@@ -4039,15 +4038,35 @@
             return await new Promise(res => {
               const img = new Image();
               img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width  = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#0B2B5E'; // mesmo NAVY do header
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
+                // 1ª passagem: renderizar sobre canvas transparente para isolar pixels do logo
+                const c1 = document.createElement('canvas');
+                c1.width = img.naturalWidth; c1.height = img.naturalHeight;
+                const ctx1 = c1.getContext('2d');
+                ctx1.drawImage(img, 0, 0);
+                // Converter pixels brancos/claros (texto) → navy; manter verdes (ícone)
+                const id = ctx1.getImageData(0, 0, c1.width, c1.height);
+                const d = id.data;
+                for (let i = 0; i < d.length; i += 4) {
+                  if (d[i+3] < 30) continue;           // transparente: pula
+                  const r = d[i], g = d[i+1], b = d[i+2];
+                  const isGreen = g > r + 40 && g > b + 40; // ícone verde: preserva
+                  if (!isGreen && r > 160 && g > 160 && b > 160) {
+                    const t = Math.min(1, (r - 160) / 95);  // gradiente suave
+                    d[i]   = Math.round(r * (1-t) + 11 * t);
+                    d[i+1] = Math.round(g * (1-t) + 43 * t);
+                    d[i+2] = Math.round(b * (1-t) + 94 * t);
+                  }
+                }
+                ctx1.putImageData(id, 0, 0);
+                // 2ª passagem: compor sobre fundo branco → JPEG sem transparência
+                const c2 = document.createElement('canvas');
+                c2.width = c1.width; c2.height = c1.height;
+                const ctx2 = c2.getContext('2d');
+                ctx2.fillStyle = '#FFFFFF';
+                ctx2.fillRect(0, 0, c2.width, c2.height);
+                ctx2.drawImage(c1, 0, 0);
                 URL.revokeObjectURL(imgUrl);
-                res(canvas.toDataURL('image/jpeg', 0.98));
+                res(c2.toDataURL('image/jpeg', 0.98));
               };
               img.onerror = () => { URL.revokeObjectURL(imgUrl); res(null); };
               img.src = imgUrl;
@@ -4087,40 +4106,46 @@
 
         // ── 6. Função de cabeçalho por página ────────────────────
         function drawPageHeader() {
-          // Fundo azul navy
-          doc.setFillColor(...NAVY);
+          // Fundo BRANCO
+          doc.setFillColor(255, 255, 255);
           doc.rect(0, 0, PW, 38, 'F');
-          // Faixa verde na base
+          // Linha separadora navy suave no topo
+          doc.setFillColor(...NAVY);
+          doc.rect(0, 0, PW, 1.5, 'F');
+          // Faixa verde na base do header
           doc.setFillColor(...GREEN_C);
           doc.rect(0, 36, PW, 2, 'F');
+          // Linha cinza-clara acima do verde (separador sutil)
+          doc.setFillColor(220, 225, 235);
+          doc.rect(0, 35.5, PW, 0.5, 'F');
 
-          // ── Logo Belém Digital (versão branca sobre navy) ───────
+          // ── Logo Belém Digital ──────────────────────────────────
           if (bdLogoDataUrl) {
             try {
               const p = doc.getImageProperties(bdLogoDataUrl);
-              const bdW = 46, bdH = (p.height / p.width) * bdW;
-              const bdY = Math.max(2, (38 - bdH) / 2);
+              const bdW = 50, bdH = (p.height / p.width) * bdW;
+              const bdY = Math.max(3, (36 - bdH) / 2);
               doc.addImage(bdLogoDataUrl, 'JPEG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
             } catch(e) {
-              doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
+              doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
               doc.text('BELÉM DIGITAL', ML, 20);
             }
           } else {
-            doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
+            doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
             doc.text('BELÉM DIGITAL', ML, 20);
           }
 
-          // ── Título e subtítulo (lado direito) ──────────────────
+          // ── Título e subtítulo (lado direito) — texto navy ─────
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(13);
-          doc.setTextColor(...WHITE);
+          doc.setTextColor(...NAVY);
           doc.text('RELATÓRIO DE GESTÃO DE CONTRATOS', PW - MR, 13, { align:'right' });
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
-          doc.setTextColor(170, 200, 240);
+          doc.setTextColor(60, 90, 140);
           doc.text(`Exercício ${adminStatsYear}  ·  Emitido em ${todayFmt}`, PW - MR, 22, { align:'right' });
           doc.setFontSize(7);
-          doc.setTextColor(120, 160, 210);
+          doc.setTextColor(100, 130, 175);
           doc.text('Núcleo de Gestão Comercial e de Contratos', PW - MR, 30, { align:'right' });
         }
 
