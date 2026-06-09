@@ -4404,8 +4404,10 @@
         }
 
         // ── Salva ────────────────────────────────────────────────
-        doc.save(`relatorio-gestao-contratos-${adminStatsYear}.pdf`);
-        addToast(`✅ Relatório ${adminStatsYear} gerado com sucesso!`);
+        // Abre o PDF no visualizador nativo do browser (pré-visualização + botão de download)
+        const blobUrl = doc.output('bloburl');
+        window.open(blobUrl, '_blank');
+        addToast(`✅ Relatório ${adminStatsYear} aberto para visualização.`);
       }
 
       if (!open) return null;

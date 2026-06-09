@@ -5912,8 +5912,9 @@ function AdminDashboard({
       doc.setPage(p);
       drawPageFooter(p, totalPgs);
     }
-    doc.save(`relatorio-gestao-contratos-${adminStatsYear}.pdf`);
-    addToast(`✅ Relatório ${adminStatsYear} gerado com sucesso!`);
+    const blobUrl = doc.output('bloburl');
+    window.open(blobUrl, '_blank');
+    addToast(`✅ Relatório ${adminStatsYear} aberto para visualização.`);
   }
   if (!open) return null;
   const todayKey = today.toISOString().slice(0, 7);
