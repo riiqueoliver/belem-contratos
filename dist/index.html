@@ -5463,7 +5463,7 @@ function AdminDashboard({
           return null;
         }
       }
-      const [bdLogoDataUrl, sgcLogoDataUrl] = await Promise.all([fetchLogoBase64('logo.png'), fetchLogoBase64('belemdigital-logo.png')]);
+      const bdLogoDataUrl = await fetchLogoBase64('logo.png');
       const fmtBRL = v => {
         if (!v || v === 0) return '—';
         return 'R$ ' + Number(v).toLocaleString('pt-BR', {
@@ -5512,66 +5512,24 @@ function AdminDashboard({
         doc.rect(0, 0, PW, 38, 'F');
         doc.setFillColor(...GREEN_C);
         doc.rect(0, 36, PW, 2, 'F');
-        let dividerX = ML + 48;
         if (bdLogoDataUrl) {
           try {
             const p = doc.getImageProperties(bdLogoDataUrl);
-            const bdW = 48,
+            const bdW = 46,
               bdH = p.height / p.width * bdW;
             const bdY = Math.max(2, (38 - bdH) / 2);
-            doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bd', 'NONE');
-            dividerX = ML + bdW + 5;
+            doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
           } catch (e) {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(10);
             doc.setTextColor(...WHITE);
-            doc.text('BELÉM DIGITAL', ML, 20, {
-              baseline: 'middle'
-            });
-            dividerX = ML + 50;
+            doc.text('BELÉM DIGITAL', ML, 20);
           }
         } else {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(10);
           doc.setTextColor(...WHITE);
-          doc.text('BELÉM DIGITAL', ML, 20, {
-            baseline: 'middle'
-          });
-          dividerX = ML + 50;
-        }
-        doc.setDrawColor(40, 70, 120);
-        doc.setLineWidth(0.5);
-        doc.line(dividerX, 7, dividerX, 31);
-        const pillX = dividerX + 5;
-        const pillW = 50;
-        const pillH = 22;
-        const pillY = (38 - pillH) / 2;
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(pillX, pillY, pillW, pillH, 2.5, 2.5, 'F');
-        if (sgcLogoDataUrl) {
-          try {
-            const p2 = doc.getImageProperties(sgcLogoDataUrl);
-            const sgcPad = 4;
-            const sgcW = pillW - sgcPad * 2;
-            const sgcH = p2.height / p2.width * sgcW;
-            const sgcX = pillX + sgcPad;
-            const sgcY = pillY + (pillH - sgcH) / 2;
-            doc.addImage(sgcLogoDataUrl, 'PNG', sgcX, sgcY, sgcW, sgcH, 'sgc', 'NONE');
-          } catch (e) {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7);
-            doc.setTextColor(...NAVY);
-            doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, {
-              align: 'center'
-            });
-          }
-        } else {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7);
-          doc.setTextColor(...NAVY);
-          doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, {
-            align: 'center'
-          });
+          doc.text('BELÉM DIGITAL', ML, 20);
         }
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);

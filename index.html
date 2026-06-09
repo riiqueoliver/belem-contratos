@@ -4039,12 +4039,8 @@
             });
           } catch(e) { return null; }
         }
-        // logo.png = Belém Digital (branco, para fundo escuro)
-        // belemdigital-logo.png = Gestão de Contratos (tons claros, para fundo branco)
-        const [bdLogoDataUrl, sgcLogoDataUrl] = await Promise.all([
-          fetchLogoBase64('logo.png'),
-          fetchLogoBase64('belemdigital-logo.png'),
-        ]);
+        // logo.png = Belém Digital (versão branca, para fundo navy)
+        const bdLogoDataUrl = await fetchLogoBase64('logo.png');
 
         // ── 3. Helpers de formatação ─────────────────────────────
         const fmtBRL = v => {
@@ -4078,65 +4074,27 @@
 
         // ── 6. Função de cabeçalho por página ────────────────────
         function drawPageHeader() {
-          // Fundo azul navy — cobre toda a largura
+          // Fundo azul navy
           doc.setFillColor(...NAVY);
           doc.rect(0, 0, PW, 38, 'F');
           // Faixa verde na base
           doc.setFillColor(...GREEN_C);
           doc.rect(0, 36, PW, 2, 'F');
 
-          // ── Logo Belém Digital (branco, direto no fundo navy) ───
-          // logo.png tem texto branco + ícone verde → ótimo contraste no fundo escuro
-          let dividerX = ML + 48;
+          // ── Logo Belém Digital (versão branca sobre navy) ───────
           if (bdLogoDataUrl) {
             try {
               const p = doc.getImageProperties(bdLogoDataUrl);
-              const bdW = 48, bdH = (p.height / p.width) * bdW;
+              const bdW = 46, bdH = (p.height / p.width) * bdW;
               const bdY = Math.max(2, (38 - bdH) / 2);
-              doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bd', 'NONE');
-              dividerX = ML + bdW + 5;
+              doc.addImage(bdLogoDataUrl, 'PNG', ML, bdY, bdW, bdH, 'bdlogo', 'NONE');
             } catch(e) {
               doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
-              doc.text('BELÉM DIGITAL', ML, 20, { baseline:'middle' });
-              dividerX = ML + 50;
+              doc.text('BELÉM DIGITAL', ML, 20);
             }
           } else {
             doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
-            doc.text('BELÉM DIGITAL', ML, 20, { baseline:'middle' });
-            dividerX = ML + 50;
-          }
-
-          // ── Divisor vertical suave ──────────────────────────────
-          doc.setDrawColor(40, 70, 120);
-          doc.setLineWidth(0.5);
-          doc.line(dividerX, 7, dividerX, 31);
-
-          // ── Logo SGC: pill branco para garantir contraste ───────
-          // belemdigital-logo.png tem tons claros → precisa de fundo branco
-          const pillX  = dividerX + 5;
-          const pillW  = 50;
-          const pillH  = 22;
-          const pillY  = (38 - pillH) / 2;
-          // Fundo branco arredondado
-          doc.setFillColor(255, 255, 255);
-          doc.roundedRect(pillX, pillY, pillW, pillH, 2.5, 2.5, 'F');
-          // Logo dentro do pill
-          if (sgcLogoDataUrl) {
-            try {
-              const p2 = doc.getImageProperties(sgcLogoDataUrl);
-              const sgcPad = 4;
-              const sgcW   = pillW - sgcPad * 2;
-              const sgcH   = (p2.height / p2.width) * sgcW;
-              const sgcX   = pillX + sgcPad;
-              const sgcY   = pillY + (pillH - sgcH) / 2;
-              doc.addImage(sgcLogoDataUrl, 'PNG', sgcX, sgcY, sgcW, sgcH, 'sgc', 'NONE');
-            } catch(e) {
-              doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...NAVY);
-              doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, { align:'center' });
-            }
-          } else {
-            doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...NAVY);
-            doc.text('Gestão de Contratos', pillX + pillW / 2, pillY + pillH / 2 + 1, { align:'center' });
+            doc.text('BELÉM DIGITAL', ML, 20);
           }
 
           // ── Título e subtítulo (lado direito) ──────────────────
