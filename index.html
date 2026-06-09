@@ -4544,7 +4544,7 @@
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8);
           doc.setTextColor(...WHITE);
-          doc.text('TOP CONTRATOS POR VALOR EXECUTADO NO EXERCÍCIO', ML + 4, y + 4.4);
+          doc.text('CONTRATOS EM EXECUÇÃO — POR VALOR EXECUTADO NO EXERCÍCIO', ML + 4, y + 4.4);
           y += 10;
 
           doc.autoTable({
@@ -4605,7 +4605,16 @@
 
         // ── Dados de parcelas ─────────────────────────────────────
         const overdueInstalls = adminByYear.filter(c => contractStatus(c) === 'overdue')
-          .sort((a, b) => calcDaysLate(b) - calcDaysLate(a)); // mais atrasadas primeiro
+          .sort((a, b) => {
+            // Ordena primariamente por órgão (sigla), secundariamente por dias em atraso (desc)
+            const metaA = contractMeta[a.contractNumber] || {};
+            const metaB = contractMeta[b.contractNumber] || {};
+            const orgA  = (getUnitSigla(metaA.unit || '') || metaA.unit || '').toLowerCase();
+            const orgB  = (getUnitSigla(metaB.unit || '') || metaB.unit || '').toLowerCase();
+            if (orgA < orgB) return -1;
+            if (orgA > orgB) return  1;
+            return calcDaysLate(b) - calcDaysLate(a); // desempate: mais atrasadas primeiro
+          });
         const onTimeInstalls  = adminByYear.filter(c => contractStatus(c) === 'on-time').length;
         const inProgressCount = Math.max(issuedYr - completedYr - overdueYr - onTimeInstalls, 0);
 
@@ -4767,7 +4776,7 @@
               d.value > 0 ? fmtBRL(d.value) : '—',
             ]);
 
-          const afterTableY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 8 : y + 10;
+          const afterTableY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 10;
 
           doc.setFillColor(...NAVY);
           doc.rect(ML, afterTableY, CW, 6.5, 'F');
