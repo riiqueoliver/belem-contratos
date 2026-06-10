@@ -3758,6 +3758,7 @@ function ContractDetailView({
     const gdocFull = addForm.gdoc.trim() ? `${addForm.gdoc.trim()}/${gdocYear}/BÉLEMDIGITAL` : '';
     onAddInstallment(contractNumber, {
       nfDate,
+      refMonth: addForm.refMonth,
       nfNumber: addForm.nfNumber,
       gdoc: gdocFull,
       billingValue: addForm.billingValue
@@ -8839,6 +8840,7 @@ function App() {
       contractNumber,
       processNumber: firstRec.processNumber || '',
       nfDate: data.nfDate,
+      refMonth: data.refMonth || data.nfDate.slice(0, 7),
       nfNumber: (data.nfNumber || '').trim(),
       gdoc: (data.gdoc || '').trim(),
       billingValue: data.billingValue || '',

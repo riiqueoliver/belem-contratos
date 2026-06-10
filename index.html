@@ -2490,8 +2490,9 @@
         const gdocFull = addForm.gdoc.trim() ? `${addForm.gdoc.trim()}/${gdocYear}/BÉLEMDIGITAL` : '';
         onAddInstallment(contractNumber, {
           nfDate,
-          nfNumber:    addForm.nfNumber,
-          gdoc:        gdocFull,
+          refMonth:     addForm.refMonth,
+          nfNumber:     addForm.nfNumber,
+          gdoc:         gdocFull,
           billingValue: addForm.billingValue,
         }, addForm.pdfBase64 || null);
         setAddForm(emptyAddForm());
@@ -6700,6 +6701,7 @@
           contractNumber,
           processNumber:    firstRec.processNumber || '',
           nfDate:           data.nfDate,
+          refMonth:         data.refMonth || data.nfDate.slice(0, 7),
           nfNumber:         (data.nfNumber || '').trim(),
           gdoc:             (data.gdoc || '').trim(),
           billingValue:     data.billingValue || '',
