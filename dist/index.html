@@ -11352,12 +11352,12 @@ function App() {
       label: 'Portfólio Total',
       value: fmtCurrencyShort(financialKPIs.portfolioTotal),
       sub: `${financialKPIs.contractCount} contrato${financialKPIs.contractCount !== 1 ? 's' : ''} em ${statsYear}`,
-      defaultBg: `linear-gradient(135deg,${BLUE} 0%,#1e3a8a 100%)`,
-      defaultBorder: BLUE,
-      defaultLabel: 'text-blue-300',
-      defaultValue: 'text-white',
-      defaultSub: 'text-blue-300',
-      alwaysDark: true
+      defaultBg: '#eff6ff',
+      defaultBorder: '#bfdbfe',
+      defaultLabel: 'text-blue-400',
+      defaultValue: 'text-blue-900',
+      defaultSub: 'text-blue-400',
+      alwaysDark: false
     }, {
       key: 'faturado',
       label: `Faturado ${statsYear}`,
@@ -11396,7 +11396,7 @@ function App() {
       className: "grid grid-cols-2 lg:grid-cols-4 gap-3"
     }, homeCardDefs.map(card => {
       const isActive = activeHomeCard === card.key;
-      const useDark = isActive || card.alwaysDark && activeHomeCard === null;
+      const useDark = isActive;
       return React.createElement("div", {
         key: card.key,
         onClick: () => setActiveHomeCard(isActive ? null : card.key),
