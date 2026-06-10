@@ -103,7 +103,7 @@ const lazyLoader = `
 out = out.replace('</head>', lazyLoader + '\n</head>');
 
 // ── 8. Copia assets estáticos (logos) ─────────────────────────────────────
-['belemdigital-logo.png', 'sgc-logo.png', 'logo.png'].forEach(file => {
+['belemdigital-logo.png', 'sgc-logo.png', 'logo.png', 'simbologo2.PNG'].forEach(file => {
   const src = path.join(__dirname, file);
   const dst = path.join(__dirname, 'dist', file);
   if (fs.existsSync(src)) fs.copyFileSync(src, dst);
