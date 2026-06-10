@@ -1572,6 +1572,7 @@ function ContractCard({
     className: "text-red-400"
   }, "*")), React.createElement("input", {
     type: "date",
+    lang: "pt-BR",
     value: paymentDate,
     max: new Date().toISOString().slice(0, 10),
     onChange: e => setPaymentDate(e.target.value),
@@ -4848,6 +4849,7 @@ function ContractDetailView({
         className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
       }, "Data de Emiss\xE3o"), isEditingCard ? React.createElement("input", {
         type: "date",
+        lang: "pt-BR",
         value: draft.nfDate,
         onChange: e => setNfCardDraft(d => ({
           ...d,
@@ -5179,6 +5181,7 @@ function ContractDetailView({
       className: "text-red-400"
     }, "*")), React.createElement("input", {
       type: "date",
+      lang: "pt-BR",
       value: payDraft,
       max: new Date().toISOString().slice(0, 10),
       onChange: e => setPaymentDrafts(prev => ({
