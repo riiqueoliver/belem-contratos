@@ -3568,9 +3568,76 @@ function ProposalModal({
   isAdmin,
   onSave,
   onDelete,
-  onClose
+  onClose,
+  apiKey,
+  addToast
 }) {
   const isNew = !proposal;
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfAnalyzing, setPdfAnalyzing] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState(null);
+  async function analyzeProposalPdf() {
+    if (!pdfFile || !apiKey) return;
+    setPdfAnalyzing(true);
+    setPdfStatus(null);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(pdfFile);
+      });
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [{
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64
+              }
+            }, {
+              type: 'text',
+              text: 'Analise este documento de proposta comercial ou técnica e retorne SOMENTE um JSON válido (sem markdown, sem explicação) com as chaves: title (objeto/descrição resumida da proposta), client (nome do órgão ou empresa cliente), value (valor estimado como string em formato brasileiro, ex: "R$ 120.000,00"; deixe vazio se não encontrar), responsible (nome do responsável ou empresa proponente), unit (sigla ou nome da unidade/secretaria solicitante), demandType ("recebida" se o cliente solicitou, "ofertada" se a empresa propôs), notes (observações relevantes, prazo de entrega, condições especiais). Deixe vazio se não encontrar.'
+            }]
+          }]
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      let text = data.content[0].text.trim();
+      if (text.startsWith('```')) text = text.replace(/```json?\n?/, '').replace(/```$/, '').trim();
+      const ex = JSON.parse(text);
+      setForm(prev => ({
+        ...prev,
+        title: ex.title || prev.title,
+        client: ex.client || prev.client,
+        value: ex.value || prev.value,
+        responsible: ex.responsible || prev.responsible,
+        unit: ex.unit || prev.unit,
+        demandType: ex.demandType === 'recebida' || ex.demandType === 'ofertada' ? ex.demandType : prev.demandType,
+        notes: ex.notes ? prev.notes ? prev.notes + '\n' + ex.notes : ex.notes : prev.notes
+      }));
+      setPdfStatus('ok');
+      if (addToast) addToast('🤖 IA preencheu os campos. Revise antes de salvar.');
+    } catch (err) {
+      setPdfStatus('error');
+      if (addToast) addToast('❌ Erro na leitura: ' + (err.message || 'tente novamente.'));
+    } finally {
+      setPdfAnalyzing(false);
+    }
+  }
   const nextNumber = useMemo(() => {
     const yr = filterYear;
     const nums = allProposals.filter(p => (p.year || (p.createdAt || '').slice(0, 4)) === yr && p.number).map(p => {
@@ -3667,6 +3734,65 @@ function ProposalModal({
     onSubmit: handleSubmit,
     className: "flex-1 overflow-y-auto px-6 py-5 space-y-4"
   }, React.createElement("div", {
+    className: "rounded-2xl border-2 border-dashed p-4 space-y-3",
+    style: {
+      borderColor: BLUE + '40',
+      background: '#f0f5ff'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("div", {
+    className: "w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-black flex-shrink-0",
+    style: {
+      background: BLUE
+    }
+  }, "IA"), React.createElement("div", null, React.createElement("span", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Leitura Autom\xE1tica da Proposta"), React.createElement("span", {
+    className: "ml-2 text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold"
+  }, "BETA"))), React.createElement("p", {
+    className: "text-xs text-blue-700"
+  }, "Anexe o PDF da proposta e a IA preencher\xE1 os campos automaticamente. Voc\xEA pode revisar e ajustar tudo depois."), React.createElement("div", {
+    className: "flex flex-col sm:flex-row gap-2 items-start sm:items-center"
+  }, React.createElement("label", {
+    className: "flex items-center gap-2 cursor-pointer flex-1"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 hover:border-blue-300 transition-colors flex-1 min-w-0"
+  }, React.createElement(FileText, {
+    className: "w-4 h-4 flex-shrink-0",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("span", {
+    className: "truncate"
+  }, pdfFile ? pdfFile.name : 'Selecionar PDF da proposta…')), React.createElement("input", {
+    type: "file",
+    accept: "application/pdf",
+    className: "hidden",
+    onChange: e => {
+      setPdfFile(e.target.files[0] || null);
+      setPdfStatus(null);
+    }
+  })), React.createElement("button", {
+    type: "button",
+    onClick: analyzeProposalPdf,
+    disabled: !pdfFile || !apiKey || pdfAnalyzing,
+    className: "flex items-center gap-2 text-white text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40 hover:opacity-90 transition-opacity flex-shrink-0",
+    style: {
+      background: pdfAnalyzing ? '#6b7280' : BLUE
+    }
+  }, pdfAnalyzing ? React.createElement(React.Fragment, null, React.createElement("span", {
+    className: "animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full"
+  }), "Analisando\u2026") : React.createElement(React.Fragment, null, React.createElement(Search, {
+    className: "w-3.5 h-3.5"
+  }), "Analisar com IA"))), pdfStatus === 'ok' && React.createElement("p", {
+    className: "text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200"
+  }, "\u2705 Campos preenchidos automaticamente. Revise abaixo antes de salvar."), pdfStatus === 'error' && React.createElement("p", {
+    className: "text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200"
+  }, "\u274C N\xE3o foi poss\xEDvel ler o PDF. Verifique o arquivo ou preencha manualmente.")), React.createElement("div", {
     className: "grid grid-cols-3 gap-3"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
@@ -3842,7 +3968,8 @@ function ProposalsPage({
   onAdd,
   onUpdate,
   onDelete,
-  addToast
+  addToast,
+  apiKey
 }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -4044,7 +4171,9 @@ function ProposalsPage({
     isAdmin: currentUser?.role === 'admin',
     onSave: handleSave,
     onDelete: handleDelete,
-    onClose: () => setShowModal(false)
+    onClose: () => setShowModal(false),
+    apiKey: apiKey,
+    addToast: addToast
   }));
 }
 function InstallmentsPage({
@@ -11257,7 +11386,8 @@ function App() {
     onAdd: handleAddProposal,
     onUpdate: handleUpdateProposal,
     onDelete: handleDeleteProposal,
-    addToast: addToast
+    addToast: addToast,
+    apiKey: apiKey
   }) : showInstallmentsPage && !activeContractNumber ? React.createElement(InstallmentsPage, {
     contracts: contracts,
     contractMeta: contractMeta,
