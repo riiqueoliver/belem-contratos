@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "belem-digital-contratos",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["C:\\Users\\Henrique\\OneDrive\\Documentos\\GitHub\\github.com-seu-usuario-belem-contratos\\claude\\server.js"],
+      "port": 5174
+    },
+    {
+      "name": "monitoramento-ia",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["monitor-server.js"],
+      "port": 5175
+    },
+    {
+      "name": "assessor-ia",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["assessor-ia-server.js"],
+      "port": 5176
+    }
+  ]
+}

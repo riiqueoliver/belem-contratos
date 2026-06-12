@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "belem-digital-contratos",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5174", "--directory", "C:\\Users\\Henrique\\OneDrive\\Documentos\\GitHub\\github.com-seu-usuario-belem-contratos"],
+      "port": 5174
+    }
+  ]
+}
