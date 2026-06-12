@@ -7754,13 +7754,16 @@
       }, [contracts, contractMeta, statsYear]);
 
       const pipelineData = useMemo(() => {
-        const active = contracts.filter(c => c.currentStep >= 1 && c.currentStep <= TOTAL_STEPS);
+        const active = contracts.filter(c =>
+          c.currentStep >= 1 && c.currentStep <= TOTAL_STEPS &&
+          c.nfDate && c.nfDate.slice(0,4) === statsYear
+        );
         return STEPS.map(step => ({
           ...step,
           count:      active.filter(c => c.currentStep === step.id).length,
           totalValue: active.filter(c => c.currentStep === step.id).reduce((s, c) => s + parseBRL(c.billingValue), 0),
         }));
-      }, [contracts]);
+      }, [contracts, statsYear]);
 
       function handleLogin(user) {
         localStorage.setItem('belem-session', String(user.id));
