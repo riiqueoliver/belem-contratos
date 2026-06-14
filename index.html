@@ -5369,8 +5369,35 @@
       const activeCountYr       = allMetaYrContracts.filter(m => effectiveSituation(m) === 'ativo').length;
       const suspendedCountYr    = allMetaYrContracts.filter(m => m.situation === 'suspenso').length;
       const closedCountYr       = allMetaYrContracts.filter(m => ['encerrado','rescindido'].includes(m.situation)).length;
-      // Taxa de execução: NFs pagas no ano / valor total dos contratos vigentes no ano
-      const execRateAll         = contractedYrTotal > 0 ? (totalBilledAll / contractedYrTotal * 100) : 0;
+      // Receita anual projetada: prorrateio por meses de sobreposição (mesma lógica da home)
+      const adminYearInt = parseInt(adminStatsYear, 10);
+      const toAdmIdx = d => { const [y,mo] = d.slice(0,7).split('-').map(Number); return y*12+mo; };
+      const valorNoAnoAdmin = Object.values(contractMeta).reduce((s, m) => {
+        if (!m.startDate || !m.endDate) return s;
+        const gv = m.contractType === 'parceria' && m.bdTotal > 0
+          ? parseFloat(m.bdTotal) || 0
+          : parseFloat(m.globalValue) || 0;
+        if (gv === 0) return s;
+        const cStart = toAdmIdx(m.startDate), cEnd = toAdmIdx(m.endDate);
+        const yStart = adminYearInt*12+1,    yEnd = adminYearInt*12+12;
+        const totalMeses = cEnd - cStart + 1;
+        if (totalMeses <= 0) return s;
+        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+        return s + (gv / totalMeses) * mesesNoAno;
+      }, 0);
+      const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
+        if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
+        const pv = parseFloat(m.partnerTotal) || 0;
+        if (pv === 0) return s;
+        const cStart = toAdmIdx(m.startDate), cEnd = toAdmIdx(m.endDate);
+        const yStart = adminYearInt*12+1,    yEnd = adminYearInt*12+12;
+        const totalMeses = cEnd - cStart + 1;
+        if (totalMeses <= 0) return s;
+        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+        return s + (pv / totalMeses) * mesesNoAno;
+      }, 0);
+      // Taxa de execução: NFs pagas no ano / receita prevista projetada para o ano
+      const execRateAll         = valorNoAnoAdmin > 0 ? (totalBilledAll / valorNoAnoAdmin * 100) : 0;
       const bySituationYr       = useMemo(() => {
         const map = {};
         allMetaYrContracts.forEach(m => { const s=effectiveSituation(m); map[s]=(map[s]||0)+1; });
@@ -5631,12 +5658,12 @@
         const kpiH = 23;
         const kpiGap = 3;
         const kpiData = [
-          { label:'Contratos Vigentes',    value:String(contractsYrCount),          sub:`no exercício ${adminStatsYear}`,     accent:NAVY },
-          { label:'Contratos Ativos',      value:String(activeCountYr),             sub:'situação ativa',                     accent:GREEN_C },
-          { label:'Valor Total Contratado',value:fmtShort(contractedYrTotal),       sub:'portfólio do exercício',             accent:NAVY },
-          { label:'Valor Executado',       value:fmtShort(totalBilledAll),          sub:'NFs pagas no exercício',             accent:GREEN_C },
-          { label:'Taxa de Execução',      value:`${execRateAll.toFixed(1)}%`,      sub:'executado / contratado',             accent: execRateAll >= 60 ? GREEN_C : execRateAll >= 30 ? AMBER_C : RED_C },
-          { label:'Parcelas no Exercício', value:`${issuedYr}  emitidas`,           sub:`${completedYr} pagas · ${overdueYr} atrasadas`, accent:NAVY },
+          { label:'Contratos Vigentes',              value:String(contractsYrCount),           sub:`no exercício ${adminStatsYear}`,              accent:NAVY },
+          { label:'Contratos Ativos',                value:String(activeCountYr),              sub:'situação ativa',                              accent:GREEN_C },
+          { label:`Receita Prevista ${adminStatsYear}`, value:fmtShort(valorNoAnoAdmin),       sub:'valor anual proporcional ao exercício',       accent:NAVY },
+          { label:'Repasse Parceiros',               value:partnerRepasseAdmin > 0 ? fmtShort(partnerRepasseAdmin) : '—', sub:`destinado às parceiras em ${adminStatsYear}`, accent:[80,100,200] },
+          { label:'Valor Executado',                 value:fmtShort(totalBilledAll),           sub:'NFs pagas no exercício',                      accent:GREEN_C },
+          { label:'Taxa de Execução',                value:`${execRateAll.toFixed(1)}%`,       sub:'executado / receita prevista',                accent: execRateAll >= 60 ? GREEN_C : execRateAll >= 30 ? AMBER_C : RED_C },
         ];
 
         kpiData.forEach((k, i) => {
@@ -6186,10 +6213,10 @@
               {/* ── Faixa de KPIs — clicáveis (exceto Taxa de Execução) ── */}
               <div className="pres-in" style={{animationDelay:'0.14s', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:'48px'}}>
                 {[
-                  { label:'Contratos',        value: String(contractsYrCount),                       sub:`${activeCountYr} ativo${activeCountYr!==1?'s':''} em ${adminStatsYear}`,  hi:false, action:'contracts' },
-                  { label:'Valor Contratado',  value: fmtCurrencyShort(contractedYrTotal),            sub:`portfólio vigente em ${adminStatsYear}`,          hi:false, action:'value'     },
+                  { label:'Contratos',          value: String(contractsYrCount),                       sub:`${activeCountYr} ativo${activeCountYr!==1?'s':''} em ${adminStatsYear}`,  hi:false, action:'contracts' },
+                  { label:'Receita Prevista',  value: fmtCurrencyShort(valorNoAnoAdmin),              sub:`valor proporcional ao exercício ${adminStatsYear}`, hi:false, action:'value'   },
                   { label:'Total Faturado',    value: fmtCurrencyShort(totalBilledAll),               sub:`NFs pagas em ${adminStatsYear}`,                  hi:true,  action:'billed'    },
-                  { label:'Taxa de Execução',  value: `${execRateAll.toFixed(1).replace('.',',')}%`,  sub:'do contratado faturado',                          hi:execRateAll>=50, action:null },
+                  { label:'Taxa de Execução',  value: `${execRateAll.toFixed(1).replace('.',',')}%`,  sub:'executado / receita prevista',                    hi:execRateAll>=50, action:null },
                 ].map(({label, value, sub, hi, action}, i) => {
                   const isActive  = action && kpiOpen === action;
                   const clickable = action !== null;
@@ -6556,15 +6583,19 @@
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashKpiCard icon={<Clipboard />} label="Contratos Ativos" value={contractsYrCount} color={BLUE}
                   sub={`${activeCountYr} ativo${activeCountYr!==1?'s':''} · ${suspendedCountYr} suspenso${suspendedCountYr!==1?'s':''} em ${adminStatsYear}`} />
-                <DashKpiCard icon={<DollarSign />} label="Valor Contratado" value={fmtCurrencyShort(contractedYrTotal)} color="#1e40af"
-                  sub={`${contractsYrCount} contrato${contractsYrCount!==1?'s':''} com NFs em ${adminStatsYear}`} />
+                <DashKpiCard icon={<DollarSign />} label={`Receita Prevista ${adminStatsYear}`} value={fmtCurrencyShort(valorNoAnoAdmin)} color="#1e40af"
+                  sub="valor anual proporcional ao exercício" />
+                {partnerRepasseAdmin > 0 && (
+                  <DashKpiCard icon={<LinkIcon />} label="Repasse Parceiros" value={fmtCurrencyShort(partnerRepasseAdmin)} color="#1d4ed8"
+                    sub={`destinado às parceiras em ${adminStatsYear}`} />
+                )}
                 <DashKpiCard icon={<CheckCircle />} label="Total Pago" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
                   sub={`${completedYr} parcela${completedYr!==1?'s':''} c/ pagamento concluído em ${adminStatsYear}`} />
                 <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
                   value={`${execRateAll.toFixed(1).replace('.',',')}%`}
                   color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
                   progressBar={execRateAll}
-                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(contractedYrTotal - totalBilledAll)} a receber`} />
+                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(valorNoAnoAdmin - totalBilledAll)} a receber`} />
               </div>
 
               {/* Gráfico mensal + Situação */}

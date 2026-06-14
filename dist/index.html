@@ -7153,7 +7153,38 @@ function AdminDashboard({
   const activeCountYr = allMetaYrContracts.filter(m => effectiveSituation(m) === 'ativo').length;
   const suspendedCountYr = allMetaYrContracts.filter(m => m.situation === 'suspenso').length;
   const closedCountYr = allMetaYrContracts.filter(m => ['encerrado', 'rescindido'].includes(m.situation)).length;
-  const execRateAll = contractedYrTotal > 0 ? totalBilledAll / contractedYrTotal * 100 : 0;
+  const adminYearInt = parseInt(adminStatsYear, 10);
+  const toAdmIdx = d => {
+    const [y, mo] = d.slice(0, 7).split('-').map(Number);
+    return y * 12 + mo;
+  };
+  const valorNoAnoAdmin = Object.values(contractMeta).reduce((s, m) => {
+    if (!m.startDate || !m.endDate) return s;
+    const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
+    if (gv === 0) return s;
+    const cStart = toAdmIdx(m.startDate),
+      cEnd = toAdmIdx(m.endDate);
+    const yStart = adminYearInt * 12 + 1,
+      yEnd = adminYearInt * 12 + 12;
+    const totalMeses = cEnd - cStart + 1;
+    if (totalMeses <= 0) return s;
+    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+    return s + gv / totalMeses * mesesNoAno;
+  }, 0);
+  const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
+    if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
+    const pv = parseFloat(m.partnerTotal) || 0;
+    if (pv === 0) return s;
+    const cStart = toAdmIdx(m.startDate),
+      cEnd = toAdmIdx(m.endDate);
+    const yStart = adminYearInt * 12 + 1,
+      yEnd = adminYearInt * 12 + 12;
+    const totalMeses = cEnd - cStart + 1;
+    if (totalMeses <= 0) return s;
+    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+    return s + pv / totalMeses * mesesNoAno;
+  }, 0);
+  const execRateAll = valorNoAnoAdmin > 0 ? totalBilledAll / valorNoAnoAdmin * 100 : 0;
   const bySituationYr = useMemo(() => {
     const map = {};
     allMetaYrContracts.forEach(m => {
@@ -7403,10 +7434,15 @@ function AdminDashboard({
         sub: 'situação ativa',
         accent: GREEN_C
       }, {
-        label: 'Valor Total Contratado',
-        value: fmtShort(contractedYrTotal),
-        sub: 'portfólio do exercício',
+        label: `Receita Prevista ${adminStatsYear}`,
+        value: fmtShort(valorNoAnoAdmin),
+        sub: 'valor anual proporcional ao exercício',
         accent: NAVY
+      }, {
+        label: 'Repasse Parceiros',
+        value: partnerRepasseAdmin > 0 ? fmtShort(partnerRepasseAdmin) : '—',
+        sub: `destinado às parceiras em ${adminStatsYear}`,
+        accent: [80, 100, 200]
       }, {
         label: 'Valor Executado',
         value: fmtShort(totalBilledAll),
@@ -7415,13 +7451,8 @@ function AdminDashboard({
       }, {
         label: 'Taxa de Execução',
         value: `${execRateAll.toFixed(1)}%`,
-        sub: 'executado / contratado',
+        sub: 'executado / receita prevista',
         accent: execRateAll >= 60 ? GREEN_C : execRateAll >= 30 ? AMBER_C : RED_C
-      }, {
-        label: 'Parcelas no Exercício',
-        value: `${issuedYr}  emitidas`,
-        sub: `${completedYr} pagas · ${overdueYr} atrasadas`,
-        accent: NAVY
       }];
       kpiData.forEach((k, i) => {
         const col = i % 3;
@@ -8136,9 +8167,9 @@ function AdminDashboard({
       hi: false,
       action: 'contracts'
     }, {
-      label: 'Valor Contratado',
-      value: fmtCurrencyShort(contractedYrTotal),
-      sub: `portfólio vigente em ${adminStatsYear}`,
+      label: 'Receita Prevista',
+      value: fmtCurrencyShort(valorNoAnoAdmin),
+      sub: `valor proporcional ao exercício ${adminStatsYear}`,
       hi: false,
       action: 'value'
     }, {
@@ -8150,7 +8181,7 @@ function AdminDashboard({
     }, {
       label: 'Taxa de Execução',
       value: `${execRateAll.toFixed(1).replace('.', ',')}%`,
-      sub: 'do contratado faturado',
+      sub: 'executado / receita prevista',
       hi: execRateAll >= 50,
       action: null
     }].map(({
@@ -8838,10 +8869,16 @@ function AdminDashboard({
     sub: `${activeCountYr} ativo${activeCountYr !== 1 ? 's' : ''} · ${suspendedCountYr} suspenso${suspendedCountYr !== 1 ? 's' : ''} em ${adminStatsYear}`
   }), React.createElement(DashKpiCard, {
     icon: React.createElement(DollarSign, null),
-    label: "Valor Contratado",
-    value: fmtCurrencyShort(contractedYrTotal),
+    label: `Receita Prevista ${adminStatsYear}`,
+    value: fmtCurrencyShort(valorNoAnoAdmin),
     color: "#1e40af",
-    sub: `${contractsYrCount} contrato${contractsYrCount !== 1 ? 's' : ''} com NFs em ${adminStatsYear}`
+    sub: "valor anual proporcional ao exerc\xEDcio"
+  }), partnerRepasseAdmin > 0 && React.createElement(DashKpiCard, {
+    icon: React.createElement(LinkIcon, null),
+    label: "Repasse Parceiros",
+    value: fmtCurrencyShort(partnerRepasseAdmin),
+    color: "#1d4ed8",
+    sub: `destinado às parceiras em ${adminStatsYear}`
   }), React.createElement(DashKpiCard, {
     icon: React.createElement(CheckCircle, null),
     label: "Total Pago",
@@ -8854,7 +8891,7 @@ function AdminDashboard({
     value: `${execRateAll.toFixed(1).replace('.', ',')}%`,
     color: execRateAll >= 75 ? '#166534' : execRateAll >= 40 ? '#854d0e' : '#991b1b',
     progressBar: execRateAll,
-    sub: `${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr !== 1 ? 's' : ''} · ` : ''}${fmtCurrencyShort(contractedYrTotal - totalBilledAll)} a receber`
+    sub: `${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr !== 1 ? 's' : ''} · ` : ''}${fmtCurrencyShort(valorNoAnoAdmin - totalBilledAll)} a receber`
   })), React.createElement("div", {
     className: "grid grid-cols-1 lg:grid-cols-3 gap-4"
   }, React.createElement("div", {
