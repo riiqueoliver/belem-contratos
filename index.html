@@ -5412,8 +5412,8 @@
         const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
         if (totalMeses <= 0) return s;
         const yStart = adminYearInt*12+1, yEnd = adminYearInt*12+12;
-        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-        return s + (gv / totalMeses) * mesesNoAno;
+        if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s; // sem sobreposição
+        return s + (gv / totalMeses) * 12; // valor anual cheio
       }, 0);
       const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
         if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
@@ -5423,8 +5423,8 @@
         const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
         if (totalMeses <= 0) return s;
         const yStart = adminYearInt*12+1, yEnd = adminYearInt*12+12;
-        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-        return s + (pv / totalMeses) * mesesNoAno;
+        if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s;
+        return s + (pv / totalMeses) * 12;
       }, 0);
       // Taxa de execução: NFs pagas no ano / receita prevista projetada para o ano
       const execRateAll         = valorNoAnoAdmin > 0 ? (totalBilledAll / valorNoAnoAdmin * 100) : 0;
@@ -7944,10 +7944,9 @@
           const cStart = toIdx(m.startDate), cEnd = toIdx(m.endDate);
           const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
           if (totalMeses <= 0) return s;
-          const yStart = yearInt * 12 + 1;
-          const yEnd   = yearInt * 12 + 12;
-          const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-          return s + (gv / totalMeses) * mesesNoAno;
+          const yStart = yearInt * 12 + 1, yEnd = yearInt * 12 + 12;
+          if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s; // sem sobreposição
+          return s + (gv / totalMeses) * 12; // valor anual cheio
         }, 0);
         const contractCount  = metaUpToYear.length;
         const billedYTD  = byYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
@@ -9634,10 +9633,9 @@
                               const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
                               if (totalMeses <= 0) return null;
                               const yStart = yearInt*12+1, yEnd = yearInt*12+12;
-                              const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-                              if (mesesNoAno === 0) return null;
-                              const receitaAno = (gv / totalMeses) * mesesNoAno;
-                              return { cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno };
+                              if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+                              const receitaAno = (gv / totalMeses) * 12;
+                              return { cn, m, isParceria, gv, totalMeses, receitaAno };
                             }).filter(Boolean).sort((a,b) => b.receitaAno - a.receitaAno);
                             const total = rows.reduce((s, r) => s + r.receitaAno, 0);
                             return (
@@ -9650,7 +9648,7 @@
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                  {rows.map(({ cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno }) => {
+                                  {rows.map(({ cn, m, isParceria, gv, totalMeses, receitaAno }) => {
                                     const sigla = getUnitSigla(m.unit||'');
                                     return (
                                       <tr key={cn} className="hover:bg-violet-50 transition-colors cursor-pointer"
@@ -9706,11 +9704,10 @@
                               const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
                               if (totalMeses <= 0) return null;
                               const yStart = yearInt*12+1, yEnd = yearInt*12+12;
-                              const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-                              if (mesesNoAno === 0) return null;
-                              const repasseAno = (pv / totalMeses) * mesesNoAno;
-                              const bdAno = ((parseFloat(m.bdTotal)||0) / totalMeses) * mesesNoAno;
-                              return { cn, m, pv, totalMeses, mesesNoAno, repasseAno, bdAno };
+                              if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+                              const repasseAno = (pv / totalMeses) * 12;
+                              const bdAno = ((parseFloat(m.bdTotal)||0) / totalMeses) * 12;
+                              return { cn, m, pv, totalMeses, repasseAno, bdAno };
                             }).filter(Boolean).sort((a,b) => b.repasseAno - a.repasseAno);
                             const total = rows.reduce((s, r) => s + r.repasseAno, 0);
                             return (

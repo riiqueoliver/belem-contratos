@@ -7202,8 +7202,8 @@ function AdminDashboard({
     if (totalMeses <= 0) return s;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-    return s + gv / totalMeses * mesesNoAno;
+    if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s;
+    return s + gv / totalMeses * 12;
   }, 0);
   const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
     if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
@@ -7215,8 +7215,8 @@ function AdminDashboard({
     if (totalMeses <= 0) return s;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-    return s + pv / totalMeses * mesesNoAno;
+    if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s;
+    return s + pv / totalMeses * 12;
   }, 0);
   const execRateAll = valorNoAnoAdmin > 0 ? totalBilledAll / valorNoAnoAdmin * 100 : 0;
   const bySituationYr = useMemo(() => {
@@ -10408,10 +10408,10 @@ function App() {
         cEnd = toIdx(m.endDate);
       const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
       if (totalMeses <= 0) return s;
-      const yStart = yearInt * 12 + 1;
-      const yEnd = yearInt * 12 + 12;
-      const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-      return s + gv / totalMeses * mesesNoAno;
+      const yStart = yearInt * 12 + 1,
+        yEnd = yearInt * 12 + 12;
+      if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return s;
+      return s + gv / totalMeses * 12;
     }, 0);
     const contractCount = metaUpToYear.length;
     const billedYTD = byYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
@@ -12561,16 +12561,14 @@ function App() {
         if (totalMeses <= 0) return null;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-        if (mesesNoAno === 0) return null;
-        const receitaAno = gv / totalMeses * mesesNoAno;
+        if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+        const receitaAno = gv / totalMeses * 12;
         return {
           cn,
           m,
           isParceria,
           gv,
           totalMeses,
-          mesesNoAno,
           receitaAno
         };
       }).filter(Boolean).sort((a, b) => b.receitaAno - a.receitaAno);
@@ -12592,7 +12590,6 @@ function App() {
         isParceria,
         gv,
         totalMeses,
-        mesesNoAno,
         receitaAno
       }) => {
         const sigla = getUnitSigla(m.unit || '');
@@ -12677,16 +12674,14 @@ function App() {
         if (totalMeses <= 0) return null;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
-        if (mesesNoAno === 0) return null;
-        const repasseAno = pv / totalMeses * mesesNoAno;
-        const bdAno = (parseFloat(m.bdTotal) || 0) / totalMeses * mesesNoAno;
+        if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+        const repasseAno = pv / totalMeses * 12;
+        const bdAno = (parseFloat(m.bdTotal) || 0) / totalMeses * 12;
         return {
           cn,
           m,
           pv,
           totalMeses,
-          mesesNoAno,
           repasseAno,
           bdAno
         };
