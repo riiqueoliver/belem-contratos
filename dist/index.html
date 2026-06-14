@@ -10323,6 +10323,26 @@ function App() {
       if (m.contractType === 'parceria') return s + (parseFloat(m.partnerTotal) || 0);
       return s;
     }, 0);
+    const yearInt = parseInt(statsYear, 10);
+    const valorNoAno = Object.values(contractMeta).reduce((s, m) => {
+      if (!m.startDate || !m.endDate) return s;
+      const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
+      if (gv === 0) return s;
+      const toIdx = d => {
+        const [y, mo] = d.slice(0, 7).split('-').map(Number);
+        return y * 12 + mo;
+      };
+      const cStart = toIdx(m.startDate);
+      const cEnd = toIdx(m.endDate);
+      const yStart = yearInt * 12 + 1;
+      const yEnd = yearInt * 12 + 12;
+      const totalMeses = cEnd - cStart + 1;
+      if (totalMeses <= 0) return s;
+      const overlapStart = Math.max(cStart, yStart);
+      const overlapEnd = Math.min(cEnd, yEnd);
+      const mesesNoAno = Math.max(0, overlapEnd - overlapStart + 1);
+      return s + gv / totalMeses * mesesNoAno;
+    }, 0);
     const contractCount = metaUpToYear.length;
     const billedYTD = byYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
     const paidYTD = byYear.filter(c => c.currentStep > TOTAL_STEPS).reduce((s, c) => s + parseBRL(c.billingValue), 0);
@@ -10330,6 +10350,7 @@ function App() {
     return {
       portfolioTotal,
       partnerRepasse,
+      valorNoAno,
       contractCount,
       billedYTD,
       paidYTD,
@@ -12109,12 +12130,34 @@ function App() {
       key: 'portfolio',
       label: 'Portfólio Total',
       value: fmtCurrencyShort(financialKPIs.portfolioTotal),
-      sub: `${financialKPIs.contractCount} contrato${financialKPIs.contractCount !== 1 ? 's' : ''} em ${statsYear}`,
+      sub: `${financialKPIs.contractCount} contrato${financialKPIs.contractCount !== 1 ? 's' : ''}`,
       defaultBg: '#eff6ff',
       defaultBorder: '#bfdbfe',
       defaultLabel: 'text-blue-400',
       defaultValue: 'text-blue-900',
       defaultSub: 'text-blue-400',
+      alwaysDark: false
+    }, {
+      key: 'parceiros',
+      label: 'Repasse Parceiros',
+      value: fmtCurrencyShort(financialKPIs.partnerRepasse),
+      sub: financialKPIs.partnerRepasse > 0 ? 'destinado às parceiras' : 'sem contratos de parceria',
+      defaultBg: financialKPIs.partnerRepasse > 0 ? '#dbeafe' : '#ffffff',
+      defaultBorder: financialKPIs.partnerRepasse > 0 ? '#93c5fd' : '#e5e7eb',
+      defaultLabel: 'text-gray-400',
+      defaultValue: financialKPIs.partnerRepasse > 0 ? 'text-blue-700' : 'text-gray-300',
+      defaultSub: financialKPIs.partnerRepasse > 0 ? 'text-blue-400' : 'text-gray-400',
+      alwaysDark: false
+    }, {
+      key: 'anual',
+      label: `Receita ${statsYear}`,
+      value: fmtCurrencyShort(financialKPIs.valorNoAno),
+      sub: 'valor proporcional ao exercício',
+      defaultBg: financialKPIs.valorNoAno > 0 ? '#f5f3ff' : '#ffffff',
+      defaultBorder: financialKPIs.valorNoAno > 0 ? '#c4b5fd' : '#e5e7eb',
+      defaultLabel: 'text-gray-400',
+      defaultValue: financialKPIs.valorNoAno > 0 ? 'text-violet-800' : 'text-gray-300',
+      defaultSub: financialKPIs.valorNoAno > 0 ? 'text-violet-400' : 'text-gray-400',
       alwaysDark: false
     }, {
       key: 'faturado',
@@ -12149,20 +12192,9 @@ function App() {
       defaultValue: financialKPIs.pendingYTD > 0 ? 'text-amber-700' : 'text-gray-300',
       defaultSub: financialKPIs.pendingYTD > 0 ? 'text-amber-500' : 'text-gray-400',
       alwaysDark: false
-    }, {
-      key: 'parceiros',
-      label: 'Repasse Parceiros',
-      value: fmtCurrencyShort(financialKPIs.partnerRepasse),
-      sub: financialKPIs.partnerRepasse > 0 ? 'valor total destinado a parceiros' : 'sem contratos de parceria',
-      defaultBg: financialKPIs.partnerRepasse > 0 ? '#fff7ed' : '#ffffff',
-      defaultBorder: financialKPIs.partnerRepasse > 0 ? '#fed7aa' : '#e5e7eb',
-      defaultLabel: 'text-gray-400',
-      defaultValue: financialKPIs.partnerRepasse > 0 ? 'text-orange-700' : 'text-gray-300',
-      defaultSub: financialKPIs.partnerRepasse > 0 ? 'text-orange-400' : 'text-gray-400',
-      alwaysDark: false
     }];
     return React.createElement("div", {
-      className: "grid grid-cols-2 lg:grid-cols-5 gap-3"
+      className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
     }, homeCardDefs.map(card => {
       const isActive = activeHomeCard === card.key;
       const useDark = isActive;
