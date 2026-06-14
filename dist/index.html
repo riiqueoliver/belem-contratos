@@ -12278,7 +12278,9 @@ function App() {
       portfolio: 'Contratos do Portfólio',
       faturado: `NFs Emitidas em ${statsYear}`,
       recebido: `NFs Recebidas em ${statsYear}`,
-      transito: `NFs em Trânsito — ${statsYear}`
+      transito: `NFs em Trânsito — ${statsYear}`,
+      anual: `Receita Prevista ${statsYear} — por Contrato`,
+      parceiros: `Repasse Parceiros em ${statsYear}`
     };
     return React.createElement("div", {
       className: "mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden fade-in"
@@ -12490,6 +12492,227 @@ function App() {
         colSpan: 6,
         className: "px-4 py-8 text-center text-xs text-gray-400"
       }, "Nenhuma parcela paga em ", statsYear))));
+    })(), activeHomeCard === 'anual' && (() => {
+      const yearInt = parseInt(statsYear, 10);
+      const toIdx = d => {
+        const [y, mo] = d.slice(0, 7).split('-').map(Number);
+        return y * 12 + mo;
+      };
+      const rows = Object.entries(contractMeta).map(([cn, m]) => {
+        if (!m.startDate || !m.endDate) return null;
+        const isParceria = m.contractType === 'parceria';
+        const gv = isParceria && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
+        if (gv === 0) return null;
+        const cStart = toIdx(m.startDate),
+          cEnd = toIdx(m.endDate);
+        const yStart = yearInt * 12 + 1,
+          yEnd = yearInt * 12 + 12;
+        const totalMeses = cEnd - cStart + 1;
+        if (totalMeses <= 0) return null;
+        const overlapStart = Math.max(cStart, yStart);
+        const overlapEnd = Math.min(cEnd, yEnd);
+        const mesesNoAno = Math.max(0, overlapEnd - overlapStart + 1);
+        if (mesesNoAno === 0) return null;
+        const receitaAno = gv / totalMeses * mesesNoAno;
+        return {
+          cn,
+          m,
+          isParceria,
+          gv,
+          totalMeses,
+          mesesNoAno,
+          receitaAno
+        };
+      }).filter(Boolean).sort((a, b) => b.receitaAno - a.receitaAno);
+      const total = rows.reduce((s, r) => s + r.receitaAno, 0);
+      return React.createElement("table", {
+        className: "w-full text-xs"
+      }, React.createElement("thead", null, React.createElement("tr", {
+        style: {
+          background: '#f1f5f9'
+        }
+      }, ['Nº Contrato', 'Órgão', 'Objeto', 'Tipo', 'Prazo Total', 'Meses em ' + statsYear, 'Valor Base', 'Receita ' + statsYear].map(h => React.createElement("th", {
+        key: h,
+        className: "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap"
+      }, h)))), React.createElement("tbody", {
+        className: "divide-y divide-gray-50"
+      }, rows.map(({
+        cn,
+        m,
+        isParceria,
+        gv,
+        totalMeses,
+        mesesNoAno,
+        receitaAno
+      }) => {
+        const sigla = getUnitSigla(m.unit || '');
+        return React.createElement("tr", {
+          key: cn,
+          className: "hover:bg-violet-50 transition-colors cursor-pointer",
+          onClick: () => {
+            setActiveContractNumber(cn);
+            setActiveHomeCard(null);
+          }
+        }, React.createElement("td", {
+          className: "px-4 py-2.5 font-black whitespace-nowrap",
+          style: {
+            color: BLUE
+          }
+        }, cn), React.createElement("td", {
+          className: "px-4 py-2.5 whitespace-nowrap"
+        }, sigla ? React.createElement("span", {
+          className: "text-[10px] font-black px-2 py-0.5 rounded-md",
+          style: {
+            background: BLUE + '14',
+            color: BLUE
+          }
+        }, sigla) : React.createElement("span", {
+          className: "text-gray-400 text-[11px]"
+        }, (m.unit || '—').substring(0, 20))), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-700 max-w-[200px]"
+        }, React.createElement("p", {
+          className: "truncate"
+        }, m.object || '—')), React.createElement("td", {
+          className: "px-4 py-2.5 whitespace-nowrap"
+        }, isParceria ? React.createElement("span", {
+          className: "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+          style: {
+            background: '#f0fdf4',
+            color: '#166534',
+            borderColor: '#86efac'
+          }
+        }, "Parceria") : React.createElement("span", {
+          className: "text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-gray-50"
+        }, "Direto")), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-500 whitespace-nowrap text-center"
+        }, totalMeses, "m"), React.createElement("td", {
+          className: "px-4 py-2.5 text-center whitespace-nowrap"
+        }, React.createElement("span", {
+          className: "font-bold text-violet-700"
+        }, mesesNoAno), React.createElement("span", {
+          className: "text-gray-400 text-[10px]"
+        }, " / 12")), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-500 whitespace-nowrap"
+        }, fmtV(gv)), React.createElement("td", {
+          className: "px-4 py-2.5 font-black whitespace-nowrap text-violet-800"
+        }, fmtV(receitaAno)));
+      }), rows.length > 0 && React.createElement("tr", {
+        style: {
+          background: '#f5f3ff',
+          borderTop: '2px solid #c4b5fd'
+        }
+      }, React.createElement("td", {
+        colSpan: 7,
+        className: "px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-violet-400"
+      }, "Total Receita ", statsYear), React.createElement("td", {
+        className: "px-4 py-2.5 font-black text-sm text-violet-800"
+      }, fmtV(total))), rows.length === 0 && React.createElement("tr", null, React.createElement("td", {
+        colSpan: 8,
+        className: "px-4 py-8 text-center text-xs text-gray-400"
+      }, "Nenhum contrato com vig\xEAncia em ", statsYear))));
+    })(), activeHomeCard === 'parceiros' && (() => {
+      const yearInt = parseInt(statsYear, 10);
+      const toIdx = d => {
+        const [y, mo] = d.slice(0, 7).split('-').map(Number);
+        return y * 12 + mo;
+      };
+      const rows = Object.entries(contractMeta).map(([cn, m]) => {
+        if (m.contractType !== 'parceria') return null;
+        if (!m.startDate || !m.endDate) return null;
+        const pv = parseFloat(m.partnerTotal) || 0;
+        if (pv === 0) return null;
+        const cStart = toIdx(m.startDate),
+          cEnd = toIdx(m.endDate);
+        const yStart = yearInt * 12 + 1,
+          yEnd = yearInt * 12 + 12;
+        const totalMeses = cEnd - cStart + 1;
+        if (totalMeses <= 0) return null;
+        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+        if (mesesNoAno === 0) return null;
+        const repasseAno = pv / totalMeses * mesesNoAno;
+        const bdAno = (parseFloat(m.bdTotal) || 0) / totalMeses * mesesNoAno;
+        return {
+          cn,
+          m,
+          pv,
+          totalMeses,
+          mesesNoAno,
+          repasseAno,
+          bdAno
+        };
+      }).filter(Boolean).sort((a, b) => b.repasseAno - a.repasseAno);
+      const total = rows.reduce((s, r) => s + r.repasseAno, 0);
+      return React.createElement("table", {
+        className: "w-full text-xs"
+      }, React.createElement("thead", null, React.createElement("tr", {
+        style: {
+          background: '#f1f5f9'
+        }
+      }, ['Nº Contrato', 'Empresa Parceira', 'Órgão', 'Prazo Total', 'Meses em ' + statsYear, 'Repasse Parceira ' + statsYear, 'BD ' + statsYear].map(h => React.createElement("th", {
+        key: h,
+        className: "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap"
+      }, h)))), React.createElement("tbody", {
+        className: "divide-y divide-gray-50"
+      }, rows.map(({
+        cn,
+        m,
+        totalMeses,
+        mesesNoAno,
+        repasseAno,
+        bdAno
+      }) => {
+        const sigla = getUnitSigla(m.unit || '');
+        return React.createElement("tr", {
+          key: cn,
+          className: "hover:bg-blue-50 transition-colors cursor-pointer",
+          onClick: () => {
+            setActiveContractNumber(cn);
+            setActiveHomeCard(null);
+          }
+        }, React.createElement("td", {
+          className: "px-4 py-2.5 font-black whitespace-nowrap",
+          style: {
+            color: BLUE
+          }
+        }, cn), React.createElement("td", {
+          className: "px-4 py-2.5 font-semibold text-orange-700 whitespace-nowrap"
+        }, m.partnerName || '—'), React.createElement("td", {
+          className: "px-4 py-2.5 whitespace-nowrap"
+        }, sigla ? React.createElement("span", {
+          className: "text-[10px] font-black px-2 py-0.5 rounded-md",
+          style: {
+            background: BLUE + '14',
+            color: BLUE
+          }
+        }, sigla) : React.createElement("span", {
+          className: "text-gray-400 text-[11px]"
+        }, (m.unit || '—').substring(0, 20))), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-500 whitespace-nowrap text-center"
+        }, totalMeses, "m"), React.createElement("td", {
+          className: "px-4 py-2.5 text-center whitespace-nowrap"
+        }, React.createElement("span", {
+          className: "font-bold text-blue-700"
+        }, mesesNoAno), React.createElement("span", {
+          className: "text-gray-400 text-[10px]"
+        }, " / 12")), React.createElement("td", {
+          className: "px-4 py-2.5 font-black whitespace-nowrap text-orange-700"
+        }, fmtV(repasseAno)), React.createElement("td", {
+          className: "px-4 py-2.5 font-bold whitespace-nowrap text-green-700"
+        }, fmtV(bdAno)));
+      }), rows.length > 0 && React.createElement("tr", {
+        style: {
+          background: '#eff6ff',
+          borderTop: '2px solid #93c5fd'
+        }
+      }, React.createElement("td", {
+        colSpan: 5,
+        className: "px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-blue-400"
+      }, "Total Repasse ", statsYear), React.createElement("td", {
+        className: "px-4 py-2.5 font-black text-sm text-orange-700"
+      }, fmtV(total)), React.createElement("td", null)), rows.length === 0 && React.createElement("tr", null, React.createElement("td", {
+        colSpan: 7,
+        className: "px-4 py-8 text-center text-xs text-gray-400"
+      }, "Nenhum contrato de parceria com vig\xEAncia em ", statsYear))));
     })(), activeHomeCard === 'transito' && (() => {
       const rows = nfsYear.filter(c => contractStatus(c) !== 'completed').sort((a, b) => (a.nfDate || '') < (b.nfDate || '') ? -1 : 1);
       const total = rows.reduce((s, c) => s + parseBRL(c.billingValue), 0);
