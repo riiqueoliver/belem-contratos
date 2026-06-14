@@ -7193,29 +7193,29 @@ function AdminDashboard({
     return y * 12 + mo;
   };
   const valorNoAnoAdmin = Object.values(contractMeta).reduce((s, m) => {
-    if (!m.startDate) return s;
+    if (!m.startDate || !m.endDate) return s;
     const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
     if (gv === 0) return s;
-    const cStart = toAdmIdx(m.startDate);
-    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toAdmIdx(m.endDate) - cStart + 1 : 0;
+    const cStart = toAdmIdx(m.startDate),
+      cEnd = toAdmIdx(m.endDate);
+    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
     if (totalMeses <= 0) return s;
-    const cEndEff = cStart + totalMeses - 1;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
+    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
     return s + gv / totalMeses * mesesNoAno;
   }, 0);
   const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
-    if (!m.startDate || m.contractType !== 'parceria') return s;
+    if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
     const pv = parseFloat(m.partnerTotal) || 0;
     if (pv === 0) return s;
-    const cStart = toAdmIdx(m.startDate);
-    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toAdmIdx(m.endDate) - cStart + 1 : 0;
+    const cStart = toAdmIdx(m.startDate),
+      cEnd = toAdmIdx(m.endDate);
+    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
     if (totalMeses <= 0) return s;
-    const cEndEff = cStart + totalMeses - 1;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
+    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
     return s + pv / totalMeses * mesesNoAno;
   }, 0);
   const execRateAll = valorNoAnoAdmin > 0 ? totalBilledAll / valorNoAnoAdmin * 100 : 0;
@@ -10401,16 +10401,16 @@ function App() {
       return y * 12 + mo;
     };
     const valorNoAno = Object.values(contractMeta).reduce((s, m) => {
-      if (!m.startDate) return s;
+      if (!m.startDate || !m.endDate) return s;
       const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
       if (gv === 0) return s;
-      const cStart = toIdx(m.startDate);
-      const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+      const cStart = toIdx(m.startDate),
+        cEnd = toIdx(m.endDate);
+      const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
       if (totalMeses <= 0) return s;
-      const cEndEff = cStart + totalMeses - 1;
       const yStart = yearInt * 12 + 1;
       const yEnd = yearInt * 12 + 12;
-      const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
+      const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
       return s + gv / totalMeses * mesesNoAno;
     }, 0);
     const contractCount = metaUpToYear.length;
@@ -12551,17 +12551,17 @@ function App() {
         return y * 12 + mo;
       };
       const rows = Object.entries(contractMeta).map(([cn, m]) => {
-        if (!m.startDate) return null;
+        if (!m.startDate || !m.endDate) return null;
         const isParceria = m.contractType === 'parceria';
         const gv = isParceria && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
         if (gv === 0) return null;
-        const cStart = toIdx(m.startDate);
-        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+        const cStart = toIdx(m.startDate),
+          cEnd = toIdx(m.endDate);
+        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
         if (totalMeses <= 0) return null;
-        const cEndEff = cStart + totalMeses - 1;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
+        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
         if (mesesNoAno === 0) return null;
         const receitaAno = gv / totalMeses * mesesNoAno;
         return {
@@ -12668,16 +12668,16 @@ function App() {
       };
       const rows = Object.entries(contractMeta).map(([cn, m]) => {
         if (m.contractType !== 'parceria') return null;
-        if (!m.startDate) return null;
+        if (!m.startDate || !m.endDate) return null;
         const pv = parseFloat(m.partnerTotal) || 0;
         if (pv === 0) return null;
-        const cStart = toIdx(m.startDate);
-        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+        const cStart = toIdx(m.startDate),
+          cEnd = toIdx(m.endDate);
+        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : cEnd - cStart + 1;
         if (totalMeses <= 0) return null;
-        const cEndEff = cStart + totalMeses - 1;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
+        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
         if (mesesNoAno === 0) return null;
         const repasseAno = pv / totalMeses * mesesNoAno;
         const bdAno = (parseFloat(m.bdTotal) || 0) / totalMeses * mesesNoAno;
