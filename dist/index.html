@@ -2927,6 +2927,7 @@ function EditContractDrawer({
       globalValue: m.globalValue != null ? String(m.globalValue) : '',
       startDate: m.startDate || '',
       endDate: m.endDate || '',
+      prazoMeses: m.prazoMeses || 0,
       manager: m.manager || '',
       fiscalPrimary: m.fiscalPrimary || '',
       fiscalSubstitute: m.fiscalSubstitute || '',
@@ -2948,6 +2949,7 @@ function EditContractDrawer({
       globalValue: parseFloat(form.globalValue) || 0,
       startDate: form.startDate,
       endDate: form.endDate,
+      prazoMeses: form.prazoMeses || 0,
       manager: form.manager,
       fiscalPrimary: form.fiscalPrimary,
       fiscalSubstitute: form.fiscalSubstitute,
@@ -3122,7 +3124,22 @@ function EditContractDrawer({
     label: "Fim da Vig\xEAncia",
     k: "endDate",
     type: "date"
-  })), React.createElement(F, {
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-medium text-gray-600 mb-1.5"
+  }, "Prazo de Vig\xEAncia"), React.createElement("div", {
+    className: "flex gap-2 overflow-x-auto pb-1"
+  }, [0, 12, 24, 36, 48, 60].map(p => React.createElement("button", {
+    type: "button",
+    key: p,
+    onClick: () => setForm(f => ({
+      ...f,
+      prazoMeses: p
+    })),
+    className: `flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${form.prazoMeses === p ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`,
+    style: form.prazoMeses === p ? {
+      background: BLUE
+    } : {}
+  }, p === 0 ? '—' : `${p}m`)))), React.createElement(F, {
     label: "Valor Global (R$)",
     k: "globalValue",
     type: "number",
@@ -4911,6 +4928,7 @@ function ContractDetailView({
       globalValue: m.globalValue != null ? String(m.globalValue) : '',
       startDate: m.startDate || '',
       endDate: m.endDate || '',
+      prazoMeses: m.prazoMeses || 0,
       manager: m.manager || '',
       fiscalPrimary: m.fiscalPrimary || '',
       fiscalSubstitute: m.fiscalSubstitute || '',
@@ -4997,6 +5015,7 @@ function ContractDetailView({
       globalValue: parseFloat(editForm.globalValue) || 0,
       startDate: editForm.startDate,
       endDate: editForm.endDate,
+      prazoMeses: editForm.prazoMeses || 0,
       manager: editForm.manager,
       fiscalPrimary: editForm.fiscalPrimary,
       fiscalSubstitute: editForm.fiscalSubstitute,
@@ -5694,7 +5713,22 @@ function ContractDetailView({
     label: "Fim da Vig\xEAncia",
     k: "endDate",
     type: "date"
-  })), React.createElement("div", {
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-medium text-gray-600 mb-1.5"
+  }, "Prazo de Vig\xEAncia"), React.createElement("div", {
+    className: "flex gap-2 overflow-x-auto pb-1"
+  }, [0, 12, 24, 36, 48, 60].map(p => React.createElement("button", {
+    type: "button",
+    key: p,
+    onClick: () => setEditForm(f => ({
+      ...f,
+      prazoMeses: p
+    })),
+    className: `flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${(editForm.prazoMeses || 0) === p ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`,
+    style: (editForm.prazoMeses || 0) === p ? {
+      background: BLUE
+    } : {}
+  }, p === 0 ? '—' : `${p}m`)))), React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-3 gap-4"
   }, React.createElement(F, {
     label: "Gestor do Contrato",
@@ -7159,29 +7193,29 @@ function AdminDashboard({
     return y * 12 + mo;
   };
   const valorNoAnoAdmin = Object.values(contractMeta).reduce((s, m) => {
-    if (!m.startDate || !m.endDate) return s;
+    if (!m.startDate) return s;
     const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
     if (gv === 0) return s;
-    const cStart = toAdmIdx(m.startDate),
-      cEnd = toAdmIdx(m.endDate);
+    const cStart = toAdmIdx(m.startDate);
+    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toAdmIdx(m.endDate) - cStart + 1 : 0;
+    if (totalMeses <= 0) return s;
+    const cEndEff = cStart + totalMeses - 1;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const totalMeses = cEnd - cStart + 1;
-    if (totalMeses <= 0) return s;
-    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+    const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
     return s + gv / totalMeses * mesesNoAno;
   }, 0);
   const partnerRepasseAdmin = Object.values(contractMeta).reduce((s, m) => {
-    if (!m.startDate || !m.endDate || m.contractType !== 'parceria') return s;
+    if (!m.startDate || m.contractType !== 'parceria') return s;
     const pv = parseFloat(m.partnerTotal) || 0;
     if (pv === 0) return s;
-    const cStart = toAdmIdx(m.startDate),
-      cEnd = toAdmIdx(m.endDate);
+    const cStart = toAdmIdx(m.startDate);
+    const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toAdmIdx(m.endDate) - cStart + 1 : 0;
+    if (totalMeses <= 0) return s;
+    const cEndEff = cStart + totalMeses - 1;
     const yStart = adminYearInt * 12 + 1,
       yEnd = adminYearInt * 12 + 12;
-    const totalMeses = cEnd - cStart + 1;
-    if (totalMeses <= 0) return s;
-    const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+    const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
     return s + pv / totalMeses * mesesNoAno;
   }, 0);
   const execRateAll = valorNoAnoAdmin > 0 ? totalBilledAll / valorNoAnoAdmin * 100 : 0;
@@ -10161,7 +10195,8 @@ function App() {
     partnerItems: [],
     bdItems: [],
     partnerTotal: 0,
-    bdTotal: 0
+    bdTotal: 0,
+    prazoMeses: 0
   });
   const [anexoPdfFile, setAnexoPdfFile] = useState(null);
   const [partnerPdfFile, setPartnerPdfFile] = useState(null);
@@ -10361,23 +10396,21 @@ function App() {
       return s;
     }, 0);
     const yearInt = parseInt(statsYear, 10);
+    const toIdx = d => {
+      const [y, mo] = d.slice(0, 7).split('-').map(Number);
+      return y * 12 + mo;
+    };
     const valorNoAno = Object.values(contractMeta).reduce((s, m) => {
-      if (!m.startDate || !m.endDate) return s;
+      if (!m.startDate) return s;
       const gv = m.contractType === 'parceria' && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
       if (gv === 0) return s;
-      const toIdx = d => {
-        const [y, mo] = d.slice(0, 7).split('-').map(Number);
-        return y * 12 + mo;
-      };
       const cStart = toIdx(m.startDate);
-      const cEnd = toIdx(m.endDate);
+      const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+      if (totalMeses <= 0) return s;
+      const cEndEff = cStart + totalMeses - 1;
       const yStart = yearInt * 12 + 1;
       const yEnd = yearInt * 12 + 12;
-      const totalMeses = cEnd - cStart + 1;
-      if (totalMeses <= 0) return s;
-      const overlapStart = Math.max(cStart, yStart);
-      const overlapEnd = Math.min(cEnd, yEnd);
-      const mesesNoAno = Math.max(0, overlapEnd - overlapStart + 1);
+      const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
       return s + gv / totalMeses * mesesNoAno;
     }, 0);
     const contractCount = metaUpToYear.length;
@@ -10910,7 +10943,8 @@ function App() {
         partnerItems: form.contractType === 'parceria' ? form.partnerItems || [] : [],
         partnerTotal: form.contractType === 'parceria' ? form.partnerTotal || 0 : 0,
         bdItems: form.contractType === 'parceria' ? form.bdItems || [] : [],
-        bdTotal: form.contractType === 'parceria' ? form.bdTotal || 0 : 0
+        bdTotal: form.contractType === 'parceria' ? form.bdTotal || 0 : 0,
+        prazoMeses: form.prazoMeses > 0 ? form.prazoMeses : 0
       });
       if (pdfFile) {
         if (pdfFile.size > 700 * 1024) {
@@ -10995,7 +11029,8 @@ function App() {
         partnerItems: [],
         bdItems: [],
         partnerTotal: 0,
-        bdTotal: 0
+        bdTotal: 0,
+        prazoMeses: 0
       });
       setPdfFile(null);
       setPdfResult(null);
@@ -11741,7 +11776,24 @@ function App() {
     }),
     placeholder: "0,00",
     className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-300"
-  })))), React.createElement("div", null, React.createElement("div", {
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-medium text-gray-600 mb-2"
+  }, "Prazo de Vig\xEAncia ", React.createElement("span", {
+    className: "text-[10px] text-gray-400"
+  }, "(para c\xE1lculo de receita anual)")), React.createElement("div", {
+    className: "flex gap-2 overflow-x-auto pb-1"
+  }, [0, 12, 24, 36, 48, 60].map(p => React.createElement("button", {
+    type: "button",
+    key: p,
+    onClick: () => setForm({
+      ...form,
+      prazoMeses: p
+    }),
+    className: `flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${form.prazoMeses === p ? 'text-white border-transparent shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`,
+    style: form.prazoMeses === p ? {
+      background: BLUE
+    } : {}
+  }, p === 0 ? 'Não definido' : `${p} meses`))))), React.createElement("div", null, React.createElement("div", {
     className: "flex items-center gap-2 mb-3"
   }, React.createElement(Shield, {
     className: "w-3.5 h-3.5",
@@ -12499,19 +12551,17 @@ function App() {
         return y * 12 + mo;
       };
       const rows = Object.entries(contractMeta).map(([cn, m]) => {
-        if (!m.startDate || !m.endDate) return null;
+        if (!m.startDate) return null;
         const isParceria = m.contractType === 'parceria';
         const gv = isParceria && m.bdTotal > 0 ? parseFloat(m.bdTotal) || 0 : parseFloat(m.globalValue) || 0;
         if (gv === 0) return null;
-        const cStart = toIdx(m.startDate),
-          cEnd = toIdx(m.endDate);
+        const cStart = toIdx(m.startDate);
+        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+        if (totalMeses <= 0) return null;
+        const cEndEff = cStart + totalMeses - 1;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const totalMeses = cEnd - cStart + 1;
-        if (totalMeses <= 0) return null;
-        const overlapStart = Math.max(cStart, yStart);
-        const overlapEnd = Math.min(cEnd, yEnd);
-        const mesesNoAno = Math.max(0, overlapEnd - overlapStart + 1);
+        const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
         if (mesesNoAno === 0) return null;
         const receitaAno = gv / totalMeses * mesesNoAno;
         return {
@@ -12618,16 +12668,16 @@ function App() {
       };
       const rows = Object.entries(contractMeta).map(([cn, m]) => {
         if (m.contractType !== 'parceria') return null;
-        if (!m.startDate || !m.endDate) return null;
+        if (!m.startDate) return null;
         const pv = parseFloat(m.partnerTotal) || 0;
         if (pv === 0) return null;
-        const cStart = toIdx(m.startDate),
-          cEnd = toIdx(m.endDate);
+        const cStart = toIdx(m.startDate);
+        const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : m.endDate ? toIdx(m.endDate) - cStart + 1 : 0;
+        if (totalMeses <= 0) return null;
+        const cEndEff = cStart + totalMeses - 1;
         const yStart = yearInt * 12 + 1,
           yEnd = yearInt * 12 + 12;
-        const totalMeses = cEnd - cStart + 1;
-        if (totalMeses <= 0) return null;
-        const mesesNoAno = Math.max(0, Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1);
+        const mesesNoAno = Math.max(0, Math.min(cEndEff, yEnd) - Math.max(cStart, yStart) + 1);
         if (mesesNoAno === 0) return null;
         const repasseAno = pv / totalMeses * mesesNoAno;
         const bdAno = (parseFloat(m.bdTotal) || 0) / totalMeses * mesesNoAno;
