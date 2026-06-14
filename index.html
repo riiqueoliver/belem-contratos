@@ -3142,7 +3142,7 @@
     // ════════════════════════════════════════════════════════
     //  CONTRACTS PAGE — Lista completa de contratos
     // ════════════════════════════════════════════════════════
-    function ContractsPage({ contracts, contractMeta, onSelect, onNew, onEdit, currentUser }) {
+    function ContractsPage({ contracts, contractMeta, onSelect, onNew, onEdit, onDelete, currentUser }) {
       const [search,       setSearch]       = useState('');
       const [statusFilter, setStatusFilter] = useState('all');
 
@@ -3315,11 +3315,18 @@
                           )}
                         </div>
                         {isAdmin && (
-                          <button onClick={e => { e.stopPropagation(); onEdit(s.cn); }}
-                                  title="Editar contrato"
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-50 flex-shrink-0">
-                            <Edit2 className="w-3.5 h-3.5" style={{color: BLUE}} />
-                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                            <button onClick={e => { e.stopPropagation(); onEdit(s.cn); }}
+                                    title="Editar contrato"
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:bg-blue-50">
+                              <Edit2 className="w-3.5 h-3.5" style={{color: BLUE}} />
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); onDelete && onDelete(s.cn); }}
+                                    title="Excluir contrato"
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:bg-red-50 hover:border-red-200">
+                              <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -3417,7 +3424,7 @@
                                   onBack, onSaveEdit, onAdvance, onUndo, onUpdateNfNumber,
                                   onNotify, onSavePdf, onDeletePdf, onAddInstallment, apiKey,
                                   onDeleteInstallment, onSaveContractPdf, onDeleteContractPdf,
-                                  currentUser, onUpdateNfData,
+                                  currentUser, onUpdateNfData, onDelete,
                                   addToast }) {
 
       function buildForm() {
@@ -3874,10 +3881,19 @@
                             style={{background: BLUE}}>💾 Salvar Alterações</button>
                   </>
                 ) : (
-                  <button onClick={() => setEditMode(true)}
-                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
-                    <Edit2 className="w-3.5 h-3.5" /> Editar Contrato
-                  </button>
+                  <>
+                    <button onClick={() => setEditMode(true)}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Edit2 className="w-3.5 h-3.5" /> Editar Contrato
+                    </button>
+                    {currentUser?.role === 'admin' && onDelete && (
+                      <button onClick={() => onDelete(contractNumber)}
+                              title="Excluir contrato"
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" /> Excluir
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -7957,7 +7973,7 @@
         await db.collection('users').doc(String(user.id)).delete();
         addToast(`🗑️ Usuário ${user.name} excluído.`);
       }
-      async function handleDeleteContract(contractNumber) {
+      async function handleDeleteContract(contractNumber, afterDelete) {
         if (!confirm(`Excluir o contrato ${contractNumber} e todas as suas parcelas? Esta ação não pode ser desfeita.`)) return;
         const batch = db.batch();
         contracts.filter(c => c.contractNumber === contractNumber)
@@ -7974,6 +7990,7 @@
         });
         await pdfBatch.commit();
         addToast(`🗑️ Contrato ${contractNumber} excluído.`);
+        if (afterDelete) afterDelete();
       }
       function handleSelectContract(contractNumber) {
         setActiveContractNumber(contractNumber);
@@ -9165,6 +9182,7 @@
                 onSelect={cn => { setActiveContractNumber(cn); }}
                 onNew={() => { setShowContractsPage(false); setShowForm(true); }}
                 onEdit={cn => { setEditingContractNumber(cn); }}
+                onDelete={handleDeleteContract}
               />
             ) : activeContractNumber ? (
               /* ── PÁGINA DE DETALHE DO CONTRATO ── */
@@ -9192,6 +9210,7 @@
                 apiKey={apiKey}
                 currentUser={currentUser}
                 onUpdateNfData={handleUpdateNfData}
+                onDelete={cn => handleDeleteContract(cn, () => { setActiveContractNumber(null); })}
               />
             ) : (
               <>
