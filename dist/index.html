@@ -10084,7 +10084,15 @@ function App() {
   const [editingContractNumber, setEditingContractNumber] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [showForm, setShowForm] = useState(false);
+  const [formType, setFormType] = useState(null);
+  const [formTab, setFormTab] = useState('geral');
   const [savingContract, setSavingContract] = useState(false);
+  React.useEffect(() => {
+    if (!showForm) {
+      setFormType(null);
+      setFormTab('geral');
+    }
+  }, [showForm]);
   const [showContacts, setShowContacts] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState({
@@ -11331,12 +11339,26 @@ function App() {
     }
   }, React.createElement("div", {
     className: "flex items-center gap-2"
-  }, React.createElement("div", {
+  }, formType && React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setFormType(null);
+      setFormTab('geral');
+    },
+    className: "p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 mr-0.5"
+  }, React.createElement(ChevronLeft, {
+    className: "w-4 h-4"
+  })), React.createElement("div", {
     className: "w-7 h-7 rounded-lg flex items-center justify-center",
     style: {
-      background: '#dcfce7'
+      background: formType === 'parceria' ? '#dcfce7' : '#dcfce7'
     }
-  }, React.createElement(Plus, {
+  }, formType === 'parceria' ? React.createElement(Handshake, {
+    className: "w-4 h-4",
+    style: {
+      color: GREEN
+    }
+  }) : React.createElement(Plus, {
     className: "w-4 h-4",
     style: {
       color: GREEN
@@ -11346,15 +11368,90 @@ function App() {
     style: {
       color: BLUE
     }
-  }, "Novo Contrato"), React.createElement("p", {
+  }, formType === 'parceria' ? 'Contrato em Parceria' : 'Novo Contrato'), React.createElement("p", {
     className: "text-[10px] text-gray-400"
-  }, "Preencha as se\xE7\xF5es abaixo"))), React.createElement("button", {
+  }, !formType ? 'Selecione o tipo de contrato' : 'Preencha as seções abaixo'))), React.createElement("button", {
     onClick: () => setShowForm(false),
     className: "text-gray-400 hover:text-gray-600"
   }, React.createElement(X, {
     className: "w-4 h-4"
-  }))), React.createElement("form", {
-    onSubmit: handleAdd,
+  }))), !formType && React.createElement("div", {
+    className: "p-8 space-y-5"
+  }, React.createElement("p", {
+    className: "text-sm text-gray-500 text-center font-medium"
+  }, "Qual \xE9 a modalidade deste contrato?"), React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setFormType('direto');
+      setForm(f => ({
+        ...f,
+        contractType: 'direto'
+      }));
+    },
+    className: "group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center cursor-pointer"
+  }, React.createElement("div", {
+    className: "w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110",
+    style: {
+      background: '#eff6ff'
+    }
+  }, React.createElement(FileText, {
+    className: "w-8 h-8",
+    style: {
+      color: BLUE
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "font-bold text-gray-800 group-hover:text-blue-800"
+  }, "Contrato Direto"), React.createElement("p", {
+    className: "text-xs text-gray-400 mt-1.5 leading-relaxed"
+  }, "Bel\xE9m Digital \xE9 a \xFAnica contratada pelo \xF3rg\xE3o p\xFAblico, sem divis\xE3o de responsabilidades"))), React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setFormType('parceria');
+      setForm(f => ({
+        ...f,
+        contractType: 'parceria'
+      }));
+    },
+    className: "group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center cursor-pointer"
+  }, React.createElement("div", {
+    className: "w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110",
+    style: {
+      background: '#f0fdf4'
+    }
+  }, React.createElement(Handshake, {
+    className: "w-8 h-8",
+    style: {
+      color: GREEN
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "font-bold text-gray-800 group-hover:text-green-800"
+  }, "Contrato em Parceria"), React.createElement("p", {
+    className: "text-xs text-gray-400 mt-1.5 leading-relaxed"
+  }, "BD + empresa parceira dividem responsabilidades e valores com repasses distintos por empresa"))))), formType && React.createElement("form", {
+    onSubmit: handleAdd
+  }, formType === 'parceria' && React.createElement("div", {
+    className: "flex border-b border-gray-100 bg-gray-50"
+  }, [{
+    id: 'geral',
+    label: 'Dados Gerais',
+    icon: FileText
+  }, {
+    id: 'parceria',
+    label: 'Parceria Empresarial',
+    icon: Handshake
+  }].map(tab => React.createElement("button", {
+    key: tab.id,
+    type: "button",
+    onClick: () => setFormTab(tab.id),
+    className: `flex items-center gap-1.5 px-5 py-3 text-xs font-bold transition-colors border-b-2 ${formTab === tab.id ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'}`
+  }, React.createElement(tab.icon, {
+    className: "w-3.5 h-3.5"
+  }), tab.label, tab.id === 'parceria' && form.partnerName && React.createElement("span", {
+    className: "ml-1 w-1.5 h-1.5 rounded-full bg-green-500 inline-block",
+    title: "Preenchida"
+  })))), (formType === 'direto' || formTab === 'geral') && React.createElement("div", {
     className: "px-5 py-5 space-y-6"
   }, React.createElement("div", {
     className: "rounded-2xl border-2 border-dashed p-4 space-y-3",
@@ -11633,61 +11730,9 @@ function App() {
   }, Object.entries(CONTRACT_SITUATION).filter(([k]) => k !== 'vencido').map(([k, v]) => React.createElement("option", {
     key: k,
     value: k
-  }, v.label)))))), React.createElement("div", null, React.createElement("div", {
-    className: "flex items-center gap-2 mb-3"
-  }, React.createElement(Handshake, {
-    className: "w-3.5 h-3.5",
-    style: {
-      color: BLUE
-    }
-  }), React.createElement("h3", {
-    className: "text-xs font-black uppercase tracking-widest",
-    style: {
-      color: BLUE
-    }
-  }, "Tipo de Contrato"), React.createElement("div", {
-    className: "flex-1 h-px bg-gray-100"
-  })), React.createElement("div", {
-    className: "flex flex-col sm:flex-row gap-3"
-  }, [{
-    value: 'direto',
-    label: 'Contrato Direto',
-    desc: 'Belém Digital é a única contratada pelo órgão'
-  }, {
-    value: 'parceria',
-    label: 'Contrato em Parceria',
-    desc: 'BD + empresa parceira dividem responsabilidades e valores'
-  }].map(opt => React.createElement("button", {
-    key: opt.value,
-    type: "button",
-    onClick: () => setForm({
-      ...form,
-      contractType: opt.value
-    }),
-    className: `flex-1 py-3 px-4 rounded-xl border-2 text-left transition-all ${form.contractType === opt.value ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`
-  }, React.createElement("p", {
-    className: `text-sm font-bold ${form.contractType === opt.value ? 'text-blue-800' : 'text-gray-600'}`
-  }, opt.label), React.createElement("p", {
-    className: "text-xs text-gray-400 mt-0.5 leading-tight"
-  }, opt.desc))))), form.contractType === 'parceria' && React.createElement("div", {
-    className: "rounded-2xl border-2 p-4 space-y-4",
-    style: {
-      borderColor: '#86efac',
-      background: '#f0fdf4'
-    }
+  }, v.label))))))), " ", formType === 'parceria' && formTab === 'parceria' && React.createElement("div", {
+    className: "px-5 py-5 space-y-5"
   }, React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("div", {
-    className: "w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs",
-    style: {
-      background: GREEN
-    }
-  }, "P"), React.createElement("h3", {
-    className: "font-bold text-sm",
-    style: {
-      color: '#166534'
-    }
-  }, "Dados da Parceria Empresarial")), React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-xs font-medium text-gray-600 mb-1.5"
@@ -11735,27 +11780,28 @@ function App() {
     className: "hidden",
     onChange: e => setPartnerPdfFile(e.target.files[0] || null)
   }))), React.createElement("div", {
-    className: "rounded-xl border-2 border-dashed p-3 space-y-3",
+    className: "rounded-2xl border-2 border-dashed p-4 space-y-3",
     style: {
-      borderColor: '#86efac'
+      borderColor: '#86efac',
+      background: '#f0fdf4'
     }
   }, React.createElement("div", {
     className: "flex items-center gap-2"
   }, React.createElement("div", {
-    className: "w-6 h-6 rounded-md flex items-center justify-center text-white font-black text-[10px]",
+    className: "w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs",
     style: {
       background: GREEN
     }
-  }, "IA"), React.createElement("span", {
+  }, "IA"), React.createElement("div", null, React.createElement("span", {
     className: "text-sm font-bold",
     style: {
       color: '#166534'
     }
   }, "Anexo I \u2014 Matriz de Valores"), React.createElement("span", {
-    className: "text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold"
-  }, "AUTO")), React.createElement("p", {
+    className: "ml-2 text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold"
+  }, "AUTO"))), React.createElement("p", {
     className: "text-xs text-green-700"
-  }, "Anexe o PDF \"Anexo I - Valores de Implanta\xE7\xE3o\" e a IA extrair\xE1 automaticamente a divis\xE3o de valores entre a empresa parceira e a Bel\xE9m Digital."), React.createElement("div", {
+  }, "Anexe o PDF \"Anexo I - Valores de Implanta\xE7\xE3o\" e a IA extrair\xE1 a divis\xE3o de valores entre a empresa parceira e a Bel\xE9m Digital."), React.createElement("div", {
     className: "flex flex-col sm:flex-row gap-2 items-start sm:items-center"
   }, React.createElement("label", {
     className: "flex items-center gap-2 cursor-pointer flex-1"
@@ -11793,7 +11839,7 @@ function App() {
   }, "\u2705 Matriz extra\xEDda com sucesso! Verifique os valores abaixo."), anexoResult === 'error' && React.createElement("p", {
     className: "text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200"
   }, "\u274C N\xE3o foi poss\xEDvel ler o Anexo I. Preencha os totais manualmente.")), (form.partnerTotal > 0 || form.bdTotal > 0 || parseFloat(form.globalValue) > 0) && React.createElement("div", {
-    className: "grid grid-cols-1 sm:grid-cols-3 gap-2"
+    className: "grid grid-cols-3 gap-2"
   }, React.createElement("div", {
     className: "rounded-xl p-3 text-center",
     style: {
@@ -11806,7 +11852,7 @@ function App() {
     className: "text-sm font-black text-blue-900"
   }, fmtCurrencyShort(parseFloat(form.globalValue) || 0)), React.createElement("p", {
     className: "text-[10px] text-blue-400 mt-0.5"
-  }, "Contrato com \xD3rg\xE3o")), React.createElement("div", {
+  }, "Contrato c/ \xD3rg\xE3o")), React.createElement("div", {
     className: "rounded-xl p-3 text-center",
     style: {
       background: '#fff7ed',
@@ -11818,7 +11864,7 @@ function App() {
     className: "text-sm font-black text-orange-900"
   }, fmtCurrencyShort(form.partnerTotal || 0)), parseFloat(form.globalValue) > 0 && React.createElement("p", {
     className: "text-[10px] text-orange-400 mt-0.5"
-  }, ((form.partnerTotal || 0) / (parseFloat(form.globalValue) || 1) * 100).toFixed(1), "% do total")), React.createElement("div", {
+  }, ((form.partnerTotal || 0) / (parseFloat(form.globalValue) || 1) * 100).toFixed(1), "%")), React.createElement("div", {
     className: "rounded-xl p-3 text-center",
     style: {
       background: '#f0fdf4',
@@ -11830,7 +11876,7 @@ function App() {
     className: "text-sm font-black text-green-900"
   }, fmtCurrencyShort(form.bdTotal || 0)), parseFloat(form.globalValue) > 0 && React.createElement("p", {
     className: "text-[10px] text-green-500 mt-0.5"
-  }, ((form.bdTotal || 0) / (parseFloat(form.globalValue) || 1) * 100).toFixed(1), "% do total"))), React.createElement("div", {
+  }, ((form.bdTotal || 0) / (parseFloat(form.globalValue) || 1) * 100).toFixed(1), "%"))), React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-xs font-medium text-gray-600 mb-1.5"
@@ -11904,7 +11950,7 @@ function App() {
     key: i,
     className: i % 2 === 0 ? 'bg-white' : 'bg-gray-50'
   }, React.createElement("td", {
-    className: "px-3 py-1.5 text-gray-700 leading-tight max-w-[180px]"
+    className: "px-3 py-1.5 text-gray-700 leading-tight"
   }, it.descricao), React.createElement("td", {
     className: "px-2 py-1.5 text-center text-gray-500"
   }, it.unidade), React.createElement("td", {
@@ -11912,10 +11958,20 @@ function App() {
   }, fmtCurrencyShort(parseFloat(it.valorUnitario) || 0)), React.createElement("td", {
     className: "px-2 py-1.5 text-center text-gray-500"
   }, it.qtde), React.createElement("td", {
-    className: "px-2 py-1.5 text-right font-semibold text-gray-800"
-  }, fmtCurrencyShort(parseFloat(it.valorTotal) || 0))))))))))), React.createElement("div", {
-    className: "flex justify-end gap-3 pt-1"
-  }, React.createElement("button", {
+    className: "px-2 py-1.5 text-right font-semibold"
+  }, fmtCurrencyShort(parseFloat(it.valorTotal) || 0))))))))))), " ", React.createElement("div", {
+    className: "flex items-center justify-between gap-3 px-5 pb-5 pt-3 border-t border-gray-100"
+  }, formType === 'parceria' && formTab === 'geral' ? React.createElement("button", {
+    type: "button",
+    onClick: () => setFormTab('parceria'),
+    className: "flex items-center gap-2 text-green-700 text-xs font-bold px-4 py-2 rounded-xl border border-green-200 hover:bg-green-50 transition-colors"
+  }, React.createElement(Handshake, {
+    className: "w-3.5 h-3.5"
+  }), " Parceria Empresarial \u2192") : formType === 'parceria' && formTab === 'parceria' ? React.createElement("button", {
+    type: "button",
+    onClick: () => setFormTab('geral'),
+    className: "flex items-center gap-2 text-gray-500 text-xs font-bold px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+  }, "\u2190 Dados Gerais") : React.createElement("div", null), React.createElement("button", {
     type: "submit",
     disabled: savingContract,
     className: "text-white py-2.5 px-6 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 flex items-center gap-2 disabled:opacity-60",
@@ -11926,7 +11982,7 @@ function App() {
     className: "w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
   }), "Salvando\u2026") : React.createElement(React.Fragment, null, React.createElement(Send, {
     className: "w-4 h-4"
-  }), "Salvar Contrato"))))), showNfListView ? React.createElement(NfListView, {
+  }), "Salvar Contrato")))), " "), showNfListView ? React.createElement(NfListView, {
     installments: contracts,
     statsYear: statsYear,
     contractMeta: contractMeta,
