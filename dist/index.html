@@ -529,26 +529,14 @@ const Briefcase = ({
 }), React.createElement("path", {
   d: "M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"
 }));
-const Handshake = ({
+const LinkIcon = ({
   className
 }) => React.createElement(SVG, {
   className: className
 }, React.createElement("path", {
-  d: "M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z",
-  style: {
-    display: 'none'
-  }
+  d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
 }), React.createElement("path", {
-  d: "M9 11l3 3L22 4"
-}), React.createElement("path", {
-  d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
-  style: {
-    display: 'none'
-  }
-}), React.createElement("path", {
-  d: "M3.5 9.5 7 6l4 4 4-4 4 4"
-}), React.createElement("path", {
-  d: "m3.5 14.5 3.5-3.5 2 2 3-3 2 2 3-3 2.5 2.5"
+  d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
 }));
 const ArrowRight = ({
   className
@@ -5440,7 +5428,7 @@ function ContractDetailView({
       color: '#166534',
       borderColor: '#86efac'
     }
-  }, React.createElement(Handshake, {
+  }, React.createElement(LinkIcon, {
     className: "w-3 h-3"
   }), "Parceria"), pdfStorage['contract_' + contractNumber] ? React.createElement("button", {
     onClick: () => setPdfViewer({
@@ -5489,7 +5477,7 @@ function ContractDetailView({
     }
   }, React.createElement("div", {
     className: "flex items-center gap-2 flex-wrap"
-  }, React.createElement(Handshake, {
+  }, React.createElement(LinkIcon, {
     className: "w-4 h-4",
     style: {
       color: '#166534'
@@ -11353,7 +11341,7 @@ function App() {
     style: {
       background: formType === 'parceria' ? '#dcfce7' : '#dcfce7'
     }
-  }, formType === 'parceria' ? React.createElement(Handshake, {
+  }, formType === 'parceria' ? React.createElement(LinkIcon, {
     className: "w-4 h-4",
     style: {
       color: GREEN
@@ -11420,7 +11408,7 @@ function App() {
     style: {
       background: '#f0fdf4'
     }
-  }, React.createElement(Handshake, {
+  }, React.createElement(LinkIcon, {
     className: "w-8 h-8",
     style: {
       color: GREEN
@@ -11440,7 +11428,7 @@ function App() {
   }, {
     id: 'parceria',
     label: 'Parceria Empresarial',
-    icon: Handshake
+    icon: LinkIcon
   }].map(tab => React.createElement("button", {
     key: tab.id,
     type: "button",
@@ -11965,7 +11953,7 @@ function App() {
     type: "button",
     onClick: () => setFormTab('parceria'),
     className: "flex items-center gap-2 text-green-700 text-xs font-bold px-4 py-2 rounded-xl border border-green-200 hover:bg-green-50 transition-colors"
-  }, React.createElement(Handshake, {
+  }, React.createElement(LinkIcon, {
     className: "w-3.5 h-3.5"
   }), " Parceria Empresarial \u2192") : formType === 'parceria' && formTab === 'parceria' ? React.createElement("button", {
     type: "button",
