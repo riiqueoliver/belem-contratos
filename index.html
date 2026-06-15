@@ -5158,9 +5158,11 @@
     ═══════════════════════════════════════════════════════ */
 
     /* ── Sub-componentes do Dashboard ───────────────────── */
-    function DashKpiCard({ icon, label, value, sub, color, progressBar }) {
+    function DashKpiCard({ icon, label, value, sub, color, progressBar, onClick, active }) {
       return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+        <div className={`bg-white rounded-2xl border shadow-sm p-5 flex flex-col gap-2 transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+             style={{ borderColor: active ? color : '#f3f4f6', boxShadow: active ? `0 0 0 2px ${color}40` : undefined }}
+             onClick={onClick}>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider leading-tight">{label}</p>
             <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:`${color}18`}}>
@@ -5174,6 +5176,7 @@
             </div>
           )}
           {sub && <p className="text-[10px] text-gray-400 leading-snug">{sub}</p>}
+          {onClick && <p className="text-[10px] font-semibold mt-1" style={{color}}>{active ? '▲ fechar detalhes' : '▼ ver detalhes'}</p>}
         </div>
       );
     }
@@ -5240,6 +5243,7 @@
       const [presentMode,   setPresentMode]   = useState(false);
       const [kpiOpen,       setKpiOpen]       = useState(null);
       const [adminStatsYear, setAdminStatsYear] = useState(String(new Date().getFullYear()));
+      const [showAdminReceita, setShowAdminReceita] = useState(false);
 
       // ── Lançar NF (multi-upload) ────────────────────────────
       // nfQueue: [{ id, fileName, pdfBase64, status:'pending'|'analyzing'|'done'|'error'|'saved', extracted, contractNr, errorMsg }]
@@ -6621,7 +6625,8 @@
                 <DashKpiCard icon={<Clipboard />} label="Contratos Ativos" value={contractsYrCount} color={BLUE}
                   sub={`${activeCountYr} ativo${activeCountYr!==1?'s':''} · ${suspendedCountYr} suspenso${suspendedCountYr!==1?'s':''} em ${adminStatsYear}`} />
                 <DashKpiCard icon={<DollarSign />} label={`Receita Prevista ${adminStatsYear}`} value={fmtCurrencyShort(valorNoAnoAdmin)} color="#1e40af"
-                  sub="valor anual proporcional ao exercício" />
+                  sub="valor anual proporcional ao exercício"
+                  onClick={() => setShowAdminReceita(v => !v)} active={showAdminReceita} />
                 {partnerRepasseAdmin > 0 && (
                   <DashKpiCard icon={<LinkIcon />} label="Repasse Parceiros" value={fmtCurrencyShort(partnerRepasseAdmin)} color="#1d4ed8"
                     sub={`destinado às parceiras em ${adminStatsYear}`} />
@@ -6634,6 +6639,83 @@
                   progressBar={execRateAll}
                   sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(valorNoAnoAdmin - totalBilledAll)} a receber`} />
               </div>
+
+              {/* ── Painel detalhe Receita Prevista ── */}
+              {showAdminReceita && (() => {
+                const fmtV = v => { const n = Number(v); if (!n) return '—'; return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+                const rows = Object.entries(contractMeta).map(([cn, m]) => {
+                  if (!m.startDate || !m.endDate) return null;
+                  const isParceria = m.contractType === 'parceria';
+                  const gv = isParceria && m.bdTotal > 0 ? parseFloat(m.bdTotal)||0 : parseFloat(m.globalValue)||0;
+                  if (gv === 0) return null;
+                  const cStart = toAdmIdx(m.startDate), cEnd = toAdmIdx(m.endDate);
+                  const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
+                  if (totalMeses <= 0) return null;
+                  const yStart = adminYearInt*12+1, yEnd = adminYearInt*12+12;
+                  if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+                  const mesesNoAno = Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1;
+                  const receitaAno = (gv / totalMeses) * 12;
+                  return { cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno };
+                }).filter(Boolean).sort((a,b) => b.receitaAno - a.receitaAno);
+                const total = rows.reduce((s, r) => s + r.receitaAno, 0);
+                return (
+                  <div className="mt-3 bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden fade-in">
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                      <h3 className="text-sm font-bold" style={{color:'#1e40af'}}>Receita Prevista {adminStatsYear} — por Contrato</h3>
+                      <button onClick={() => setShowAdminReceita(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr style={{background:'#f1f5f9'}}>
+                            {['Nº Contrato','Órgão','Objeto','Tipo','Prazo Total','Meses em '+adminStatsYear,'Valor Base','Receita '+adminStatsYear].map(h => (
+                              <th key={h} className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {rows.map(({ cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno }) => {
+                            const sigla = getUnitSigla(m.unit||'');
+                            return (
+                              <tr key={cn} className="hover:bg-indigo-50 transition-colors cursor-pointer"
+                                  onClick={() => { setActiveContractNumber(cn); setShowAdminReceita(false); }}>
+                                <td className="px-4 py-2.5 font-black whitespace-nowrap" style={{color:'#1e40af'}}>{cn}</td>
+                                <td className="px-4 py-2.5 whitespace-nowrap">
+                                  {sigla
+                                    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#1e40af14',color:'#1e40af'}}>{sigla}</span>
+                                    : <span className="text-gray-400 text-[11px]">{(m.unit||'—').substring(0,20)}</span>}
+                                </td>
+                                <td className="px-4 py-2.5 text-gray-700 max-w-[200px]"><p className="truncate">{m.object||'—'}</p></td>
+                                <td className="px-4 py-2.5 whitespace-nowrap">
+                                  {isParceria
+                                    ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#f0fdf4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
+                                    : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-gray-50">Direto</span>}
+                                </td>
+                                <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-center">{totalMeses}m</td>
+                                <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                                  <span className="font-bold text-indigo-700">{mesesNoAno}</span>
+                                  <span className="text-gray-400 text-[10px]"> / 12</span>
+                                </td>
+                                <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtV(gv)}</td>
+                                <td className="px-4 py-2.5 font-black whitespace-nowrap text-indigo-800">{fmtV(receitaAno)}</td>
+                              </tr>
+                            );
+                          })}
+                          {rows.length > 0 && (
+                            <tr style={{background:'#eef2ff', borderTop:'2px solid #a5b4fc'}}>
+                              <td colSpan={7} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-400">Total Receita {adminStatsYear}</td>
+                              <td className="px-4 py-2.5 font-black text-sm text-indigo-800">{fmtV(total)}</td>
+                            </tr>
+                          )}
+                          {rows.length === 0 && (
+                            <tr><td colSpan={8} className="px-4 py-8 text-center text-xs text-gray-400">Nenhum contrato com vigência em {adminStatsYear}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Gráfico mensal + Situação */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -9644,8 +9726,9 @@
                               if (totalMeses <= 0) return null;
                               const yStart = yearInt*12+1, yEnd = yearInt*12+12;
                               if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
+                              const mesesNoAno = Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1;
                               const receitaAno = (gv / totalMeses) * 12;
-                              return { cn, m, isParceria, gv, totalMeses, receitaAno };
+                              return { cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno };
                             }).filter(Boolean).sort((a,b) => b.receitaAno - a.receitaAno);
                             const total = rows.reduce((s, r) => s + r.receitaAno, 0);
                             return (
@@ -9658,7 +9741,7 @@
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                  {rows.map(({ cn, m, isParceria, gv, totalMeses, receitaAno }) => {
+                                  {rows.map(({ cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno }) => {
                                     const sigla = getUnitSigla(m.unit||'');
                                     return (
                                       <tr key={cn} className="hover:bg-violet-50 transition-colors cursor-pointer"
