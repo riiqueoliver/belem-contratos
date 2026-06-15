@@ -9786,34 +9786,28 @@
 
                           {/* ── REPASSE PARCEIROS ── */}
                           {activeHomeCard === 'parceiros' && (() => {
-                            const yearInt = parseInt(statsYear, 10);
-                            const toIdx = d => { const [y,mo] = d.slice(0,7).split('-').map(Number); return y*12+mo; };
                             const rows = Object.entries(contractMeta).map(([cn, m]) => {
                               if (m.contractType !== 'parceria') return null;
-                              if (!m.startDate || !m.endDate) return null;
-                              const pv = parseFloat(m.partnerTotal) || 0;
-                              if (pv === 0) return null;
-                              const cStart = toIdx(m.startDate), cEnd = toIdx(m.endDate);
-                              const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
-                              if (totalMeses <= 0) return null;
-                              const yStart = yearInt*12+1, yEnd = yearInt*12+12;
-                              if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
-                              const repasseAno = (pv / totalMeses) * 12;
-                              const bdAno = ((parseFloat(m.bdTotal)||0) / totalMeses) * 12;
-                              return { cn, m, pv, totalMeses, repasseAno, bdAno };
-                            }).filter(Boolean).sort((a,b) => b.repasseAno - a.repasseAno);
-                            const total = rows.reduce((s, r) => s + r.repasseAno, 0);
+                              const globalValue  = parseFloat(m.globalValue)  || 0;
+                              const partnerTotal = parseFloat(m.partnerTotal) || 0;
+                              const bdTotal      = parseFloat(m.bdTotal)      || 0;
+                              if (partnerTotal === 0 && bdTotal === 0) return null;
+                              return { cn, m, globalValue, partnerTotal, bdTotal };
+                            }).filter(Boolean).sort((a,b) => b.partnerTotal - a.partnerTotal);
+                            const totalParceira = rows.reduce((s, r) => s + r.partnerTotal, 0);
+                            const totalBD       = rows.reduce((s, r) => s + r.bdTotal, 0);
+                            const totalContrato = rows.reduce((s, r) => s + r.globalValue, 0);
                             return (
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr style={{background:'#f1f5f9'}}>
-                                    {['Nº Contrato','Empresa Parceira','Órgão','Prazo Total','Meses em '+statsYear,'Repasse Parceira '+statsYear,'BD '+statsYear].map(h => (
+                                    {['Nº Contrato','Empresa Parceira','Órgão','Valor Contrato','Valor Parceira','Valor BD'].map(h => (
                                       <th key={h} className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">{h}</th>
                                     ))}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                  {rows.map(({ cn, m, totalMeses, mesesNoAno, repasseAno, bdAno }) => {
+                                  {rows.map(({ cn, m, globalValue, partnerTotal, bdTotal }) => {
                                     const sigla = getUnitSigla(m.unit||'');
                                     return (
                                       <tr key={cn} className="hover:bg-blue-50 transition-colors cursor-pointer"
@@ -9825,25 +9819,22 @@
                                             ? <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background: BLUE+'14', color: BLUE}}>{sigla}</span>
                                             : <span className="text-gray-400 text-[11px]">{(m.unit||'—').substring(0,20)}</span>}
                                         </td>
-                                        <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-center">{totalMeses}m</td>
-                                        <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                                          <span className="font-bold text-blue-700">{mesesNoAno}</span>
-                                          <span className="text-gray-400 text-[10px]"> / 12</span>
-                                        </td>
-                                        <td className="px-4 py-2.5 font-black whitespace-nowrap text-orange-700">{fmtV(repasseAno)}</td>
-                                        <td className="px-4 py-2.5 font-bold whitespace-nowrap text-green-700">{fmtV(bdAno)}</td>
+                                        <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{fmtV(globalValue)}</td>
+                                        <td className="px-4 py-2.5 font-black whitespace-nowrap text-orange-700">{fmtV(partnerTotal)}</td>
+                                        <td className="px-4 py-2.5 font-bold whitespace-nowrap text-green-700">{fmtV(bdTotal)}</td>
                                       </tr>
                                     );
                                   })}
                                   {rows.length > 0 && (
                                     <tr style={{background:'#eff6ff', borderTop:'2px solid #93c5fd'}}>
-                                      <td colSpan={5} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-blue-400">Total Repasse {statsYear}</td>
-                                      <td className="px-4 py-2.5 font-black text-sm text-orange-700">{fmtV(total)}</td>
-                                      <td />
+                                      <td colSpan={3} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-blue-400">Total</td>
+                                      <td className="px-4 py-2.5 font-black text-sm text-gray-600">{fmtV(totalContrato)}</td>
+                                      <td className="px-4 py-2.5 font-black text-sm text-orange-700">{fmtV(totalParceira)}</td>
+                                      <td className="px-4 py-2.5 font-black text-sm text-green-700">{fmtV(totalBD)}</td>
                                     </tr>
                                   )}
                                   {rows.length === 0 && (
-                                    <tr><td colSpan={7} className="px-4 py-8 text-center text-xs text-gray-400">Nenhum contrato de parceria com vigência em {statsYear}</td></tr>
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-gray-400">Nenhum contrato de parceria cadastrado</td></tr>
                                   )}
                                 </tbody>
                               </table>
