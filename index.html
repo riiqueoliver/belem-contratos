@@ -5702,7 +5702,7 @@
           { label:'Contratos Vigentes',              value:String(contractsYrCount),           sub:`no exercício ${adminStatsYear}`,              accent:NAVY },
           { label:'Contratos Ativos',                value:String(activeCountYr),              sub:'situação ativa',                              accent:GREEN_C },
           { label:`Receita Prevista ${adminStatsYear}`, value:fmtShort(valorNoAnoAdmin),       sub:'valor anual proporcional ao exercício',       accent:NAVY },
-          { label:'Repasse Parceiros',               value:partnerRepasseAdmin > 0 ? fmtShort(partnerRepasseAdmin) : '—', sub:`destinado às parceiras em ${adminStatsYear}`, accent:[80,100,200] },
+          { label:'Repasse',               value:partnerRepasseAdmin > 0 ? fmtShort(partnerRepasseAdmin) : '—', sub:`destinado às parceiras em ${adminStatsYear}`, accent:[80,100,200] },
           { label:'Valor Executado',                 value:fmtShort(totalBilledAll),           sub:'NFs pagas no exercício',                      accent:GREEN_C },
           { label:'Taxa de Execução',                value:`${execRateAll.toFixed(1)}%`,       sub:'executado / receita prevista',                accent: execRateAll >= 60 ? GREEN_C : execRateAll >= 30 ? AMBER_C : RED_C },
         ];
@@ -6628,7 +6628,7 @@
                   sub="valor anual proporcional ao exercício"
                   onClick={() => setShowAdminReceita(v => !v)} active={showAdminReceita} />
                 {partnerRepasseAdmin > 0 && (
-                  <DashKpiCard icon={<LinkIcon />} label="Repasse Parceiros" value={fmtCurrencyShort(partnerRepasseAdmin)} color="#1d4ed8"
+                  <DashKpiCard icon={<LinkIcon />} label="Repasse" value={fmtCurrencyShort(partnerRepasseAdmin)} color="#1d4ed8"
                     sub={`destinado às parceiras em ${adminStatsYear}`} />
                 )}
                 <DashKpiCard icon={<CheckCircle />} label="Total Pago" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
@@ -9442,7 +9442,7 @@
                       },
                       {
                         key: 'parceiros',
-                        label: 'Repasse Parceiros',
+                        label: 'Repasse',
                         value: fmtCurrencyShort(financialKPIs.partnerRepasse),
                         sub: financialKPIs.partnerRepasse > 0
                           ? 'destinado às parceiras'
@@ -9549,7 +9549,7 @@
                     const nfsYear = contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === statsYear);
                     const fmtV = v => { const n = Number(v); if (!n) return '—'; return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
                     const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—';
-                    const titles = { portfolio:'Contratos do Portfólio', faturado:`NFs Emitidas em ${statsYear}`, recebido:`NFs Recebidas em ${statsYear}`, transito:`NFs em Trânsito — ${statsYear}`, anual:`Receita Prevista ${statsYear} — por Contrato`, parceiros:`Repasse Parceiros em ${statsYear}` };
+                    const titles = { portfolio:'Contratos do Portfólio', faturado:`NFs Emitidas em ${statsYear}`, recebido:`NFs Recebidas em ${statsYear}`, transito:`NFs em Trânsito — ${statsYear}`, anual:`Receita Prevista ${statsYear} — por Contrato`, parceiros:`Repasse em ${statsYear}` };
 
                     return (
                       <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden fade-in">
