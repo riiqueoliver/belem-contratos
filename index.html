@@ -8805,8 +8805,8 @@
               </div>
 
               <SidebarBtn
-                icon={hasAlert_sb ? Bell : Clipboard}
-                label={hasAlert_sb ? `${totalHomeAlerts_sb} alerta${totalHomeAlerts_sb!==1?'s':''}` : `Contratos (${uniqueContractCount})`}
+                icon={Clipboard}
+                label={`Contratos (${uniqueContractCount})`}
                 onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
                 badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
                 active={showContractsPage && !activeContractNumber} />
