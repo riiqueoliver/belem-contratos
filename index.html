@@ -9348,7 +9348,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
             </header>
 
-          <main className={showGdocPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+          <main className={(showGdocPage || showProposalsPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
 
             {/* Form */}
             {showForm && (
