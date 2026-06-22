@@ -8564,6 +8564,7 @@
         setShowContractsPage(false);
         setShowInstallmentsPage(false);
         setShowProposalsPage(false);
+        setShowGdocPage(false);
       }
       async function handleSavePdf(installmentId, base64Data) {
         try {
@@ -9181,13 +9182,13 @@
               <SidebarBtn
                 icon={Clipboard}
                 label={`Contratos (${uniqueContractCount})`}
-                onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
+                onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
                 badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
                 active={showContractsPage && !activeContractNumber} />
 
               <SidebarBtn icon={Layers} label="Parcelas"
                 active={showInstallmentsPage}
-                onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
 
               <SidebarBtn icon={Briefcase} label="Propostas"
                 active={showProposalsPage}
