@@ -12049,7 +12049,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : ''))), React.createElement("main", {
-    className: "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
