@@ -7076,38 +7076,42 @@ function GDocPage({
   const [selected, setSelected] = React.useState(null);
   const [deleting, setDeleting] = React.useState(null);
   const fileRef = React.useRef(null);
-  React.useEffect(() => {
-    function onPaste(e) {
-      if (!showForm) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          const blob = item.getAsFile();
-          const reader = new FileReader();
-          reader.onload = ev => {
-            setImageBase64(ev.target.result.split(',')[1]);
-            setImagePreview(ev.target.result);
-            setExtracted(null);
-          };
-          reader.readAsDataURL(blob);
-          break;
-        }
-      }
-    }
-    document.addEventListener('paste', onPaste);
-    return () => document.removeEventListener('paste', onPaste);
-  }, [showForm]);
-  function handleFileInput(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+  const [dragging, setDragging] = React.useState(false);
+  function loadImageBlob(blob) {
     const reader = new FileReader();
     reader.onload = ev => {
       setImageBase64(ev.target.result.split(',')[1]);
       setImagePreview(ev.target.result);
       setExtracted(null);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
+  }
+  React.useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          setShowForm(true);
+          loadImageBlob(blob);
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+  function handleFileInput(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    loadImageBlob(file);
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImageBlob(file);
   }
   async function analyzeImage() {
     if (!imageBase64 || !apiKey) return;
@@ -7287,24 +7291,46 @@ function GDocPage({
     className: "text-xs font-bold text-gray-600 mb-2"
   }, "Print do GDoc"), React.createElement("div", {
     onClick: () => fileRef.current?.click(),
-    className: "border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition-colors min-h-[180px] relative",
+    onDragOver: e => {
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: () => setDragging(false),
+    onDrop: handleDrop,
+    className: "border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors min-h-[180px] relative",
     style: {
-      borderColor: imagePreview ? BLUE : '#cbd5e1',
-      background: imagePreview ? '#f0f7ff' : '#fafafa'
+      borderColor: dragging ? BLUE : imagePreview ? BLUE : '#cbd5e1',
+      background: dragging ? '#e0f0ff' : imagePreview ? '#f0f7ff' : '#fafafa',
+      transform: dragging ? 'scale(1.01)' : 'scale(1)',
+      transition: 'all 0.15s ease'
     }
   }, imagePreview ? React.createElement("img", {
     src: imagePreview,
     className: "max-h-[220px] max-w-full rounded-lg object-contain p-2",
     alt: "preview"
-  }) : React.createElement("div", {
+  }) : dragging ? React.createElement("div", {
+    className: "text-center p-6 pointer-events-none"
+  }, React.createElement(ImageIcon, {
+    className: "w-12 h-12 mx-auto mb-3",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("p", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Solte aqui!")) : React.createElement("div", {
     className: "text-center p-6"
   }, React.createElement(ImageIcon, {
     className: "w-10 h-10 mx-auto mb-3 text-gray-300"
   }), React.createElement("p", {
     className: "text-sm font-semibold text-gray-500"
-  }, "Cole com Ctrl+V ou clique para selecionar"), React.createElement("p", {
+  }, "Cole com ", React.createElement("kbd", {
+    className: "px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-xs font-mono"
+  }, "Ctrl+V"), ", arraste ou clique"), React.createElement("p", {
     className: "text-xs text-gray-400 mt-1"
-  }, "Suporta PNG, JPG, JPEG"))), React.createElement("input", {
+  }, "PNG, JPG, JPEG"))), React.createElement("input", {
     ref: fileRef,
     type: "file",
     accept: "image/*",
