@@ -45,7 +45,9 @@ let out = html
   .replace(/<script\s[^>]*xlsx[^>]*><\/script>\s*/gi, '')
   .replace(/<script\s[^>]*jszip[^>]*><\/script>\s*/gi, '')
   // Substitui o bloco JSX pelo JS pré-transpilado
-  .replace(BABEL_RE, `<script>\n${result.code}\n</script>`);
+  // Usa função callback para evitar que $1/$& no código Babel sejam
+  // interpretados como referências de grupo de captura pelo .replace()
+  .replace(BABEL_RE, () => `<script>\n${result.code}\n</script>`);
 
 // ── 3. Remove no-cache agressivo ───────────────────────────────────────────
 // Os meta no-cache impedem cache do próprio HTML e de todo asset CDN.
