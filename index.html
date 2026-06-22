@@ -2273,22 +2273,32 @@
                opacity: isDragging ? 0.5 : 1,
              }}>
           <div className="p-3">
-            {/* Número + tipo */}
-            <div className="flex items-center justify-between mb-2 gap-1">
+            {/* Número + badges */}
+            <div className="flex items-center justify-between mb-1.5 gap-1">
               <span className="text-[10px] font-black tracking-widest truncate" style={{color: col.color}}>
                 {p.number || '—'}
               </span>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
-                p.demandType === 'ofertada'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'bg-blue-100 text-blue-700'
-              }`}>
-                {p.demandType === 'ofertada' ? 'Ofertada' : 'Recebida'}
-              </span>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {p.modelo && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600">
+                    {p.modelo}
+                  </span>
+                )}
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                  p.demandType === 'ofertada' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {p.demandType === 'ofertada' ? 'Ofertada' : 'Recebida'}
+                </span>
+              </div>
             </div>
 
+            {/* Solução */}
+            {p.solucao && (
+              <p className="text-[11px] font-black mb-1" style={{color: BLUE}}>{p.solucao}</p>
+            )}
+
             {/* Objeto */}
-            <p className="text-xs font-bold text-gray-800 leading-snug mb-1.5"
+            <p className="text-xs text-gray-700 leading-snug mb-1.5"
                style={{display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
               {p.title || 'Sem descrição'}
             </p>
@@ -2298,15 +2308,19 @@
               <p className="text-[10px] text-gray-400 mb-1.5 truncate">{p.client}</p>
             )}
 
-            {/* Valor */}
+            {/* Valor global */}
             {p.value && (
-              <p className="text-[11px] font-black mb-1.5" style={{color: GREEN}}>{p.value}</p>
+              <p className="text-[11px] font-black" style={{color: GREEN}}>{p.value}</p>
+            )}
+            {/* Valor mensal complementar */}
+            {p.valorMensal && p.valorMensal !== p.value && (
+              <p className="text-[9px] text-gray-400 mb-1">{p.valorMensal}/mês</p>
             )}
 
-            {/* Gdoc */}
+            {/* GDoc */}
             {p.gdoc && (
               <a href={p.gdoc} target="_blank" rel="noopener noreferrer"
-                 className="text-[10px] font-semibold hover:underline inline-flex items-center gap-0.5"
+                 className="text-[10px] font-semibold hover:underline inline-flex items-center gap-0.5 mt-1"
                  style={{color:'#7c3aed'}}
                  onClick={e => e.stopPropagation()}>
                 <ExternalLink className="w-2.5 h-2.5" />
@@ -2358,12 +2372,30 @@
             },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
-              max_tokens: 1024,
+              max_tokens: 2048,
               messages: [{
                 role: 'user',
                 content: [
                   { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-                  { type: 'text', text: 'Analise este documento de proposta comercial ou técnica e retorne SOMENTE um JSON válido (sem markdown, sem explicação) com as chaves: title (objeto/descrição resumida da proposta), client (nome do órgão ou empresa cliente), value (valor estimado como string em formato brasileiro, ex: "R$ 120.000,00"; deixe vazio se não encontrar), responsible (nome do responsável ou empresa proponente), unit (sigla ou nome da unidade/secretaria solicitante), demandType ("recebida" se o cliente solicitou, "ofertada" se a empresa propôs), notes (observações relevantes, prazo de entrega, condições especiais). Deixe vazio se não encontrar.' }
+                  { type: 'text', text: `Você é um assistente especializado em leitura de propostas comerciais e técnicas da empresa Belém Digital.
+Analise este documento e retorne SOMENTE um JSON válido (sem markdown, sem explicação, sem bloco de código) com exatamente estas chaves:
+
+- numero: número da proposta exatamente como aparece no documento (ex: "Nº 003/2026" ou "003/2026")
+- solucao: nome do produto ou sistema proposto (ex: "SGO - Sistema de Gestão de Obras", "SGC", "SGA")
+- modelo: modelo de fornecimento — um dos valores: "SaaS", "Licença Perpétua", "Consultoria", "Implantação", "Outro"
+- title: descrição completa do objeto da proposta (serviços incluídos, ex: "implantação, licenciamento, integração, capacitação e suporte do SGO")
+- cliente: nome completo do órgão ou empresa destinatária (ex: "Secretaria de Estado de Educação do Pará - SEDUC")
+- contato: nome e cargo do responsável no cliente (ex: "Lázaro César da Silva Lima Junior - Secretário Adjunto")
+- valorGlobal: valor total da contratação como string em formato brasileiro (ex: "R$ 11.672.212,20"); se houver valor anual e mensal, prefira o anual
+- valorMensal: valor mensal da solução como string em formato brasileiro (ex: "R$ 972.684,35"); deixe "" se não houver
+- vigencia: prazo de vigência em meses como número inteiro (ex: 12); deixe "" se não encontrar
+- prazoImplantacao: prazo de implantação como string (ex: "90 dias", "120 dias"); deixe "" se não encontrar
+- dataEnvio: data de envio da proposta no formato YYYY-MM-DD (ex: "2026-06-03"); deixe "" se não encontrar
+- responsible: nome do responsável da Belém Digital que assinou ou enviou a proposta (ex: "Henrique Correia")
+- demandType: "recebida" se o cliente solicitou/abriu RFP; "ofertada" se a Belém Digital propôs proativamente
+- notes: resumo executivo das principais características, módulos incluídos e condições relevantes (máximo 3 linhas)
+
+Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 ]
               }]
             })
@@ -2371,23 +2403,30 @@
           const data = await resp.json();
           if (data.error) throw new Error(data.error.message);
           let text = data.content[0].text.trim();
-          if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
+          if (text.startsWith('```')) text = text.replace(/```json?\n?/g,'').replace(/```/g,'').trim();
           const ex = JSON.parse(text);
           setForm(prev => ({
             ...prev,
-            title:       ex.title       || prev.title,
-            client:      ex.client      || prev.client,
-            value:       ex.value       || prev.value,
-            responsible: ex.responsible || prev.responsible,
-            unit:        ex.unit        || prev.unit,
-            demandType:  (ex.demandType === 'recebida' || ex.demandType === 'ofertada') ? ex.demandType : prev.demandType,
-            notes:       ex.notes       ? (prev.notes ? prev.notes + '\n' + ex.notes : ex.notes) : prev.notes,
+            number:           ex.numero          || prev.number,
+            solucao:          ex.solucao          || prev.solucao,
+            modelo:           ex.modelo           || prev.modelo,
+            title:            ex.title            || prev.title,
+            client:           ex.cliente          || prev.client,
+            contato:          ex.contato          || prev.contato,
+            value:            ex.valorGlobal      || prev.value,
+            valorMensal:      ex.valorMensal      || prev.valorMensal,
+            vigencia:         ex.vigencia         || prev.vigencia,
+            prazoImplantacao: ex.prazoImplantacao || prev.prazoImplantacao,
+            dataEnvio:        ex.dataEnvio        || prev.dataEnvio,
+            responsible:      ex.responsible      || prev.responsible,
+            demandType:       (ex.demandType === 'recebida' || ex.demandType === 'ofertada') ? ex.demandType : prev.demandType,
+            notes:            ex.notes ? (prev.notes ? prev.notes + '\n' + ex.notes : ex.notes) : prev.notes,
           }));
           setPdfStatus('ok');
-          if (addToast) addToast('🤖 IA preencheu os campos. Revise antes de salvar.');
+          if (addToast) addToast('IA preencheu os campos. Revise antes de salvar.');
         } catch(err) {
           setPdfStatus('error');
-          if (addToast) addToast('❌ Erro na leitura: ' + (err.message || 'tente novamente.'));
+          if (addToast) addToast('Erro na leitura: ' + (err.message || 'tente novamente.'));
         } finally {
           setPdfAnalyzing(false);
         }
@@ -2404,9 +2443,9 @@
       }, [allProposals, filterYear]);
 
       const blank = {
-        number:'', title:'', client:'', unit:'',
-        demandType:'recebida', value:'', status:'demanda',
-        gdoc:'', gdocNumber:'', responsible:'', notes:'',
+        number:'', solucao:'', modelo:'SaaS', title:'', client:'', contato:'',
+        demandType:'recebida', value:'', valorMensal:'', vigencia:'', prazoImplantacao:'',
+        dataEnvio:'', status:'demanda', gdoc:'', gdocNumber:'', responsible:'', notes:'',
       };
       const initial = isNew
         ? { ...blank, number: nextNumber }
@@ -2508,7 +2547,7 @@
                 )}
               </div>
 
-              {/* Linha 1: número, status, tipo */}
+              {/* Linha 1: número, etapa, tipo */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Nº Proposta</label>
@@ -2535,18 +2574,40 @@
                 </div>
               </div>
 
+              {/* Linha 2: solução + modelo */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Solução / Produto</label>
+                  <input value={form.solucao} onChange={f('solucao')} placeholder="Ex.: SGO, SGC, SGA…"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Modelo</label>
+                  <select value={form.modelo} onChange={f('modelo')}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 bg-white"
+                          style={{'--tw-ring-color': BLUE+'40'}}>
+                    <option value="SaaS">SaaS</option>
+                    <option value="Licença Perpétua">Licença Perpétua</option>
+                    <option value="Consultoria">Consultoria</option>
+                    <option value="Implantação">Implantação</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Objeto */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
-                  Objeto / Descrição <span className="text-red-400">*</span>
+                  Objeto / Escopo <span className="text-red-400">*</span>
                 </label>
                 <textarea required value={form.title} onChange={f('title')} rows={2}
-                          placeholder="Descrição resumida do objeto da proposta…"
+                          placeholder="Ex.: implantação, licenciamento, integração, capacitação e suporte do SGO…"
                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300 resize-none"
                           style={{'--tw-ring-color': BLUE+'40'}} />
               </div>
 
-              {/* Órgão + valor */}
+              {/* Órgão + contato */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Órgão / Cliente</label>
@@ -2555,14 +2616,59 @@
                          style={{'--tw-ring-color': BLUE+'40'}} />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Valor Estimado</label>
-                  <input value={form.value} onChange={f('value')} placeholder="R$ 0,00"
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Contato no Cliente</label>
+                  <input value={form.contato} onChange={f('contato')} placeholder="Nome e cargo do responsável"
                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
                          style={{'--tw-ring-color': BLUE+'40'}} />
                 </div>
               </div>
 
-              {/* Gdoc */}
+              {/* Valores */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Valor Global / Anual</label>
+                  <input value={form.value} onChange={f('value')} placeholder="R$ 0,00"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Valor Mensal (SaaS)</label>
+                  <input value={form.valorMensal} onChange={f('valorMensal')} placeholder="R$ 0,00"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+              </div>
+
+              {/* Vigência + prazo + data + responsável */}
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Vigência (meses)</label>
+                  <input value={form.vigencia} onChange={f('vigencia')} placeholder="12"
+                         type="number" min="1"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Prazo Implant.</label>
+                  <input value={form.prazoImplantacao} onChange={f('prazoImplantacao')} placeholder="90 dias"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Data de Envio</label>
+                  <input value={form.dataEnvio} onChange={f('dataEnvio')} type="date"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Responsável BD</label>
+                  <input value={form.responsible} onChange={f('responsible')} placeholder="Nome"
+                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                         style={{'--tw-ring-color': BLUE+'40'}} />
+                </div>
+              </div>
+
+              {/* GDoc */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Link Gdoc</label>
@@ -2578,27 +2684,11 @@
                 </div>
               </div>
 
-              {/* Responsável + unidade */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Responsável</label>
-                  <input value={form.responsible} onChange={f('responsible')} placeholder="Nome do responsável"
-                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
-                         style={{'--tw-ring-color': BLUE+'40'}} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Unidade / Sigla</label>
-                  <input value={form.unit} onChange={f('unit')} placeholder="Ex.: SEFIN, SECON…"
-                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
-                         style={{'--tw-ring-color': BLUE+'40'}} />
-                </div>
-              </div>
-
               {/* Observações */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Observações</label>
                 <textarea value={form.notes} onChange={f('notes')} rows={3}
-                          placeholder="Histórico, detalhes relevantes, próximos passos…"
+                          placeholder="Módulos incluídos, condições especiais, histórico, próximos passos…"
                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300 resize-none"
                           style={{'--tw-ring-color': BLUE+'40'}} />
               </div>

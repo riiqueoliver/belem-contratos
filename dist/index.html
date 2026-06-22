@@ -3555,16 +3555,25 @@ function ProposalCard({
   }, React.createElement("div", {
     className: "p-3"
   }, React.createElement("div", {
-    className: "flex items-center justify-between mb-2 gap-1"
+    className: "flex items-center justify-between mb-1.5 gap-1"
   }, React.createElement("span", {
     className: "text-[10px] font-black tracking-widest truncate",
     style: {
       color: col.color
     }
-  }, p.number || '—'), React.createElement("span", {
-    className: `text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${p.demandType === 'ofertada' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`
-  }, p.demandType === 'ofertada' ? 'Ofertada' : 'Recebida')), React.createElement("p", {
-    className: "text-xs font-bold text-gray-800 leading-snug mb-1.5",
+  }, p.number || '—'), React.createElement("div", {
+    className: "flex items-center gap-1 flex-shrink-0"
+  }, p.modelo && React.createElement("span", {
+    className: "text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600"
+  }, p.modelo), React.createElement("span", {
+    className: `text-[9px] font-bold px-1.5 py-0.5 rounded-md ${p.demandType === 'ofertada' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`
+  }, p.demandType === 'ofertada' ? 'Ofertada' : 'Recebida'))), p.solucao && React.createElement("p", {
+    className: "text-[11px] font-black mb-1",
+    style: {
+      color: BLUE
+    }
+  }, p.solucao), React.createElement("p", {
+    className: "text-xs text-gray-700 leading-snug mb-1.5",
     style: {
       display: '-webkit-box',
       WebkitLineClamp: 2,
@@ -3574,15 +3583,17 @@ function ProposalCard({
   }, p.title || 'Sem descrição'), p.client && React.createElement("p", {
     className: "text-[10px] text-gray-400 mb-1.5 truncate"
   }, p.client), p.value && React.createElement("p", {
-    className: "text-[11px] font-black mb-1.5",
+    className: "text-[11px] font-black",
     style: {
       color: GREEN
     }
-  }, p.value), p.gdoc && React.createElement("a", {
+  }, p.value), p.valorMensal && p.valorMensal !== p.value && React.createElement("p", {
+    className: "text-[9px] text-gray-400 mb-1"
+  }, p.valorMensal, "/m\xEAs"), p.gdoc && React.createElement("a", {
     href: p.gdoc,
     target: "_blank",
     rel: "noopener noreferrer",
-    className: "text-[10px] font-semibold hover:underline inline-flex items-center gap-0.5",
+    className: "text-[10px] font-semibold hover:underline inline-flex items-center gap-0.5 mt-1",
     style: {
       color: '#7c3aed'
     },
@@ -3633,7 +3644,7 @@ function ProposalModal({
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
+          max_tokens: 2048,
           messages: [{
             role: 'user',
             content: [{
@@ -3645,7 +3656,25 @@ function ProposalModal({
               }
             }, {
               type: 'text',
-              text: 'Analise este documento de proposta comercial ou técnica e retorne SOMENTE um JSON válido (sem markdown, sem explicação) com as chaves: title (objeto/descrição resumida da proposta), client (nome do órgão ou empresa cliente), value (valor estimado como string em formato brasileiro, ex: "R$ 120.000,00"; deixe vazio se não encontrar), responsible (nome do responsável ou empresa proponente), unit (sigla ou nome da unidade/secretaria solicitante), demandType ("recebida" se o cliente solicitou, "ofertada" se a empresa propôs), notes (observações relevantes, prazo de entrega, condições especiais). Deixe vazio se não encontrar.'
+              text: `Você é um assistente especializado em leitura de propostas comerciais e técnicas da empresa Belém Digital.
+Analise este documento e retorne SOMENTE um JSON válido (sem markdown, sem explicação, sem bloco de código) com exatamente estas chaves:
+
+- numero: número da proposta exatamente como aparece no documento (ex: "Nº 003/2026" ou "003/2026")
+- solucao: nome do produto ou sistema proposto (ex: "SGO - Sistema de Gestão de Obras", "SGC", "SGA")
+- modelo: modelo de fornecimento — um dos valores: "SaaS", "Licença Perpétua", "Consultoria", "Implantação", "Outro"
+- title: descrição completa do objeto da proposta (serviços incluídos, ex: "implantação, licenciamento, integração, capacitação e suporte do SGO")
+- cliente: nome completo do órgão ou empresa destinatária (ex: "Secretaria de Estado de Educação do Pará - SEDUC")
+- contato: nome e cargo do responsável no cliente (ex: "Lázaro César da Silva Lima Junior - Secretário Adjunto")
+- valorGlobal: valor total da contratação como string em formato brasileiro (ex: "R$ 11.672.212,20"); se houver valor anual e mensal, prefira o anual
+- valorMensal: valor mensal da solução como string em formato brasileiro (ex: "R$ 972.684,35"); deixe "" se não houver
+- vigencia: prazo de vigência em meses como número inteiro (ex: 12); deixe "" se não encontrar
+- prazoImplantacao: prazo de implantação como string (ex: "90 dias", "120 dias"); deixe "" se não encontrar
+- dataEnvio: data de envio da proposta no formato YYYY-MM-DD (ex: "2026-06-03"); deixe "" se não encontrar
+- responsible: nome do responsável da Belém Digital que assinou ou enviou a proposta (ex: "Henrique Correia")
+- demandType: "recebida" se o cliente solicitou/abriu RFP; "ofertada" se a Belém Digital propôs proativamente
+- notes: resumo executivo das principais características, módulos incluídos e condições relevantes (máximo 3 linhas)
+
+Use string vazia "" para campos não encontrados. Nunca invente valores.`
             }]
           }]
         })
@@ -3653,23 +3682,30 @@ function ProposalModal({
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith('```')) text = text.replace(/```json?\n?/, '').replace(/```$/, '').trim();
+      if (text.startsWith('```')) text = text.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
       const ex = JSON.parse(text);
       setForm(prev => ({
         ...prev,
+        number: ex.numero || prev.number,
+        solucao: ex.solucao || prev.solucao,
+        modelo: ex.modelo || prev.modelo,
         title: ex.title || prev.title,
-        client: ex.client || prev.client,
-        value: ex.value || prev.value,
+        client: ex.cliente || prev.client,
+        contato: ex.contato || prev.contato,
+        value: ex.valorGlobal || prev.value,
+        valorMensal: ex.valorMensal || prev.valorMensal,
+        vigencia: ex.vigencia || prev.vigencia,
+        prazoImplantacao: ex.prazoImplantacao || prev.prazoImplantacao,
+        dataEnvio: ex.dataEnvio || prev.dataEnvio,
         responsible: ex.responsible || prev.responsible,
-        unit: ex.unit || prev.unit,
         demandType: ex.demandType === 'recebida' || ex.demandType === 'ofertada' ? ex.demandType : prev.demandType,
         notes: ex.notes ? prev.notes ? prev.notes + '\n' + ex.notes : ex.notes : prev.notes
       }));
       setPdfStatus('ok');
-      if (addToast) addToast('🤖 IA preencheu os campos. Revise antes de salvar.');
+      if (addToast) addToast('IA preencheu os campos. Revise antes de salvar.');
     } catch (err) {
       setPdfStatus('error');
-      if (addToast) addToast('❌ Erro na leitura: ' + (err.message || 'tente novamente.'));
+      if (addToast) addToast('Erro na leitura: ' + (err.message || 'tente novamente.'));
     } finally {
       setPdfAnalyzing(false);
     }
@@ -3685,11 +3721,17 @@ function ProposalModal({
   }, [allProposals, filterYear]);
   const blank = {
     number: '',
+    solucao: '',
+    modelo: 'SaaS',
     title: '',
     client: '',
-    unit: '',
+    contato: '',
     demandType: 'recebida',
     value: '',
+    valorMensal: '',
+    vigencia: '',
+    prazoImplantacao: '',
+    dataEnvio: '',
     status: 'demanda',
     gdoc: '',
     gdocNumber: '',
@@ -3864,16 +3906,49 @@ function ProposalModal({
     value: "recebida"
   }, "Recebida"), React.createElement("option", {
     value: "ofertada"
-  }, "Ofertada")))), React.createElement("div", null, React.createElement("label", {
+  }, "Ofertada")))), React.createElement("div", {
+    className: "grid grid-cols-3 gap-3"
+  }, React.createElement("div", {
+    className: "col-span-2"
+  }, React.createElement("label", {
     className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
-  }, "Objeto / Descri\xE7\xE3o ", React.createElement("span", {
+  }, "Solu\xE7\xE3o / Produto"), React.createElement("input", {
+    value: form.solucao,
+    onChange: f('solucao'),
+    placeholder: "Ex.: SGO, SGC, SGA\u2026",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Modelo"), React.createElement("select", {
+    value: form.modelo,
+    onChange: f('modelo'),
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 bg-white",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  }, React.createElement("option", {
+    value: "SaaS"
+  }, "SaaS"), React.createElement("option", {
+    value: "Licen\xE7a Perp\xE9tua"
+  }, "Licen\xE7a Perp\xE9tua"), React.createElement("option", {
+    value: "Consultoria"
+  }, "Consultoria"), React.createElement("option", {
+    value: "Implanta\xE7\xE3o"
+  }, "Implanta\xE7\xE3o"), React.createElement("option", {
+    value: "Outro"
+  }, "Outro")))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Objeto / Escopo ", React.createElement("span", {
     className: "text-red-400"
   }, "*")), React.createElement("textarea", {
     required: true,
     value: form.title,
     onChange: f('title'),
     rows: 2,
-    placeholder: "Descri\xE7\xE3o resumida do objeto da proposta\u2026",
+    placeholder: "Ex.: implanta\xE7\xE3o, licenciamento, integra\xE7\xE3o, capacita\xE7\xE3o e suporte do SGO\u2026",
     className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300 resize-none",
     style: {
       '--tw-ring-color': BLUE + '40'
@@ -3892,10 +3967,76 @@ function ProposalModal({
     }
   })), React.createElement("div", null, React.createElement("label", {
     className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
-  }, "Valor Estimado"), React.createElement("input", {
+  }, "Contato no Cliente"), React.createElement("input", {
+    value: form.contato,
+    onChange: f('contato'),
+    placeholder: "Nome e cargo do respons\xE1vel",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  }))), React.createElement("div", {
+    className: "grid grid-cols-2 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Valor Global / Anual"), React.createElement("input", {
     value: form.value,
     onChange: f('value'),
     placeholder: "R$ 0,00",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Valor Mensal (SaaS)"), React.createElement("input", {
+    value: form.valorMensal,
+    onChange: f('valorMensal'),
+    placeholder: "R$ 0,00",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  }))), React.createElement("div", {
+    className: "grid grid-cols-4 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Vig\xEAncia (meses)"), React.createElement("input", {
+    value: form.vigencia,
+    onChange: f('vigencia'),
+    placeholder: "12",
+    type: "number",
+    min: "1",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Prazo Implant."), React.createElement("input", {
+    value: form.prazoImplantacao,
+    onChange: f('prazoImplantacao'),
+    placeholder: "90 dias",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Data de Envio"), React.createElement("input", {
+    value: form.dataEnvio,
+    onChange: f('dataEnvio'),
+    type: "date",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2",
+    style: {
+      '--tw-ring-color': BLUE + '40'
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Respons\xE1vel BD"), React.createElement("input", {
+    value: form.responsible,
+    onChange: f('responsible'),
+    placeholder: "Nome",
     className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
     style: {
       '--tw-ring-color': BLUE + '40'
@@ -3924,35 +4065,13 @@ function ProposalModal({
     style: {
       '--tw-ring-color': BLUE + '40'
     }
-  }))), React.createElement("div", {
-    className: "grid grid-cols-2 gap-3"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
-  }, "Respons\xE1vel"), React.createElement("input", {
-    value: form.responsible,
-    onChange: f('responsible'),
-    placeholder: "Nome do respons\xE1vel",
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
-    style: {
-      '--tw-ring-color': BLUE + '40'
-    }
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
-  }, "Unidade / Sigla"), React.createElement("input", {
-    value: form.unit,
-    onChange: f('unit'),
-    placeholder: "Ex.: SEFIN, SECON\u2026",
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
-    style: {
-      '--tw-ring-color': BLUE + '40'
-    }
   }))), React.createElement("div", null, React.createElement("label", {
     className: "block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5"
   }, "Observa\xE7\xF5es"), React.createElement("textarea", {
     value: form.notes,
     onChange: f('notes'),
     rows: 3,
-    placeholder: "Hist\xF3rico, detalhes relevantes, pr\xF3ximos passos\u2026",
+    placeholder: "M\xF3dulos inclu\xEDdos, condi\xE7\xF5es especiais, hist\xF3rico, pr\xF3ximos passos\u2026",
     className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300 resize-none",
     style: {
       '--tw-ring-color': BLUE + '40'
