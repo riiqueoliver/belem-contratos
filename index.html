@@ -10349,7 +10349,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                       <tr key={c.id} className="hover:bg-amber-50 transition-colors cursor-pointer"
                                           onClick={() => { setActiveContractNumber(c.contractNumber); setActiveHomeCard(null); }}>
                                         <td className="px-4 py-2.5 font-bold text-gray-700 whitespace-nowrap">{c.nfNumber||'—'}</td>
-                                        <td className="px-4 py-2.5 font-black whitespace-nowrap" style={{color: BLUE}}>{c.contractNumber}</td>
+                                        <td className="px-4 py-2.5 whitespace-nowrap">
+                                          <p className="font-black" style={{color: BLUE}}>{c.contractNumber}</p>
+                                          {contractMeta[c.contractNumber]?.unit && (
+                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5">{getUnitSigla(contractMeta[c.contractNumber].unit)}</p>
+                                          )}
+                                        </td>
                                         <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{comp}</td>
                                         <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtD(c.nfDate)}</td>
                                         <td className="px-4 py-2.5 whitespace-nowrap">

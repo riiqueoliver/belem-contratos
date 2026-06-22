@@ -13565,11 +13565,15 @@ function App() {
         }, React.createElement("td", {
           className: "px-4 py-2.5 font-bold text-gray-700 whitespace-nowrap"
         }, c.nfNumber || '—'), React.createElement("td", {
-          className: "px-4 py-2.5 font-black whitespace-nowrap",
+          className: "px-4 py-2.5 whitespace-nowrap"
+        }, React.createElement("p", {
+          className: "font-black",
           style: {
             color: BLUE
           }
-        }, c.contractNumber), React.createElement("td", {
+        }, c.contractNumber), contractMeta[c.contractNumber]?.unit && React.createElement("p", {
+          className: "text-[10px] font-bold text-gray-400 mt-0.5"
+        }, getUnitSigla(contractMeta[c.contractNumber].unit))), React.createElement("td", {
           className: "px-4 py-2.5 text-gray-500 whitespace-nowrap"
         }, comp), React.createElement("td", {
           className: "px-4 py-2.5 text-gray-500 whitespace-nowrap"
