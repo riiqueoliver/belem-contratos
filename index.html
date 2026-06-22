@@ -254,6 +254,7 @@
     const Upload          = ({className}) => <SVG className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></SVG>;
     const ScrollText      = ({className}) => <SVG className={className}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="9" x2="16" y2="9"/></SVG>;
     const ImageIcon       = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></SVG>;
+    const GDocLayersIcon  = ({className}) => <SVG className={className}><rect x="2" y="14" width="14" height="8" rx="2"/><rect x="6" y="9" width="14" height="8" rx="2"/><rect x="10" y="4" width="12" height="7" rx="2"/></SVG>;
 
     /* ═══════════════════════════════════════════════════════
        BUSINESS LOGIC
@@ -2841,7 +2842,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <div key={col.id}
                      className="flex-shrink-0 flex flex-col rounded-2xl border transition-all duration-150"
                      style={{
-                       width: '220px',
+                       width: '270px',
                        background: isTarget ? col.bg : '#f8fafc',
                        borderColor: isTarget ? col.color + '80' : '#e2e8f0',
                        boxShadow: isTarget ? `0 0 0 2px ${col.color}40, 0 4px 16px rgba(0,0,0,0.06)` : '0 1px 4px rgba(0,0,0,0.04)',
@@ -9283,7 +9284,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 active={showProposalsPage}
                 onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
 
-              <SidebarBtn icon={ScrollText} label="GDoc"
+              <SidebarBtn icon={GDocLayersIcon} label="GDoc"
                 active={showGdocPage}
                 badge={gdocs.length > 0 ? 0 : 0}
                 onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
