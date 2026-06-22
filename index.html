@@ -5420,7 +5420,7 @@
 
       return (
         <div className="flex-1 overflow-auto p-6 bg-gray-50 min-h-screen">
-          <div className="max-w-5xl mx-auto">
+          <div className="w-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -5567,15 +5567,15 @@
                     {filtered.map(g => (
                       <tr key={g.id} className="hover:bg-blue-50 transition-colors cursor-pointer" onClick={() => setSelected(g)}>
                         <td className="px-4 py-3 font-black whitespace-nowrap" style={{color: BLUE}}>{g.numero || '—'}</td>
-                        <td className="px-4 py-3 text-gray-700 max-w-[220px]">
-                          <p className="truncate font-medium">{g.descricao || '—'}</p>
+                        <td className="px-4 py-3 text-gray-700 w-full">
+                          <p className="font-medium leading-snug">{g.descricao || '—'}</p>
                           {g.tipo && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 text-blue-600 bg-blue-50">{g.tipo}</span>}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{g.interessado || '—'}</td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{g.dataAbertura || '—'}</td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                           <p>{g.dataEncaminhamento || '—'}</p>
-                          {g.encaminhadoPara && <p className="text-[10px] text-gray-400 truncate max-w-[120px]">{g.encaminhadoPara}</p>}
+                          {g.encaminhadoPara && <p className="text-[10px] text-gray-400">{g.encaminhadoPara}</p>}
                         </td>
                         <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{g.criadoEm ? new Date(g.criadoEm).toLocaleDateString('pt-BR') : '—'}</td>
                         <td className="px-4 py-3">

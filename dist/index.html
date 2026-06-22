@@ -7247,7 +7247,7 @@ function GDocPage({
   return React.createElement("div", {
     className: "flex-1 overflow-auto p-6 bg-gray-50 min-h-screen"
   }, React.createElement("div", {
-    className: "max-w-5xl mx-auto"
+    className: "w-full"
   }, React.createElement("div", {
     className: "flex items-center justify-between mb-6"
   }, React.createElement("div", null, React.createElement("h1", {
@@ -7422,9 +7422,9 @@ function GDocPage({
       color: BLUE
     }
   }, g.numero || '—'), React.createElement("td", {
-    className: "px-4 py-3 text-gray-700 max-w-[220px]"
+    className: "px-4 py-3 text-gray-700 w-full"
   }, React.createElement("p", {
-    className: "truncate font-medium"
+    className: "font-medium leading-snug"
   }, g.descricao || '—'), g.tipo && React.createElement("span", {
     className: "text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 text-blue-600 bg-blue-50"
   }, g.tipo)), React.createElement("td", {
@@ -7434,7 +7434,7 @@ function GDocPage({
   }, g.dataAbertura || '—'), React.createElement("td", {
     className: "px-4 py-3 text-gray-500 whitespace-nowrap"
   }, React.createElement("p", null, g.dataEncaminhamento || '—'), g.encaminhadoPara && React.createElement("p", {
-    className: "text-[10px] text-gray-400 truncate max-w-[120px]"
+    className: "text-[10px] text-gray-400"
   }, g.encaminhadoPara)), React.createElement("td", {
     className: "px-4 py-3 text-gray-400 whitespace-nowrap"
   }, g.criadoEm ? new Date(g.criadoEm).toLocaleDateString('pt-BR') : '—'), React.createElement("td", {
