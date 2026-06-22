@@ -2500,7 +2500,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <form id="proposal-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
               {/* ── Leitura Automática por IA ── */}
               <div className="rounded-2xl border-2 border-dashed p-4 space-y-3"
@@ -2601,7 +2601,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
                   Objeto / Escopo <span className="text-red-400">*</span>
                 </label>
-                <textarea required value={form.title} onChange={f('title')} rows={2}
+                <textarea value={form.title} onChange={f('title')} rows={2}
                           placeholder="Ex.: implantação, licenciamento, integração, capacitação e suporte do SGO…"
                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 placeholder-gray-300 resize-none"
                           style={{'--tw-ring-color': BLUE+'40'}} />
@@ -2724,7 +2724,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   Cancelar
                 </button>
                 <button type="submit" form="proposal-form" disabled={saving}
-                        onClick={e => { e.currentTarget.closest('.bg-white').querySelector('form').requestSubmit(); }}
                         className="flex items-center gap-2 text-white text-sm font-bold px-5 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
                         style={{background: BLUE}}>
                   {saving
