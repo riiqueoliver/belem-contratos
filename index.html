@@ -252,6 +252,8 @@
     const Home            = ({className}) => <SVG className={className}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></SVG>;
     const Paperclip       = ({className}) => <SVG className={className}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></SVG>;
     const Upload          = ({className}) => <SVG className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></SVG>;
+    const ScrollText      = ({className}) => <SVG className={className}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="9" x2="16" y2="9"/></SVG>;
+    const ImageIcon       = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></SVG>;
 
     /* ═══════════════════════════════════════════════════════
        BUSINESS LOGIC
@@ -5231,6 +5233,344 @@
       );
     }
 
+    /* ═══════════════════════════════════════════════════════
+       GDOC PAGE
+    ═══════════════════════════════════════════════════════ */
+    function GDocPage({ gdocs, onAdd, onDelete, apiKey, addToast, currentUser }) {
+      const [showForm,      setShowForm]      = React.useState(false);
+      const [imageBase64,   setImageBase64]   = React.useState(null);
+      const [imagePreview,  setImagePreview]  = React.useState(null);
+      const [analyzing,     setAnalyzing]     = React.useState(false);
+      const [extracted,     setExtracted]     = React.useState(null);
+      const [saving,        setSaving]        = React.useState(false);
+      const [search,        setSearch]        = React.useState('');
+      const [selected,      setSelected]      = React.useState(null);
+      const [deleting,      setDeleting]      = React.useState(null);
+      const fileRef = React.useRef(null);
+
+      React.useEffect(() => {
+        function onPaste(e) {
+          if (!showForm) return;
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of items) {
+            if (item.type.startsWith('image/')) {
+              const blob = item.getAsFile();
+              const reader = new FileReader();
+              reader.onload = ev => {
+                setImageBase64(ev.target.result.split(',')[1]);
+                setImagePreview(ev.target.result);
+                setExtracted(null);
+              };
+              reader.readAsDataURL(blob);
+              break;
+            }
+          }
+        }
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+      }, [showForm]);
+
+      function handleFileInput(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          setImageBase64(ev.target.result.split(',')[1]);
+          setImagePreview(ev.target.result);
+          setExtracted(null);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      async function analyzeImage() {
+        if (!imageBase64 || !apiKey) return;
+        setAnalyzing(true);
+        try {
+          const mediaType = imagePreview.startsWith('data:image/png') ? 'image/png'
+            : imagePreview.startsWith('data:image/jpg') || imagePreview.startsWith('data:image/jpeg') ? 'image/jpeg'
+            : 'image/png';
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 1024,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+                  { type: 'text', text: 'Extraia as informações deste GDoc (processo administrativo). Retorne SOMENTE JSON válido, sem markdown, com os campos: numero (número do processo), interessado, tipo (tipo do processo), descricao, dataAbertura, setorOrigem, encaminhadoDe, encaminhadoPara, dataEncaminhamento, encaminhadoPor, despacho. Use string vazia para campos ausentes.' }
+                ]
+              }]
+            })
+          });
+          const data = await res.json();
+          const text = (data.content?.[0]?.text || '').trim();
+          const clean = text.replace(/```json|```/g, '').trim();
+          setExtracted(JSON.parse(clean));
+        } catch(e) {
+          addToast('Erro ao analisar imagem. Verifique a chave API ou tente novamente.', 'error');
+        }
+        setAnalyzing(false);
+      }
+
+      async function handleSave() {
+        if (!extracted?.numero) { addToast('Nenhum dado extraído.', 'error'); return; }
+        setSaving(true);
+        try {
+          await onAdd({
+            ...extracted,
+            imageBase64,
+            criadoEm: new Date().toISOString(),
+            criadoPor: currentUser?.name || ''
+          });
+          addToast('GDoc salvo com sucesso!', 'success');
+          setShowForm(false); setImageBase64(null); setImagePreview(null); setExtracted(null);
+        } catch(e) { addToast('Erro ao salvar.', 'error'); }
+        setSaving(false);
+      }
+
+      async function handleDelete(id) {
+        setDeleting(id);
+        try { await onDelete(id); addToast('GDoc removido.', 'success'); setSelected(null); }
+        catch(e) { addToast('Erro ao remover.', 'error'); }
+        setDeleting(null);
+      }
+
+      const fmtDate = d => d ? d.replace(/(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1') : d;
+
+      const filtered = (gdocs || []).filter(g =>
+        !search ||
+        (g.numero || '').toLowerCase().includes(search.toLowerCase()) ||
+        (g.descricao || '').toLowerCase().includes(search.toLowerCase()) ||
+        (g.interessado || '').toLowerCase().includes(search.toLowerCase())
+      ).sort((a, b) => (b.criadoEm || '') > (a.criadoEm || '') ? 1 : -1);
+
+      if (selected) {
+        return (
+          <div className="flex-1 overflow-auto p-6 bg-gray-50 min-h-screen">
+            <div className="max-w-3xl mx-auto">
+              <button onClick={() => setSelected(null)}
+                className="flex items-center gap-2 text-sm font-semibold mb-5 hover:opacity-70 transition-opacity"
+                style={{color: BLUE}}>
+                <ArrowLeft className="w-4 h-4" /> Voltar à listagem
+              </button>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"
+                     style={{background: '#f0f7ff'}}>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-0.5">Processo</p>
+                    <h2 className="text-lg font-black" style={{color: BLUE}}>{selected.numero || '—'}</h2>
+                  </div>
+                  <button onClick={() => handleDelete(selected.id)}
+                    disabled={deleting === selected.id}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deleting === selected.id ? 'Removendo…' : 'Remover'}
+                  </button>
+                </div>
+                <div className="p-6 grid grid-cols-1 gap-4">
+                  {[
+                    ['Interessado', selected.interessado],
+                    ['Tipo do Processo', selected.tipo],
+                    ['Descrição', selected.descricao],
+                    ['Data de Abertura', selected.dataAbertura],
+                    ['Setor Origem', selected.setorOrigem],
+                    ['Encaminhado De', selected.encaminhadoDe],
+                    ['Encaminhado Para', selected.encaminhadoPara],
+                    ['Data Encaminhamento', selected.dataEncaminhamento],
+                    ['Encaminhado Por', selected.encaminhadoPor],
+                  ].filter(([,v]) => v).map(([label, value]) => (
+                    <div key={label} className="border-b border-gray-50 pb-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
+                      <p className="text-sm text-gray-800 font-medium">{value}</p>
+                    </div>
+                  ))}
+                  {selected.despacho && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Despacho</p>
+                      <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-4 border border-gray-100">{selected.despacho}</p>
+                    </div>
+                  )}
+                  {selected.imageBase64 && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Print do GDoc</p>
+                      <img src={`data:image/png;base64,${selected.imageBase64}`}
+                           className="rounded-xl border border-gray-200 max-w-full shadow-sm" alt="GDoc" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex-1 overflow-auto p-6 bg-gray-50 min-h-screen">
+          <div className="max-w-5xl mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-black tracking-tight" style={{color: BLUE}}>Controle de GDoc</h1>
+                <p className="text-xs text-gray-400 mt-0.5">Processos administrativos com leitura automática via IA</p>
+              </div>
+              <button onClick={() => { setShowForm(true); setImageBase64(null); setImagePreview(null); setExtracted(null); }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
+                style={{background: BLUE}}>
+                <Plus className="w-4 h-4" /> Novo GDoc
+              </button>
+            </div>
+
+            {/* Formulário de novo GDoc */}
+            {showForm && (
+              <div className="bg-white rounded-2xl border border-blue-100 shadow-sm mb-6 overflow-hidden fade-in">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100" style={{background:'#f0f7ff'}}>
+                  <h3 className="text-sm font-bold" style={{color: BLUE}}>Adicionar GDoc</h3>
+                  <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                </div>
+                <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  {/* Área de imagem */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-600 mb-2">Print do GDoc</p>
+                    <div
+                      onClick={() => fileRef.current?.click()}
+                      className="border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition-colors min-h-[180px] relative"
+                      style={{borderColor: imagePreview ? BLUE : '#cbd5e1', background: imagePreview ? '#f0f7ff' : '#fafafa'}}>
+                      {imagePreview
+                        ? <img src={imagePreview} className="max-h-[220px] max-w-full rounded-lg object-contain p-2" alt="preview" />
+                        : (
+                          <div className="text-center p-6">
+                            <ImageIcon className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                            <p className="text-sm font-semibold text-gray-500">Cole com Ctrl+V ou clique para selecionar</p>
+                            <p className="text-xs text-gray-400 mt-1">Suporta PNG, JPG, JPEG</p>
+                          </div>
+                        )
+                      }
+                    </div>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
+                    <button
+                      onClick={analyzeImage}
+                      disabled={!imageBase64 || analyzing}
+                      className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity disabled:opacity-40"
+                      style={{background: GREEN}}>
+                      {analyzing
+                        ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Analisando com IA…</>
+                        : <><ScrollText className="w-4 h-4" /> Ler com IA</>}
+                    </button>
+                  </div>
+
+                  {/* Dados extraídos */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-600 mb-2">Dados extraídos</p>
+                    {!extracted && !analyzing && (
+                      <div className="flex flex-col items-center justify-center min-h-[180px] rounded-xl border border-gray-100 bg-gray-50">
+                        <ScrollText className="w-8 h-8 text-gray-200 mb-2" />
+                        <p className="text-xs text-gray-400">Cole um print e clique em "Ler com IA"</p>
+                      </div>
+                    )}
+                    {analyzing && (
+                      <div className="flex flex-col items-center justify-center min-h-[180px] rounded-xl border border-blue-100 bg-blue-50">
+                        <div className="w-8 h-8 border-3 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3" />
+                        <p className="text-xs text-blue-500 font-semibold">Lendo o documento…</p>
+                      </div>
+                    )}
+                    {extracted && (
+                      <div className="rounded-xl border border-green-100 bg-green-50 p-4 space-y-2 overflow-auto max-h-[280px]">
+                        {[
+                          ['Nº Processo', 'numero'],
+                          ['Interessado', 'interessado'],
+                          ['Tipo', 'tipo'],
+                          ['Descrição', 'descricao'],
+                          ['Data Abertura', 'dataAbertura'],
+                          ['Setor Origem', 'setorOrigem'],
+                          ['Encaminhado De', 'encaminhadoDe'],
+                          ['Encaminhado Para', 'encaminhadoPara'],
+                          ['Data Encaminhamento', 'dataEncaminhamento'],
+                          ['Encaminhado Por', 'encaminhadoPor'],
+                        ].map(([label, key]) => extracted[key] ? (
+                          <div key={key}>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-green-600">{label}</p>
+                            <p className="text-xs text-gray-800 font-medium leading-snug">{extracted[key]}</p>
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
+                    {extracted && (
+                      <button onClick={handleSave} disabled={saving}
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-opacity"
+                        style={{background: BLUE}}>
+                        {saving ? 'Salvando…' : <><FileCheck className="w-4 h-4" /> Confirmar e Salvar</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Busca */}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por número, descrição…"
+                  className="w-full pl-8 pr-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-blue-300 bg-white" />
+              </div>
+              <span className="text-xs text-gray-400 font-medium">{filtered.length} processo{filtered.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            {/* Listagem */}
+            {filtered.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-16">
+                <ScrollText className="w-12 h-12 text-gray-200 mb-3" />
+                <p className="text-sm font-semibold text-gray-400">Nenhum GDoc cadastrado</p>
+                <p className="text-xs text-gray-300 mt-1">Clique em "Novo GDoc" para começar</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{background:'#f1f5f9'}}>
+                      {['Nº GDoc','Descrição','Interessado','Data Abertura','Encaminhamento','Cadastrado em',''].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filtered.map(g => (
+                      <tr key={g.id} className="hover:bg-blue-50 transition-colors cursor-pointer" onClick={() => setSelected(g)}>
+                        <td className="px-4 py-3 font-black whitespace-nowrap" style={{color: BLUE}}>{g.numero || '—'}</td>
+                        <td className="px-4 py-3 text-gray-700 max-w-[220px]">
+                          <p className="truncate font-medium">{g.descricao || '—'}</p>
+                          {g.tipo && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 text-blue-600 bg-blue-50">{g.tipo}</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{g.interessado || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{g.dataAbertura || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                          <p>{g.dataEncaminhamento || '—'}</p>
+                          {g.encaminhadoPara && <p className="text-[10px] text-gray-400 truncate max-w-[120px]">{g.encaminhadoPara}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{g.criadoEm ? new Date(g.criadoEm).toLocaleDateString('pt-BR') : '—'}</td>
+                        <td className="px-4 py-3">
+                          <ChevronRight className="w-4 h-4 text-gray-300" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser, apiKey, onAddInstallment, addToast, initialTab }) {
       const [filter, setFilter]               = useState('');
       const [tab, setTab]                     = useState('dashboard');
@@ -7786,6 +8126,8 @@
       const [showContractsPage,    setShowContractsPage]    = useState(false);
       const [showInstallmentsPage, setShowInstallmentsPage] = useState(false);
       const [showProposalsPage,    setShowProposalsPage]    = useState(false);
+      const [showGdocPage,         setShowGdocPage]         = useState(false);
+      const [gdocs,                setGdocs]                = useState([]);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
       // Fecha o menu + ao clicar fora
       useEffect(() => {
@@ -7890,7 +8232,11 @@
             markLoaded('proposals');
           }),
         ];
-        return () => unsubs.forEach(u => u());
+        // gdocs — listener independente (não bloqueia o dbReady)
+        const unsubGdocs = db.collection('gdocs').onSnapshot(snap => {
+          setGdocs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        });
+        return () => { unsubs.forEach(u => u()); unsubGdocs(); };
       }, []);
 
       const uniqueContractCount = useMemo(() => {
@@ -8609,6 +8955,13 @@
         await db.collection('proposals').doc(id).delete();
       }
 
+      async function handleAddGdoc(data) {
+        await db.collection('gdocs').add(data);
+      }
+      async function handleDeleteGdoc(id) {
+        await db.collection('gdocs').doc(id).delete();
+      }
+
       async function handleUndo(id) {
         const c = contracts.find(x => x.id === id);
         if (!c || c.completedSteps.length <= 1) return;
@@ -8749,7 +9102,7 @@
             {/* Nav principal */}
             <nav className="flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible">
               <SidebarBtn icon={Home} label="Início"
-                active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage}
+                active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage}
                 onClick={handleGoHome} />
 
               {/* Botão + com dropdown — logo após Início */}
@@ -8817,7 +9170,12 @@
 
               <SidebarBtn icon={Briefcase} label="Propostas"
                 active={showProposalsPage}
-                onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+
+              <SidebarBtn icon={ScrollText} label="GDoc"
+                active={showGdocPage}
+                badge={gdocs.length > 0 ? 0 : 0}
+                onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
 
               {currentUser.role === 'admin' && (
                 <SidebarBtn icon={LayoutDashboard} label="Painel Admin"
@@ -9334,6 +9692,16 @@
                 contractMeta={contractMeta}
                 onBack={handleCloseNfList}
                 onOpenContract={cn => { handleCloseNfList(); handleOpenContractDetail(cn); }}
+              />
+            ) : showGdocPage ? (
+              /* ── CONTROLE DE GDOC ── */
+              <GDocPage
+                gdocs={gdocs}
+                onAdd={handleAddGdoc}
+                onDelete={handleDeleteGdoc}
+                apiKey={apiKey}
+                addToast={addToast}
+                currentUser={currentUser}
               />
             ) : showProposalsPage ? (
               /* ── KANBAN DE PROPOSTAS ── */
