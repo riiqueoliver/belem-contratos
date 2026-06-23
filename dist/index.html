@@ -1050,6 +1050,31 @@ const ParcelasIcon = ({
   x2: "12",
   y2: "16"
 }));
+const ArcanjoIcon = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("rect", {
+  x: "3",
+  y: "3",
+  width: "18",
+  height: "18",
+  rx: "2"
+}), React.createElement("path", {
+  d: "M3 9h18M3 15h18M9 3v18"
+}), React.createElement("circle", {
+  cx: "15",
+  cy: "6",
+  r: "1.2",
+  fill: "currentColor",
+  stroke: "none"
+}), React.createElement("circle", {
+  cx: "15",
+  cy: "12",
+  r: "1.2",
+  fill: "currentColor",
+  stroke: "none"
+}));
 function addCalendarDays(dateStr, days) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + days);
@@ -7219,6 +7244,460 @@ function AlertGroupCard({
     }, days === null ? '' : days < 0 ? `Vencido há ${Math.abs(days)}d` : days === 0 ? 'Vence hoje' : `${days}d restantes`)));
   })));
 }
+const ARCANJO_TABS = [{
+  key: 'cras',
+  label: "Análise CRA'S",
+  accent: '#7c3aed'
+}, {
+  key: 'rg',
+  label: '2ª Via RG',
+  accent: '#1d4ed8'
+}, {
+  key: 'certidao',
+  label: '2ª Via Certidão',
+  accent: '#0891b2'
+}];
+const ARCANJO_STATUSES = [{
+  key: 'pendente',
+  label: 'Pendente',
+  color: '#6b7280',
+  bg: '#f3f4f6'
+}, {
+  key: 'encaminhado',
+  label: 'Encaminhado',
+  color: '#1d4ed8',
+  bg: '#dbeafe'
+}, {
+  key: 'atendido',
+  label: 'Atendido',
+  color: '#15803d',
+  bg: '#dcfce7'
+}, {
+  key: 'nao_compareceu',
+  label: 'Não Compareceu',
+  color: '#b45309',
+  bg: '#fef3c7'
+}, {
+  key: 'concluido',
+  label: 'Concluído',
+  color: '#166534',
+  bg: '#bbf7d0'
+}, {
+  key: 'cancelado',
+  label: 'Cancelado',
+  color: '#991b1b',
+  bg: '#fee2e2'
+}];
+function ArcanjoModal({
+  tab,
+  editing,
+  onSubmit,
+  onClose
+}) {
+  const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
+  const blank = {
+    nome: '',
+    cpf: '',
+    endereco: '',
+    lideranca: '',
+    coordenador: '',
+    telefone: '',
+    observacao: '',
+    dataAgendamento: '',
+    status: 'pendente',
+    retorno: '',
+    subtipo: 'nascimento'
+  };
+  const [form, setForm] = React.useState(editing ? {
+    nome: editing.nome || '',
+    cpf: editing.cpf || '',
+    endereco: editing.endereco || '',
+    lideranca: editing.lideranca || '',
+    coordenador: editing.coordenador || '',
+    telefone: editing.telefone || '',
+    observacao: editing.observacao || '',
+    dataAgendamento: editing.dataAgendamento || '',
+    status: editing.status || 'pendente',
+    retorno: editing.retorno || '',
+    subtipo: editing.subtipo || 'nascimento'
+  } : blank);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const accent = tabInfo.accent;
+  const F = ({
+    label,
+    children
+  }) => React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider"
+  }, label), children);
+  const inp = (key, placeholder, type = 'text') => React.createElement("input", {
+    type: type,
+    value: form[key],
+    onChange: e => set(key, e.target.value),
+    placeholder: placeholder,
+    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all",
+    style: {
+      '--tw-ring-color': accent + '55'
+    }
+  });
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: accent
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("div", null, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, editing ? 'Editar Registro' : 'Cadastrar Pessoa'), React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, tabInfo.label))), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("form", {
+    id: "arcanjo-form",
+    onSubmit: e => {
+      e.preventDefault();
+      if (!form.nome.trim()) return;
+      onSubmit(form);
+    },
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement(F, {
+    label: "Nome Completo *"
+  }, React.createElement("input", {
+    value: form.nome,
+    onChange: e => set('nome', e.target.value),
+    required: true,
+    placeholder: "Nome completo",
+    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+  })), React.createElement(F, {
+    label: "CPF"
+  }, inp('cpf', '000.000.000-00'))), React.createElement(F, {
+    label: "Endere\xE7o"
+  }, inp('endereco', 'Endereço completo')), React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement(F, {
+    label: "Lideran\xE7a"
+  }, inp('lideranca', 'Nome da liderança')), React.createElement(F, {
+    label: "Coordenador"
+  }, inp('coordenador', 'Nome do coordenador'))), React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement(F, {
+    label: "Telefone"
+  }, inp('telefone', '(91) 9xxxx-xxxx')), React.createElement(F, {
+    label: tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento'
+  }, inp('dataAgendamento', 'ex.: 18/06 - 16h · Usina'))), tab === 'certidao' && React.createElement(F, {
+    label: "Tipo de Certid\xE3o"
+  }, React.createElement("select", {
+    value: form.subtipo,
+    onChange: e => set('subtipo', e.target.value),
+    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2"
+  }, React.createElement("option", {
+    value: "nascimento"
+  }, "Nascimento"), React.createElement("option", {
+    value: "obito"
+  }, "\xD3bito"), React.createElement("option", {
+    value: "casamento"
+  }, "Casamento"))), tab === 'rg' && React.createElement(F, {
+    label: "Retorno"
+  }, inp('retorno', 'Informações de retorno')), React.createElement(F, {
+    label: "Observa\xE7\xE3o"
+  }, React.createElement("textarea", {
+    value: form.observacao,
+    onChange: e => set('observacao', e.target.value),
+    placeholder: "Observa\xE7\xF5es adicionais...",
+    rows: 3,
+    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 resize-none transition-all"
+  })), React.createElement(F, {
+    label: "Status"
+  }, React.createElement("select", {
+    value: form.status,
+    onChange: e => set('status', e.target.value),
+    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2"
+  }, ARCANJO_STATUSES.map(s => React.createElement("option", {
+    key: s.key,
+    value: s.key
+  }, s.label))))), React.createElement("div", {
+    className: "flex justify-end gap-3 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+  }, "Cancelar"), React.createElement("button", {
+    type: "submit",
+    form: "arcanjo-form",
+    className: "px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95",
+    style: {
+      background: accent
+    }
+  }, editing ? 'Salvar Alterações' : 'Cadastrar'))));
+}
+function ArcanjoPage({
+  records,
+  onAdd,
+  onUpdate,
+  onDelete,
+  addToast,
+  currentUser
+}) {
+  const [tab, setTab] = React.useState('cras');
+  const [showModal, setShowModal] = React.useState(false);
+  const [editing, setEditing] = React.useState(null);
+  const [search, setSearch] = React.useState('');
+  const [statusMenu, setStatusMenu] = React.useState(null);
+  React.useEffect(() => {
+    if (!statusMenu) return;
+    const close = () => setStatusMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [statusMenu]);
+  const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
+  const filtered = records.filter(r => r.tipo === tab && (!search || r.nome?.toLowerCase().includes(search.toLowerCase()) || r.cpf?.includes(search) || r.lideranca?.toLowerCase().includes(search.toLowerCase()) || r.coordenador?.toLowerCase().includes(search.toLowerCase())));
+  function getStatus(key) {
+    return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0];
+  }
+  function handleSubmit(data) {
+    if (editing) {
+      onUpdate(editing.id, {
+        ...data,
+        tipo: tab
+      });
+      addToast('Registro atualizado', 'success');
+    } else {
+      onAdd({
+        ...data,
+        tipo: tab
+      });
+      addToast('Registro cadastrado', 'success');
+    }
+    setShowModal(false);
+    setEditing(null);
+  }
+  const accentColor = tabInfo.accent;
+  return React.createElement("div", {
+    className: "flex-1 flex flex-col fade-in overflow-hidden"
+  }, React.createElement("div", {
+    className: "px-8 pt-7 pb-0 flex-shrink-0"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between mb-6"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: '#1e3a8a'
+    }
+  }, React.createElement(ArcanjoIcon, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-lg font-extrabold tracking-tight",
+    style: {
+      color: '#1e3a8a'
+    }
+  }, "Assist\xEAncia Social"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 font-medium"
+  }, "Instituto Arcanjo's \xB7 Acolher, Cuidar e Transformar"))), React.createElement("button", {
+    onClick: () => {
+      setEditing(null);
+      setShowModal(true);
+    },
+    className: "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95",
+    style: {
+      background: accentColor
+    }
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }), "Cadastrar Pessoa")), React.createElement("div", {
+    className: "flex gap-1 p-1 rounded-2xl w-fit mb-6",
+    style: {
+      background: '#f1f5f9'
+    }
+  }, ARCANJO_TABS.map(t => React.createElement("button", {
+    key: t.key,
+    onClick: () => setTab(t.key),
+    className: "px-5 py-2 rounded-xl text-sm font-semibold transition-all",
+    style: tab === t.key ? {
+      background: t.accent,
+      color: '#fff',
+      boxShadow: '0 2px 10px rgba(0,0,0,.15)'
+    } : {
+      color: '#94a3b8'
+    }
+  }, t.label))), React.createElement("div", {
+    className: "flex items-center justify-between mb-5"
+  }, React.createElement("div", {
+    className: "relative"
+  }, React.createElement(Search, {
+    className: "w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+  }), React.createElement("input", {
+    type: "text",
+    placeholder: "Buscar por nome, CPF ou lideran\xE7a\u2026",
+    value: search,
+    onChange: e => setSearch(e.target.value),
+    className: "pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 w-80 transition-all",
+    style: {
+      '--tw-ring-color': accentColor + '44'
+    }
+  })), React.createElement("span", {
+    className: "text-xs font-semibold text-gray-400 tracking-wide"
+  }, filtered.length, " ", filtered.length === 1 ? 'pessoa' : 'pessoas'))), React.createElement("div", {
+    className: "flex-1 overflow-auto px-8 pb-8"
+  }, filtered.length === 0 ? React.createElement("div", {
+    className: "flex flex-col items-center justify-center py-28 text-gray-300 select-none"
+  }, React.createElement(ArcanjoIcon, {
+    className: "w-14 h-14 mb-4 opacity-20"
+  }), React.createElement("p", {
+    className: "text-base font-semibold"
+  }, "Nenhum registro encontrado"), React.createElement("p", {
+    className: "text-sm mt-1 text-gray-300"
+  }, "Cadastre a primeira pessoa para come\xE7ar")) : React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Nome / CPF"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Telefone"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Lideran\xE7a"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Coordenador"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'), tab === 'certidao' && React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Tipo"), tab === 'rg' && React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Retorno"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Observa\xE7\xE3o"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Status"), React.createElement("th", {
+    className: "px-5 py-3 w-16"
+  }))), React.createElement("tbody", null, filtered.map((r, idx) => {
+    const st = getStatus(r.status);
+    return React.createElement("tr", {
+      key: r.id,
+      className: `border-t border-gray-50 hover:bg-slate-50 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/30' : ''}`
+    }, React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("p", {
+      className: "font-semibold text-gray-800 leading-tight"
+    }, r.nome), React.createElement("p", {
+      className: "text-[11px] text-gray-400 mt-0.5 font-mono"
+    }, r.cpf || '—')), React.createElement("td", {
+      className: "px-5 py-3 text-gray-500"
+    }, r.telefone || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, r.lideranca || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, r.coordenador || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
+    }, r.dataAgendamento || '—'), tab === 'certidao' && React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("span", {
+      className: "text-[11px] font-semibold px-2 py-1 rounded-full capitalize",
+      style: {
+        background: '#ecfeff',
+        color: '#0891b2'
+      }
+    }, r.subtipo || 'Nascimento')), tab === 'rg' && React.createElement("td", {
+      className: "px-5 py-3 text-gray-500 max-w-36"
+    }, React.createElement("p", {
+      className: "truncate text-xs"
+    }, r.retorno || '—')), React.createElement("td", {
+      className: "px-5 py-3 max-w-44"
+    }, React.createElement("p", {
+      className: "truncate text-xs text-gray-500"
+    }, r.observacao || '—')), React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("div", {
+      className: "relative",
+      onClick: e => e.stopPropagation()
+    }, React.createElement("button", {
+      onClick: () => setStatusMenu(statusMenu?.id === r.id ? null : {
+        id: r.id
+      }),
+      className: "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 whitespace-nowrap",
+      style: {
+        background: st.bg,
+        color: st.color
+      }
+    }, st.label, React.createElement(ChevronDown, {
+      className: "w-3 h-3 flex-shrink-0"
+    })), statusMenu?.id === r.id && React.createElement("div", {
+      className: "absolute z-50 top-full left-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden min-w-44"
+    }, ARCANJO_STATUSES.map(s => React.createElement("button", {
+      key: s.key,
+      onClick: () => {
+        onUpdate(r.id, {
+          status: s.key
+        });
+        setStatusMenu(null);
+      },
+      className: "w-full text-left px-3 py-2.5 text-xs font-semibold hover:bg-gray-50 flex items-center gap-2.5 transition-colors",
+      style: {
+        color: s.color
+      }
+    }, React.createElement("span", {
+      className: "w-2 h-2 rounded-full flex-shrink-0",
+      style: {
+        background: s.color
+      }
+    }), s.label))))), React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("div", {
+      className: "flex items-center gap-1"
+    }, React.createElement("button", {
+      onClick: () => {
+        setEditing(r);
+        setShowModal(true);
+      },
+      className: "p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+    }, React.createElement(Edit2, {
+      className: "w-3.5 h-3.5"
+    })), React.createElement("button", {
+      onClick: () => {
+        if (window.confirm(`Excluir ${r.nome}?`)) {
+          onDelete(r.id);
+          addToast('Registro excluído', 'success');
+        }
+      },
+      className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+    }, React.createElement(Trash2, {
+      className: "w-3.5 h-3.5"
+    })))));
+  }))))), showModal && React.createElement(ArcanjoModal, {
+    tab: tab,
+    editing: editing,
+    onSubmit: handleSubmit,
+    onClose: () => {
+      setShowModal(false);
+      setEditing(null);
+    }
+  }));
+}
 function GDocPage({
   gdocs,
   onAdd,
@@ -10893,6 +11372,8 @@ function App() {
   const [showInstallmentsPage, setShowInstallmentsPage] = useState(false);
   const [showProposalsPage, setShowProposalsPage] = useState(false);
   const [showGdocPage, setShowGdocPage] = useState(false);
+  const [showArcanjoPage, setShowArcanjoPage] = useState(false);
+  const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
   useEffect(() => {
@@ -11020,9 +11501,16 @@ function App() {
         id: d.id
       })));
     });
+    const unsubArcanjo = db.collection('arcanjo_social').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setArcanjoRecords(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     return () => {
       unsubs.forEach(u => u());
       unsubGdocs();
+      unsubArcanjo();
     };
   }, []);
   const uniqueContractCount = useMemo(() => {
@@ -11337,6 +11825,7 @@ function App() {
     setShowInstallmentsPage(false);
     setShowProposalsPage(false);
     setShowGdocPage(false);
+    setShowArcanjoPage(false);
   }
   async function handleSavePdf(installmentId, base64Data) {
     try {
@@ -11840,6 +12329,18 @@ function App() {
   async function handleDeleteGdoc(id) {
     await db.collection('gdocs').doc(id).delete();
   }
+  async function handleAddArcanjoRecord(data) {
+    await db.collection('arcanjo_social').add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  async function handleUpdateArcanjoRecord(id, data) {
+    await db.collection('arcanjo_social').doc(id).update(data);
+  }
+  async function handleDeleteArcanjoRecord(id) {
+    await db.collection('arcanjo_social').doc(id).delete();
+  }
   async function handleUndo(id) {
     const c = contracts.find(x => x.id === id);
     if (!c || c.completedSteps.length <= 1) return;
@@ -12021,7 +12522,7 @@ function App() {
   }, React.createElement(SidebarBtn, {
     icon: Home,
     label: "In\xEDcio",
-    active: !showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage,
+    active: !showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage,
     onClick: handleGoHome
   }), React.createElement("div", {
     className: "relative"
@@ -12093,6 +12594,7 @@ function App() {
       setShowInstallmentsPage(false);
       setShowProposalsPage(false);
       setShowGdocPage(false);
+      setShowArcanjoPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -12108,6 +12610,7 @@ function App() {
       setShowContractsPage(false);
       setShowProposalsPage(false);
       setShowGdocPage(false);
+      setShowArcanjoPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -12121,6 +12624,7 @@ function App() {
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
       setShowGdocPage(false);
+      setShowArcanjoPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -12132,6 +12636,21 @@ function App() {
     badge: gdocs.length > 0 ? 0 : 0,
     onClick: () => {
       setShowGdocPage(true);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowArcanjoPage(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+    }
+  }), React.createElement(SidebarBtn, {
+    icon: ArcanjoIcon,
+    label: "Arcanjo's",
+    active: showArcanjoPage,
+    onClick: () => {
+      setShowArcanjoPage(true);
+      setShowGdocPage(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
@@ -12213,7 +12732,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : ''))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -12907,6 +13426,13 @@ function App() {
     onDelete: handleDeleteProposal,
     addToast: addToast,
     apiKey: apiKey
+  }) : showArcanjoPage ? React.createElement(ArcanjoPage, {
+    records: arcanjoRecords,
+    onAdd: handleAddArcanjoRecord,
+    onUpdate: handleUpdateArcanjoRecord,
+    onDelete: handleDeleteArcanjoRecord,
+    addToast: addToast,
+    currentUser: currentUser
   }) : showInstallmentsPage && !activeContractNumber ? React.createElement(InstallmentsPage, {
     contracts: contracts,
     contractMeta: contractMeta,
