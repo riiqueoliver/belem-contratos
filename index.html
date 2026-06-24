@@ -5354,17 +5354,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       } : blank);
       const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
       const accent = tabInfo.accent;
-      const F = ({ label, children }) => (
-        <div>
-          <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">{label}</label>
-          {children}
-        </div>
-      );
-      const inp = (key, placeholder, type='text') => (
-        <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder}
-          className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-          style={{'--tw-ring-color': accent + '55'}} />
-      );
+      const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+      const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
@@ -5382,42 +5373,66 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </div>
             <form id="arcanjo-form" onSubmit={e => { e.preventDefault(); if (!form.nome.trim()) return; onSubmit(form); }} className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <F label="Nome Completo *">
-                  <input value={form.nome} onChange={e => set('nome', e.target.value)} required placeholder="Nome completo"
-                    className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all" />
-                </F>
-                <F label="CPF">{inp('cpf','000.000.000-00')}</F>
+                <div>
+                  <label className={lc}>Nome Completo *</label>
+                  <input value={form.nome} onChange={e => set('nome', e.target.value)} required placeholder="Nome completo" className={ic} />
+                </div>
+                <div>
+                  <label className={lc}>CPF</label>
+                  <input value={form.cpf} onChange={e => set('cpf', e.target.value)} placeholder="000.000.000-00" className={ic} />
+                </div>
               </div>
-              <F label="Endereço">{inp('endereco','Endereço completo')}</F>
-              <div className="grid grid-cols-2 gap-4">
-                <F label="Liderança">{inp('lideranca','Nome da liderança')}</F>
-                <F label="Coordenador">{inp('coordenador','Nome do coordenador')}</F>
+              <div>
+                <label className={lc}>Endereço</label>
+                <input value={form.endereco} onChange={e => set('endereco', e.target.value)} placeholder="Endereço completo" className={ic} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <F label="Telefone">{inp('telefone','(91) 9xxxx-xxxx')}</F>
-                <F label={tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento'}>{inp('dataAgendamento','ex.: 18/06 - 16h · Usina')}</F>
+                <div>
+                  <label className={lc}>Liderança</label>
+                  <input value={form.lideranca} onChange={e => set('lideranca', e.target.value)} placeholder="Nome da liderança" className={ic} />
+                </div>
+                <div>
+                  <label className={lc}>Coordenador</label>
+                  <input value={form.coordenador} onChange={e => set('coordenador', e.target.value)} placeholder="Nome do coordenador" className={ic} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lc}>Telefone</label>
+                  <input value={form.telefone} onChange={e => set('telefone', e.target.value)} placeholder="(91) 9xxxx-xxxx" className={ic} />
+                </div>
+                <div>
+                  <label className={lc}>{tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento'}</label>
+                  <input value={form.dataAgendamento} onChange={e => set('dataAgendamento', e.target.value)} placeholder="ex.: 18/06 - 16h · Usina" className={ic} />
+                </div>
               </div>
               {tab === 'certidao' && (
-                <F label="Tipo de Certidão">
-                  <select value={form.subtipo} onChange={e => set('subtipo', e.target.value)}
-                    className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2">
+                <div>
+                  <label className={lc}>Tipo de Certidão</label>
+                  <select value={form.subtipo} onChange={e => set('subtipo', e.target.value)} className={ic}>
                     <option value="nascimento">Nascimento</option>
                     <option value="obito">Óbito</option>
                     <option value="casamento">Casamento</option>
                   </select>
-                </F>
+                </div>
               )}
-              {tab === 'rg' && <F label="Retorno">{inp('retorno','Informações de retorno')}</F>}
-              <F label="Observação">
+              {tab === 'rg' && (
+                <div>
+                  <label className={lc}>Retorno</label>
+                  <input value={form.retorno} onChange={e => set('retorno', e.target.value)} placeholder="Informações de retorno" className={ic} />
+                </div>
+              )}
+              <div>
+                <label className={lc}>Observação</label>
                 <textarea value={form.observacao} onChange={e => set('observacao', e.target.value)} placeholder="Observações adicionais..." rows={3}
                   className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 resize-none transition-all" />
-              </F>
-              <F label="Status">
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2">
+              </div>
+              <div>
+                <label className={lc}>Status</label>
+                <select value={form.status} onChange={e => set('status', e.target.value)} className={ic}>
                   {ARCANJO_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
-              </F>
+              </div>
             </form>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>

@@ -7326,22 +7326,8 @@ function ArcanjoModal({
     [k]: v
   }));
   const accent = tabInfo.accent;
-  const F = ({
-    label,
-    children
-  }) => React.createElement("div", null, React.createElement("label", {
-    className: "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider"
-  }, label), children);
-  const inp = (key, placeholder, type = 'text') => React.createElement("input", {
-    type: type,
-    value: form[key],
-    onChange: e => set(key, e.target.value),
-    placeholder: placeholder,
-    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all",
-    style: {
-      '--tw-ring-color': accent + '55'
-    }
-  });
+  const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+  const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
   return React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4",
     style: {
@@ -7379,58 +7365,93 @@ function ArcanjoModal({
     className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
   }, React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
-  }, React.createElement(F, {
-    label: "Nome Completo *"
-  }, React.createElement("input", {
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome Completo *"), React.createElement("input", {
     value: form.nome,
     onChange: e => set('nome', e.target.value),
     required: true,
     placeholder: "Nome completo",
-    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-  })), React.createElement(F, {
-    label: "CPF"
-  }, inp('cpf', '000.000.000-00'))), React.createElement(F, {
-    label: "Endere\xE7o"
-  }, inp('endereco', 'Endereço completo')), React.createElement("div", {
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "CPF"), React.createElement("input", {
+    value: form.cpf,
+    onChange: e => set('cpf', e.target.value),
+    placeholder: "000.000.000-00",
+    className: ic
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Endere\xE7o"), React.createElement("input", {
+    value: form.endereco,
+    onChange: e => set('endereco', e.target.value),
+    placeholder: "Endere\xE7o completo",
+    className: ic
+  })), React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
-  }, React.createElement(F, {
-    label: "Lideran\xE7a"
-  }, inp('lideranca', 'Nome da liderança')), React.createElement(F, {
-    label: "Coordenador"
-  }, inp('coordenador', 'Nome do coordenador'))), React.createElement("div", {
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Lideran\xE7a"), React.createElement("input", {
+    value: form.lideranca,
+    onChange: e => set('lideranca', e.target.value),
+    placeholder: "Nome da lideran\xE7a",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Coordenador"), React.createElement("input", {
+    value: form.coordenador,
+    onChange: e => set('coordenador', e.target.value),
+    placeholder: "Nome do coordenador",
+    className: ic
+  }))), React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
-  }, React.createElement(F, {
-    label: "Telefone"
-  }, inp('telefone', '(91) 9xxxx-xxxx')), React.createElement(F, {
-    label: tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento'
-  }, inp('dataAgendamento', 'ex.: 18/06 - 16h · Usina'))), tab === 'certidao' && React.createElement(F, {
-    label: "Tipo de Certid\xE3o"
-  }, React.createElement("select", {
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Telefone"), React.createElement("input", {
+    value: form.telefone,
+    onChange: e => set('telefone', e.target.value),
+    placeholder: "(91) 9xxxx-xxxx",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento'), React.createElement("input", {
+    value: form.dataAgendamento,
+    onChange: e => set('dataAgendamento', e.target.value),
+    placeholder: "ex.: 18/06 - 16h \xB7 Usina",
+    className: ic
+  }))), tab === 'certidao' && React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Tipo de Certid\xE3o"), React.createElement("select", {
     value: form.subtipo,
     onChange: e => set('subtipo', e.target.value),
-    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2"
+    className: ic
   }, React.createElement("option", {
     value: "nascimento"
   }, "Nascimento"), React.createElement("option", {
     value: "obito"
   }, "\xD3bito"), React.createElement("option", {
     value: "casamento"
-  }, "Casamento"))), tab === 'rg' && React.createElement(F, {
-    label: "Retorno"
-  }, inp('retorno', 'Informações de retorno')), React.createElement(F, {
-    label: "Observa\xE7\xE3o"
-  }, React.createElement("textarea", {
+  }, "Casamento"))), tab === 'rg' && React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Retorno"), React.createElement("input", {
+    value: form.retorno,
+    onChange: e => set('retorno', e.target.value),
+    placeholder: "Informa\xE7\xF5es de retorno",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Observa\xE7\xE3o"), React.createElement("textarea", {
     value: form.observacao,
     onChange: e => set('observacao', e.target.value),
     placeholder: "Observa\xE7\xF5es adicionais...",
     rows: 3,
     className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 resize-none transition-all"
-  })), React.createElement(F, {
-    label: "Status"
-  }, React.createElement("select", {
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Status"), React.createElement("select", {
     value: form.status,
     onChange: e => set('status', e.target.value),
-    className: "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2"
+    className: ic
   }, ARCANJO_STATUSES.map(s => React.createElement("option", {
     key: s.key,
     value: s.key
