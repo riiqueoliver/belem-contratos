@@ -9167,8 +9167,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
       }
       function handleLogout() {
+        const goArcanjo = (showArcanjoPage || showArcanjoGerencial) ||
+                          (currentUser && ARCANJO_ONLY.has(currentUser.username));
         localStorage.removeItem('belem-session');
         setCurrentUser(null);
+        if (goArcanjo) window.location.replace('/moduloarcanjo');
       }
 
       // ── Title dinâmico: Arcanjo vs. SGC ──────────────────────

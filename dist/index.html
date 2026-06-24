@@ -12247,8 +12247,10 @@ function App() {
     if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
   }
   function handleLogout() {
+    const goArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
     localStorage.removeItem('belem-session');
     setCurrentUser(null);
+    if (goArcanjo) window.location.replace('/moduloarcanjo');
   }
   useEffect(() => {
     const isArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
