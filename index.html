@@ -9171,6 +9171,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         setCurrentUser(null);
       }
 
+      // ── Title dinâmico: Arcanjo vs. SGC ──────────────────────
+      useEffect(() => {
+        const isArcanjo = showArcanjoPage || showArcanjoGerencial ||
+                          (currentUser && ARCANJO_ONLY.has(currentUser.username));
+        document.title = isArcanjo
+          ? 'Sistema Arcanjo - Neotrix'
+          : 'Belém Digital – Gestão de Contratos';
+      }, [showArcanjoPage, showArcanjoGerencial, currentUser]);
+
       // ── Auto-logout por inatividade (5 minutos) ──────────────
       useEffect(() => {
         if (!currentUser) return;
