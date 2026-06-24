@@ -5507,11 +5507,22 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
       const accentColor = tabInfo.accent;
 
+      const stats = React.useMemo(() => {
+        const total       = records.length;
+        const atendidos   = records.filter(r => r.status === 'atendido' || r.status === 'concluido').length;
+        const emAndamento = records.filter(r => r.status === 'pendente'  || r.status === 'encaminhado').length;
+        const naoComp     = records.filter(r => r.status === 'nao_compareceu').length;
+        const cras        = records.filter(r => r.tipo === 'cras').length;
+        const rg          = records.filter(r => r.tipo === 'rg').length;
+        const cert        = records.filter(r => r.tipo === 'certidao').length;
+        return { total, atendidos, emAndamento, naoComp, cras, rg, cert };
+      }, [records]);
+
       return (
         <div className="flex-1 flex flex-col fade-in overflow-hidden">
           {/* Header */}
           <div className="px-8 pt-7 pb-0 flex-shrink-0">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background:'#1e3a8a'}}>
                   <ArcanjoIcon className="w-5 h-5 text-white" />
@@ -5527,6 +5538,53 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <Plus className="w-4 h-4" />
                 Cadastrar Pessoa
               </button>
+            </div>
+
+            {/* ── Indicadores ── */}
+            <div className="grid grid-cols-4 gap-3 mb-6">
+              {/* Total cadastrados */}
+              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#ede9fe'}}>
+                  <Users className="w-4 h-4" style={{color:'#7c3aed'}} />
+                </div>
+                <div>
+                  <p className="text-2xl font-black leading-none" style={{color:'#7c3aed'}}>{stats.total}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Total cadastrados</p>
+                </div>
+              </div>
+
+              {/* Atendidos / Concluídos */}
+              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#dcfce7'}}>
+                  <CheckCircle className="w-4 h-4" style={{color:'#15803d'}} />
+                </div>
+                <div>
+                  <p className="text-2xl font-black leading-none" style={{color:'#15803d'}}>{stats.atendidos}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Atendidos</p>
+                </div>
+              </div>
+
+              {/* Em andamento */}
+              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#dbeafe'}}>
+                  <Clock className="w-4 h-4" style={{color:'#1d4ed8'}} />
+                </div>
+                <div>
+                  <p className="text-2xl font-black leading-none" style={{color:'#1d4ed8'}}>{stats.emAndamento}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Em andamento</p>
+                </div>
+              </div>
+
+              {/* Não compareceram */}
+              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#fef3c7'}}>
+                  <AlertTriangle className="w-4 h-4" style={{color:'#b45309'}} />
+                </div>
+                <div>
+                  <p className="text-2xl font-black leading-none" style={{color:'#b45309'}}>{stats.naoComp}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Não compareceram</p>
+                </div>
+              </div>
             </div>
 
             {/* Tabs */}
@@ -9574,7 +9632,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
           {/* ── SIDEBAR ────────────────────────────────────────── */}
           <aside className="fixed top-0 left-0 h-screen w-16 flex flex-col items-center py-3 z-50 overflow-visible"
-                 style={{background: BLUE, boxShadow:'4px 0 24px rgba(11,43,94,0.18)'}}>
+                 style={ARCANJO_ONLY.has(currentUser.username)
+                   ? {background:'#7b61c7', boxShadow:'4px 0 24px rgba(90,55,160,0.22)'}
+                   : {background: BLUE,     boxShadow:'4px 0 24px rgba(11,43,94,0.18)'}}>
 
             {/* Logo / Home */}
             <button onClick={handleGoHome} title="Início"

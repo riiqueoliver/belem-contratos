@@ -7544,12 +7544,30 @@ function ArcanjoPage({
     setEditing(null);
   }
   const accentColor = tabInfo.accent;
+  const stats = React.useMemo(() => {
+    const total = records.length;
+    const atendidos = records.filter(r => r.status === 'atendido' || r.status === 'concluido').length;
+    const emAndamento = records.filter(r => r.status === 'pendente' || r.status === 'encaminhado').length;
+    const naoComp = records.filter(r => r.status === 'nao_compareceu').length;
+    const cras = records.filter(r => r.tipo === 'cras').length;
+    const rg = records.filter(r => r.tipo === 'rg').length;
+    const cert = records.filter(r => r.tipo === 'certidao').length;
+    return {
+      total,
+      atendidos,
+      emAndamento,
+      naoComp,
+      cras,
+      rg,
+      cert
+    };
+  }, [records]);
   return React.createElement("div", {
     className: "flex-1 flex flex-col fade-in overflow-hidden"
   }, React.createElement("div", {
     className: "px-8 pt-7 pb-0 flex-shrink-0"
   }, React.createElement("div", {
-    className: "flex items-center justify-between mb-6"
+    className: "flex items-center justify-between mb-5"
   }, React.createElement("div", {
     className: "flex items-center gap-3"
   }, React.createElement("div", {
@@ -7578,6 +7596,84 @@ function ArcanjoPage({
   }, React.createElement(Plus, {
     className: "w-4 h-4"
   }), "Cadastrar Pessoa")), React.createElement("div", {
+    className: "grid grid-cols-4 gap-3 mb-6"
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#ede9fe'
+    }
+  }, React.createElement(Users, {
+    className: "w-4 h-4",
+    style: {
+      color: '#7c3aed'
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "text-2xl font-black leading-none",
+    style: {
+      color: '#7c3aed'
+    }
+  }, stats.total), React.createElement("p", {
+    className: "text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide"
+  }, "Total cadastrados"))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#dcfce7'
+    }
+  }, React.createElement(CheckCircle, {
+    className: "w-4 h-4",
+    style: {
+      color: '#15803d'
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "text-2xl font-black leading-none",
+    style: {
+      color: '#15803d'
+    }
+  }, stats.atendidos), React.createElement("p", {
+    className: "text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide"
+  }, "Atendidos"))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#dbeafe'
+    }
+  }, React.createElement(Clock, {
+    className: "w-4 h-4",
+    style: {
+      color: '#1d4ed8'
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "text-2xl font-black leading-none",
+    style: {
+      color: '#1d4ed8'
+    }
+  }, stats.emAndamento), React.createElement("p", {
+    className: "text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide"
+  }, "Em andamento"))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#fef3c7'
+    }
+  }, React.createElement(AlertTriangle, {
+    className: "w-4 h-4",
+    style: {
+      color: '#b45309'
+    }
+  })), React.createElement("div", null, React.createElement("p", {
+    className: "text-2xl font-black leading-none",
+    style: {
+      color: '#b45309'
+    }
+  }, stats.naoComp), React.createElement("p", {
+    className: "text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide"
+  }, "N\xE3o compareceram")))), React.createElement("div", {
     className: "flex gap-1 p-1 rounded-2xl w-fit mb-6",
     style: {
       background: '#f1f5f9'
@@ -12582,7 +12678,10 @@ function App() {
     addToast: addToast
   }), React.createElement("aside", {
     className: "fixed top-0 left-0 h-screen w-16 flex flex-col items-center py-3 z-50 overflow-visible",
-    style: {
+    style: ARCANJO_ONLY.has(currentUser.username) ? {
+      background: '#7b61c7',
+      boxShadow: '4px 0 24px rgba(90,55,160,0.22)'
+    } : {
       background: BLUE,
       boxShadow: '4px 0 24px rgba(11,43,94,0.18)'
     }
