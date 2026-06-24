@@ -5505,16 +5505,20 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
       function getStatus(key) { return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
 
-      function handleSubmit(data) {
-        if (editing) {
-          onUpdate(editing.id, { ...data, tipo: tab });
-          addToast('Registro atualizado', 'success');
-        } else {
-          onAdd({ ...data, tipo: tab });
-          addToast('Registro cadastrado', 'success');
+      async function handleSubmit(data) {
+        try {
+          if (editing) {
+            await onUpdate(editing.id, { ...data, tipo: tab });
+            addToast('Registro atualizado com sucesso!');
+          } else {
+            await onAdd({ ...data, tipo: tab });
+            addToast('Registro cadastrado com sucesso!');
+          }
+          setShowModal(false);
+          setEditing(null);
+        } catch(e) {
+          addToast('Erro ao salvar: ' + (e.message || 'Falha no banco de dados'));
         }
-        setShowModal(false);
-        setEditing(null);
       }
 
       const accentColor = tabInfo.accent;
@@ -9804,21 +9808,23 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Indicador de alertas */}
-                {hasAlert_sb && (
-                  <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
-                        style={{background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca'}}>
-                    <Bell className="w-3 h-3" style={{animation:'swing 1.4s ease-in-out infinite'}} />
-                    {totalHomeAlerts_sb} alerta{totalHomeAlerts_sb!==1?'s':''}
+                {!showArcanjoPage && (<>
+                  {/* Indicador de alertas */}
+                  {hasAlert_sb && (
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
+                          style={{background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca'}}>
+                      <Bell className="w-3 h-3" style={{animation:'swing 1.4s ease-in-out infinite'}} />
+                      {totalHomeAlerts_sb} alerta{totalHomeAlerts_sb!==1?'s':''}
+                    </span>
+                  )}
+                  <div className="h-5 w-px bg-gray-200" />
+                  <span className="text-[10px] font-bold tracking-widest uppercase"
+                        style={{color: GREEN}}>Gestão de Contratos</span>
+                  <div className="h-5 w-px bg-gray-200" />
+                  <span className="text-[11px] text-gray-400 font-medium">
+                    {uniqueContractCount} contrato{uniqueContractCount!==1?'s':''}
                   </span>
-                )}
-                <div className="h-5 w-px bg-gray-200" />
-                <span className="text-[10px] font-bold tracking-widest uppercase"
-                      style={{color: GREEN}}>Gestão de Contratos</span>
-                <div className="h-5 w-px bg-gray-200" />
-                <span className="text-[11px] text-gray-400 font-medium">
-                  {uniqueContractCount} contrato{uniqueContractCount!==1?'s':''}
-                </span>
+                </>)}
               </div>
             </header>
 
@@ -11061,19 +11067,25 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </>
             )}
 
-            <div className="text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2">
-              <p>Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)</p>
-              <p className="flex items-center gap-2 text-[10px]">
-                <span className="text-green-700">
-                  Dados sincronizados em tempo real — Firebase Cloud
-                </span>
-                <span className="text-gray-300">·</span>
-                <button onClick={resetAllData}
-                        className="text-gray-400 hover:text-red-600 underline transition-colors">
-                  Resetar dados
-                </button>
-              </p>
-            </div>
+            {showArcanjoPage ? (
+              <div className="text-center text-[10px] text-gray-400 pb-4">
+                <p>Desenvolvido por <span className="font-semibold text-gray-500">Neotrix</span> · 2026</p>
+              </div>
+            ) : (
+              <div className="text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2">
+                <p>Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)</p>
+                <p className="flex items-center gap-2 text-[10px]">
+                  <span className="text-green-700">
+                    Dados sincronizados em tempo real — Firebase Cloud
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <button onClick={resetAllData}
+                          className="text-gray-400 hover:text-red-600 underline transition-colors">
+                    Resetar dados
+                  </button>
+                </p>
+              </div>
+            )}
           </main>
           </div>{/* fim flex-1 conteúdo principal */}
         </div>
