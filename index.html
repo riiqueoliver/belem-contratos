@@ -5339,9 +5339,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
        ARCANJO'S SOCIAL MODULE
     ═══════════════════════════════════════════════════════ */
     const ARCANJO_TABS = [
-      { key: 'cras',     label: "Análise CRA'S",   accent: '#7b61c7' },
-      { key: 'rg',       label: '2ª Via RG',        accent: '#6248b0' },
-      { key: 'certidao', label: '2ª Via Certidão',  accent: '#4c3d8f' },
+      { key: 'cras',     label: "Análise CRA'S",   accent: '#8b5cf6' },
+      { key: 'rg',       label: '2ª Via RG',        accent: '#0ea5e9' },
+      { key: 'certidao', label: '2ª Via Certidão',  accent: '#10b981' },
     ];
     const ARCANJO_COLOR = '#7b61c7';  // cor-base do módulo
     const ARCANJO_STATUSES = [
@@ -5460,13 +5460,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [tab, setTab] = React.useState('cras');
       const [showModal, setShowModal] = React.useState(false);
       const [editing, setEditing] = React.useState(null);
-      const [search,           setSearch]           = React.useState('');
-      const [filterLideranca,  setFilterLideranca]  = React.useState('');
-      const [filterCoordenador,setFilterCoordenador]= React.useState('');
-      const [statusMenu, setStatusMenu] = React.useState(null);
+      const [search,            setSearch]            = React.useState('');
+      const [filterLideranca,   setFilterLideranca]   = React.useState('');
+      const [filterCoordenador, setFilterCoordenador] = React.useState('');
+      const [statusMenu,        setStatusMenu]        = React.useState(null);
+      const [activeIndicator,   setActiveIndicator]   = React.useState(null);
 
       React.useEffect(() => {
-        setSearch(''); setFilterLideranca(''); setFilterCoordenador('');
+        setSearch(''); setFilterLideranca(''); setFilterCoordenador(''); setActiveIndicator(null);
       }, [tab]);
 
       React.useEffect(() => {
@@ -5496,6 +5497,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
         if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
+        if (activeIndicator === 'atendidos'   && r.status !== 'atendido' && r.status !== 'concluido') return false;
+        if (activeIndicator === 'emAndamento' && r.status !== 'pendente' && r.status !== 'encaminhado') return false;
+        if (activeIndicator === 'naoComp'     && r.status !== 'nao_compareceu') return false;
         return true;
       });
 
@@ -5549,51 +5553,42 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </div>
 
             {/* ── Indicadores ── */}
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {/* Total cadastrados */}
-              <div className="rounded-2xl border px-4 py-3.5 flex items-center gap-3 shadow-sm" style={{background:'#f5f3ff', borderColor:'#ede9fe'}}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background: ARCANJO_COLOR}}>
-                  <Users className="w-4 h-4 text-white" />
+            {(() => {
+              const ind = [
+                { key: null,          label: 'Total cadastrados', value: stats.total,       icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe', iconBg: ARCANJO_COLOR,  iconColor: '#fff' },
+                { key: 'atendidos',   label: 'Atendidos',         value: stats.atendidos,   icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0', iconBg: '#dcfce7',      iconColor: '#059669' },
+                { key: 'emAndamento', label: 'Em andamento',      value: stats.emAndamento, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd', iconBg: '#e0f2fe',      iconColor: '#0284c7' },
+                { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,     icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a', iconBg: '#fef3c7',      iconColor: '#d97706' },
+              ];
+              return (
+                <div className="grid grid-cols-4 gap-3 mb-6">
+                  {ind.map(({ key, label, value, icon: Icon, color, bg, border, iconBg, iconColor }) => {
+                    const isActive = activeIndicator === key;
+                    const isDimmed = activeIndicator !== undefined && activeIndicator !== null && !isActive && key !== null;
+                    return (
+                      <button key={String(key)} onClick={() => setActiveIndicator(isActive ? null : key)}
+                        className="rounded-2xl border px-4 py-3.5 flex items-center gap-3 text-left transition-all duration-150 active:scale-95"
+                        style={{
+                          background: isActive ? bg : '#fff',
+                          borderColor: isActive ? color : '#f1f5f9',
+                          boxShadow: isActive ? `0 0 0 2px ${color}33, 0 4px 16px ${color}18` : '0 1px 4px rgba(0,0,0,.06)',
+                          opacity: isDimmed ? 0.45 : 1,
+                          cursor: key === null ? 'default' : 'pointer',
+                        }}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+                          style={{background: isActive ? color : iconBg}}>
+                          <Icon className="w-4 h-4" style={{color: isActive ? '#fff' : iconColor}} />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-black leading-none transition-colors" style={{color: isActive ? color : '#374151'}}>{value}</p>
+                          <p className="text-[10px] font-semibold mt-0.5 uppercase tracking-wide transition-colors" style={{color: isActive ? color : '#9ca3af'}}>{label}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div>
-                  <p className="text-2xl font-black leading-none" style={{color: ARCANJO_COLOR}}>{stats.total}</p>
-                  <p className="text-[10px] font-semibold mt-0.5 uppercase tracking-wide" style={{color:'#9d85d4'}}>Total cadastrados</p>
-                </div>
-              </div>
-
-              {/* Atendidos */}
-              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#dcfce7'}}>
-                  <CheckCircle className="w-4 h-4" style={{color:'#15803d'}} />
-                </div>
-                <div>
-                  <p className="text-2xl font-black leading-none" style={{color:'#15803d'}}>{stats.atendidos}</p>
-                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Atendidos</p>
-                </div>
-              </div>
-
-              {/* Em andamento */}
-              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#ede9fe'}}>
-                  <Clock className="w-4 h-4" style={{color:'#6248b0'}} />
-                </div>
-                <div>
-                  <p className="text-2xl font-black leading-none" style={{color:'#6248b0'}}>{stats.emAndamento}</p>
-                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Em andamento</p>
-                </div>
-              </div>
-
-              {/* Não compareceram */}
-              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 shadow-sm">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#fef3c7'}}>
-                  <AlertTriangle className="w-4 h-4" style={{color:'#b45309'}} />
-                </div>
-                <div>
-                  <p className="text-2xl font-black leading-none" style={{color:'#b45309'}}>{stats.naoComp}</p>
-                  <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wide">Não compareceram</p>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Tabs */}
             <div className="flex gap-1 p-1 rounded-2xl w-fit mb-6" style={{background:'#ede9fe'}}>
@@ -9653,22 +9648,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/15"
                    style={{background:'rgba(255,255,255,0.08)'}}>
                 {ARCANJO_ONLY.has(currentUser.username) ? (
-                  <svg width="28" height="28" viewBox="0 0 30 30" fill="none">
-                    {/* halo */}
-                    <circle cx="15" cy="14" r="8.5" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" fill="rgba(255,255,255,0.08)"/>
-                    {/* letter A */}
-                    <path d="M15 7.5 L19.8 19.5 H10.2 Z" fill="rgba(255,255,255,0.95)"/>
-                    {/* crossbar (purple cutout) */}
-                    <rect x="11.8" y="15.4" width="6.4" height="1.6" fill="#7b61c7"/>
-                    {/* left wing — upper */}
-                    <path d="M6.5 11.5 C4 9.5 1.5 11 2.5 13.5" stroke="rgba(255,255,255,0.85)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
-                    {/* left wing — lower */}
-                    <path d="M6.5 13.5 C3.5 12.5 1.5 15.5 3 17" stroke="rgba(255,255,255,0.65)" strokeWidth="1" strokeLinecap="round" fill="none"/>
-                    {/* right wing — upper */}
-                    <path d="M23.5 11.5 C26 9.5 28.5 11 27.5 13.5" stroke="rgba(255,255,255,0.85)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
-                    {/* right wing — lower */}
-                    <path d="M23.5 13.5 C26.5 12.5 28.5 15.5 27 17" stroke="rgba(255,255,255,0.65)" strokeWidth="1" strokeLinecap="round" fill="none"/>
-                  </svg>
+                  <img src="arcanjo-logo.jpg" alt="Instituto Arcanjo's"
+                       style={{height:34, width:34, objectFit:'contain', borderRadius:6, background:'#fff', padding:1}} />
                 ) : (
                   <>
                     <img src="simbologo2.PNG" alt="SGC"
@@ -9777,7 +9758,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   onClick={() => { setShowArcanjoPage(true); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
-              {currentUser.role === 'admin' && (
+              {currentUser.role === 'admin' && !ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={LayoutDashboard} label="Painel Admin"
                   active={showAdmin}
                   badge={pendingUsers.length}
