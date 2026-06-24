@@ -101,11 +101,14 @@
     };
 
     const ADMIN_USERNAMES = new Set(['henriquecorreia', 'leonardomendonca']);
+    const ARCANJO_USERS   = new Set(['henriquecorreia', 'laynesoares']); // podem ver o módulo Arcanjo's
+    const ARCANJO_ONLY    = new Set(['laynesoares']);                     // veem APENAS o módulo Arcanjo's
 
     const INITIAL_USERS = [
       { id:1, username:'henriquecorreia',  password:'ngcc2026', name:'Henrique Correia',  funcional:'', phone:'', email:'', role:'admin' },
       { id:2, username:'leonardomendonca', password:'ngcc2026', name:'Leonardo Mendonça', funcional:'', phone:'', email:'', role:'admin' },
       { id:3, username:'laianalima',       password:'ngcc2026', name:'Laiana Lima',       funcional:'', phone:'', email:'', role:'user' },
+      { id:4, username:'laynesoares',      password:'ngcc2026', name:'Layne Soares',      funcional:'', phone:'', email:'', role:'user' },
     ];
 
     function loadFromStorage(key, fallback) {
@@ -8884,6 +8887,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       function handleLogin(user) {
         localStorage.setItem('belem-session', String(user.id));
         setCurrentUser(user);
+        if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
       }
       function handleLogout() {
         localStorage.removeItem('belem-session');
@@ -9020,7 +9024,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         setShowInstallmentsPage(false);
         setShowProposalsPage(false);
         setShowGdocPage(false);
-        setShowArcanjoPage(false);
+        if (ARCANJO_ONLY.has(currentUser?.username)) {
+          setShowArcanjoPage(true);
+        } else {
+          setShowArcanjoPage(false);
+        }
       }
       async function handleSavePdf(installmentId, base64Data) {
         try {
@@ -9589,85 +9597,92 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
             {/* Nav principal */}
             <nav className="flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible">
-              <SidebarBtn icon={Home} label="Início"
-                active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage}
-                onClick={handleGoHome} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Home} label="Início"
+                  active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage}
+                  onClick={handleGoHome} />
+              )}
 
-              {/* Botão + com dropdown — logo após Início */}
-              <div className="relative">
-                <button
-                  title="Novo…"
-                  onClick={() => setShowPlusMenu(v => !v)}
-                  className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 focus:outline-none
-                    ${showPlusMenu || showForm ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`}>
-                  {showPlusMenu
-                    ? <X className="w-5 h-5 text-white" />
-                    : <Plus className="w-5 h-5 text-white/80 hover:text-white" />}
-                </button>
+              {/* Botão + com dropdown — apenas para usuários não-exclusivos do Arcanjo */}
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <div className="relative">
+                  <button
+                    title="Novo…"
+                    onClick={() => setShowPlusMenu(v => !v)}
+                    className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 focus:outline-none
+                      ${showPlusMenu || showForm ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`}>
+                    {showPlusMenu
+                      ? <X className="w-5 h-5 text-white" />
+                      : <Plus className="w-5 h-5 text-white/80 hover:text-white" />}
+                  </button>
 
-                {/* Dropdown menu */}
-                {showPlusMenu && (
-                  <div className="absolute left-[52px] top-0 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] w-44 overflow-hidden"
-                       style={{boxShadow:'0 8px 32px rgba(0,0,0,0.15)'}}
-                       onMouseDown={e => e.stopPropagation()}>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 px-3 pt-2 pb-1">Criar novo</p>
-
-                    {/* Novo Contrato */}
-                    <button
-                      onClick={() => { setShowPlusMenu(false); setShowForm(true); setActiveContractNumber(null); setShowContractsPage(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-blue-50 transition-colors group">
-                      <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
-                           style={{background:'#dbeafe'}}>
-                        <FileText className="w-3.5 h-3.5" style={{color: BLUE}} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-800">Novo Contrato</p>
-                        <p className="text-[10px] text-gray-400">Cadastrar contrato</p>
-                      </div>
-                    </button>
-
-                    {/* Nova Parcela — apenas admin */}
-                    {currentUser.role === 'admin' && (
+                  {showPlusMenu && (
+                    <div className="absolute left-[52px] top-0 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] w-44 overflow-hidden"
+                         style={{boxShadow:'0 8px 32px rgba(0,0,0,0.15)'}}
+                         onMouseDown={e => e.stopPropagation()}>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 px-3 pt-2 pb-1">Criar novo</p>
                       <button
-                        onClick={() => { setShowPlusMenu(false); setAdminInitialTab('lancar-nf'); setShowAdmin(true); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-green-50 transition-colors group">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
-                             style={{background:'#dcfce7'}}>
-                          <Plus className="w-3.5 h-3.5" style={{color: GREEN}} />
+                        onClick={() => { setShowPlusMenu(false); setShowForm(true); setActiveContractNumber(null); setShowContractsPage(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-blue-50 transition-colors group">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#dbeafe'}}>
+                          <FileText className="w-3.5 h-3.5" style={{color: BLUE}} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-gray-800">Nova Parcela</p>
-                          <p className="text-[10px] text-gray-400">Lançar nota fiscal</p>
+                          <p className="text-xs font-bold text-gray-800">Novo Contrato</p>
+                          <p className="text-[10px] text-gray-400">Cadastrar contrato</p>
                         </div>
                       </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                      {currentUser.role === 'admin' && (
+                        <button
+                          onClick={() => { setShowPlusMenu(false); setAdminInitialTab('lancar-nf'); setShowAdmin(true); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-green-50 transition-colors group">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#dcfce7'}}>
+                            <Plus className="w-3.5 h-3.5" style={{color: GREEN}} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Nova Parcela</p>
+                            <p className="text-[10px] text-gray-400">Lançar nota fiscal</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <SidebarBtn
-                icon={Clipboard}
-                label={`Contratos (${uniqueContractCount})`}
-                onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
-                badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
-                active={showContractsPage && !activeContractNumber} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn
+                  icon={Clipboard}
+                  label={`Contratos (${uniqueContractCount})`}
+                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
+                  badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
+                  active={showContractsPage && !activeContractNumber} />
+              )}
 
-              <SidebarBtn icon={ParcelasIcon} label="Parcelas"
-                active={showInstallmentsPage}
-                onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={ParcelasIcon} label="Parcelas"
+                  active={showInstallmentsPage}
+                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
 
-              <SidebarBtn icon={Briefcase} label="Propostas"
-                active={showProposalsPage}
-                onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Briefcase} label="Propostas"
+                  active={showProposalsPage}
+                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
 
-              <SidebarBtn icon={Layers} label="GDoc"
-                active={showGdocPage}
-                badge={gdocs.length > 0 ? 0 : 0}
-                onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Layers} label="GDoc"
+                  active={showGdocPage}
+                  badge={gdocs.length > 0 ? 0 : 0}
+                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
 
-              <SidebarBtn icon={ArcanjoIcon} label="Arcanjo's"
-                active={showArcanjoPage}
-                onClick={() => { setShowArcanjoPage(true); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              {ARCANJO_USERS.has(currentUser.username) && (
+                <SidebarBtn icon={ArcanjoIcon} label="Arcanjo's"
+                  active={showArcanjoPage}
+                  onClick={() => { setShowArcanjoPage(true); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
 
               {currentUser.role === 'admin' && (
                 <SidebarBtn icon={LayoutDashboard} label="Painel Admin"
@@ -9676,8 +9691,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   onClick={() => setShowAdmin(true)} />
               )}
 
-              <SidebarBtn icon={Users} label="Gestores / Contatos"
-                onClick={() => setShowContacts(true)} />
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Users} label="Gestores / Contatos"
+                  onClick={() => setShowContacts(true)} />
+              )}
             </nav>
 
             {/* Divider bottom */}

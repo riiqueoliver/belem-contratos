@@ -116,6 +116,8 @@ const STORAGE_KEYS = {
   pdfs: 'belem-pdfs-v1'
 };
 const ADMIN_USERNAMES = new Set(['henriquecorreia', 'leonardomendonca']);
+const ARCANJO_USERS = new Set(['henriquecorreia', 'laynesoares']);
+const ARCANJO_ONLY = new Set(['laynesoares']);
 const INITIAL_USERS = [{
   id: 1,
   username: 'henriquecorreia',
@@ -139,6 +141,15 @@ const INITIAL_USERS = [{
   username: 'laianalima',
   password: 'ngcc2026',
   name: 'Laiana Lima',
+  funcional: '',
+  phone: '',
+  email: '',
+  role: 'user'
+}, {
+  id: 4,
+  username: 'laynesoares',
+  password: 'ngcc2026',
+  name: 'Layne Soares',
   funcional: '',
   phone: '',
   email: '',
@@ -11770,6 +11781,7 @@ function App() {
   function handleLogin(user) {
     localStorage.setItem('belem-session', String(user.id));
     setCurrentUser(user);
+    if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
   }
   function handleLogout() {
     localStorage.removeItem('belem-session');
@@ -11915,7 +11927,11 @@ function App() {
     setShowInstallmentsPage(false);
     setShowProposalsPage(false);
     setShowGdocPage(false);
-    setShowArcanjoPage(false);
+    if (ARCANJO_ONLY.has(currentUser?.username)) {
+      setShowArcanjoPage(true);
+    } else {
+      setShowArcanjoPage(false);
+    }
   }
   async function handleSavePdf(installmentId, base64Data) {
     try {
@@ -12609,18 +12625,18 @@ function App() {
     }
   }), React.createElement("nav", {
     className: "flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible"
-  }, React.createElement(SidebarBtn, {
+  }, !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Home,
     label: "In\xEDcio",
     active: !showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage,
     onClick: handleGoHome
-  }), React.createElement("div", {
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement("div", {
     className: "relative"
   }, React.createElement("button", {
     title: "Novo\u2026",
     onClick: () => setShowPlusMenu(v => !v),
     className: `relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 focus:outline-none
-                    ${showPlusMenu || showForm ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`
+                      ${showPlusMenu || showForm ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`
   }, showPlusMenu ? React.createElement(X, {
     className: "w-5 h-5 text-white"
   }) : React.createElement(Plus, {
@@ -12676,7 +12692,7 @@ function App() {
     className: "text-xs font-bold text-gray-800"
   }, "Nova Parcela"), React.createElement("p", {
     className: "text-[10px] text-gray-400"
-  }, "Lan\xE7ar nota fiscal"))))), React.createElement(SidebarBtn, {
+  }, "Lan\xE7ar nota fiscal"))))), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Clipboard,
     label: `Contratos (${uniqueContractCount})`,
     onClick: () => {
@@ -12691,7 +12707,7 @@ function App() {
     },
     badge: hasAlert_sb ? totalHomeAlerts_sb : 0,
     active: showContractsPage && !activeContractNumber
-  }), React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: ParcelasIcon,
     label: "Parcelas",
     active: showInstallmentsPage,
@@ -12705,7 +12721,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Briefcase,
     label: "Propostas",
     active: showProposalsPage,
@@ -12719,7 +12735,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Layers,
     label: "GDoc",
     active: showGdocPage,
@@ -12734,7 +12750,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), React.createElement(SidebarBtn, {
+  }), ARCANJO_USERS.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: ArcanjoIcon,
     label: "Arcanjo's",
     active: showArcanjoPage,
@@ -12754,7 +12770,7 @@ function App() {
     active: showAdmin,
     badge: pendingUsers.length,
     onClick: () => setShowAdmin(true)
-  }), React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Users,
     label: "Gestores / Contatos",
     onClick: () => setShowContacts(true)
