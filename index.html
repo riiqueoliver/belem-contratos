@@ -267,6 +267,7 @@
     const GDocLayersIcon  = ({className}) => <SVG className={className}><rect x="2" y="14" width="14" height="8" rx="2"/><rect x="6" y="9" width="14" height="8" rx="2"/><rect x="10" y="4" width="12" height="7" rx="2"/></SVG>;
     const ParcelasIcon    = ({className}) => <SVG className={className}><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2-1.5L5.5 21Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></SVG>;
     const ArcanjoIcon     = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/></SVG>;
+    const BarChart2       = ({className}) => <SVG className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></SVG>;
 
     /* ═══════════════════════════════════════════════════════
        BUSINESS LOGIC
@@ -5762,6 +5763,203 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     /* ═══════════════════════════════════════════════════════
+       CHART HELPERS
+    ═══════════════════════════════════════════════════════ */
+    function DonutChart({ data }) {
+      const total = data.reduce((s, d) => s + d.value, 0);
+      if (total === 0) return <p className="text-sm text-gray-400 text-center py-8">Sem dados para exibir</p>;
+      let angle = -Math.PI / 2;
+      const r = 58, cx = 68, cy = 68;
+      const paths = data.map(d => {
+        const sweep = (d.value / total) * 2 * Math.PI;
+        const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+        angle += sweep;
+        const x2 = cx + r * Math.cos(angle), y2 = cy + r * Math.sin(angle);
+        const large = sweep > Math.PI ? 1 : 0;
+        return { ...d, pathD: `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z` };
+      });
+      return (
+        <div className="flex items-center gap-5">
+          <svg viewBox="0 0 136 136" className="w-32 h-32 flex-shrink-0">
+            {paths.map((p, i) => <path key={i} d={p.pathD} fill={p.color} />)}
+            <circle cx={cx} cy={cy} r="34" fill="white" />
+            <text x={cx} y={cy - 3} textAnchor="middle" style={{fontSize:17,fontWeight:900,fill:'#374151'}}>{total}</text>
+            <text x={cx} y={cy + 12} textAnchor="middle" style={{fontSize:8.5,fill:'#9ca3af'}}>Total</text>
+          </svg>
+          <div className="space-y-2 flex-1 min-w-0">
+            {paths.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background: p.color}} />
+                <span className="text-xs text-gray-600 flex-1 truncate">{p.label}</span>
+                <span className="text-xs font-bold text-gray-800">{p.value}</span>
+                <span className="text-[10px] text-gray-400 w-8 text-right">({((p.value/total)*100).toFixed(0)}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function HBarChart({ data, colorFn }) {
+      const max = Math.max(...data.map(d => d[1]), 1);
+      if (!data.length) return <p className="text-sm text-gray-400 text-center py-8">Sem dados para exibir</p>;
+      return (
+        <div className="space-y-2.5">
+          {data.map(([label, value], i) => (
+            <div key={label} className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 w-40 truncate text-right flex-shrink-0" title={label}>{label}</span>
+              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                <div className="h-3 rounded-full transition-all duration-700"
+                     style={{ width: `${(value/max)*100}%`, background: colorFn(i) }} />
+              </div>
+              <span className="text-xs font-black text-gray-700 w-5 text-right flex-shrink-0">{value}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PAINEL GERENCIAL ARCANJO
+    ═══════════════════════════════════════════════════════ */
+    function ArcanjoGerencial({ records }) {
+      const [filterTipo, setFilterTipo] = React.useState('');
+      const [filterLideranca, setFilterLideranca] = React.useState('');
+
+      const uniqueLiderancas = React.useMemo(() =>
+        [...new Set(records.map(r => r.lideranca).filter(Boolean))].sort(), [records]);
+
+      const filtered = React.useMemo(() => records.filter(r => {
+        if (filterTipo && r.tipo !== filterTipo) return false;
+        if (filterLideranca && (r.lideranca||'').trim() !== filterLideranca) return false;
+        return true;
+      }), [records, filterTipo, filterLideranca]);
+
+      const stats = React.useMemo(() => ({
+        total:       filtered.length,
+        atendidos:   filtered.filter(r => r.status === 'atendido' || r.status === 'concluido').length,
+        emAndamento: filtered.filter(r => r.status === 'pendente'  || r.status === 'encaminhado').length,
+        naoComp:     filtered.filter(r => r.status === 'nao_compareceu').length,
+      }), [filtered]);
+
+      const byCoordenador = React.useMemo(() => {
+        const m = {};
+        filtered.forEach(r => { const k = r.coordenador?.trim() || 'Não informado'; m[k] = (m[k]||0)+1; });
+        return Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,12);
+      }, [filtered]);
+
+      const byLideranca = React.useMemo(() => {
+        const m = {};
+        filtered.forEach(r => { const k = r.lideranca?.trim() || 'Não informada'; m[k] = (m[k]||0)+1; });
+        return Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,12);
+      }, [filtered]);
+
+      const byServico = React.useMemo(() => [
+        { label: "Análise CRA'S",  value: filtered.filter(r => r.tipo === 'cras').length,     color: '#8b5cf6' },
+        { label: '2ª Via RG',       value: filtered.filter(r => r.tipo === 'rg').length,       color: '#0ea5e9' },
+        { label: '2ª Via Certidão', value: filtered.filter(r => r.tipo === 'certidao').length, color: '#10b981' },
+      ], [filtered]);
+
+      const byStatus = React.useMemo(() =>
+        ARCANJO_STATUSES
+          .map(s => ({ label: s.label, value: filtered.filter(r => r.status === s.key).length, color: s.color }))
+          .filter(s => s.value > 0),
+      [filtered]);
+
+      const purplePalette = ['#8b5cf6','#7c3aed','#a78bfa','#6d28d9','#4c1d95','#c4b5fd','#9333ea','#7e22ce','#5b21b6','#d8b4fe','#a21caf','#7c3aed'];
+      const lilacPalette  = ['#7b61c7','#9d80e0','#6049b5','#b39ddb','#5236a3','#cfc3f0','#8b70d0','#4b3491','#d4c5f9','#3d2980','#e9e2ff','#6752b0'];
+
+      return (
+        <div className="flex-1 flex flex-col fade-in overflow-hidden">
+          {/* Header */}
+          <div className="px-8 pt-7 pb-5 flex-shrink-0" style={{borderBottom:'1px solid #f1f5f9'}}>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background: ARCANJO_COLOR}}>
+                  <BarChart2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-extrabold tracking-tight" style={{color: ARCANJO_COLOR}}>Painel Gerencial</h1>
+                  <p className="text-[11px] text-gray-400 font-medium">Instituto Arcanjo's · Visão analítica dos atendimentos</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 bg-white focus:outline-none cursor-pointer">
+                  <option value="">Todos os serviços</option>
+                  {ARCANJO_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+                <select value={filterLideranca} onChange={e => setFilterLideranca(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 bg-white focus:outline-none cursor-pointer">
+                  <option value="">Todas as lideranças</option>
+                  {uniqueLiderancas.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                {(filterTipo || filterLideranca) && (
+                  <button onClick={() => { setFilterTipo(''); setFilterLideranca(''); }}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-50">
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: 'Total cadastrados', value: stats.total,       icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe' },
+                { label: 'Atendidos',          value: stats.atendidos,   icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0' },
+                { label: 'Em andamento',       value: stats.emAndamento, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd' },
+                { label: 'Não compareceram',   value: stats.naoComp,     icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a' },
+              ].map(({ label, value, icon: Icon, color, bg, border }) => (
+                <div key={label} className="rounded-2xl border p-4 flex items-center gap-3" style={{background: bg, borderColor: border}}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{background: color}}>
+                    <Icon className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black leading-none" style={{color}}>{value}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mt-0.5">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Gráficos: Serviço + Status */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                <p className="text-sm font-bold text-gray-700 mb-4">Distribuição por Serviço</p>
+                <DonutChart data={byServico} />
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                <p className="text-sm font-bold text-gray-700 mb-4">Distribuição por Status</p>
+                <DonutChart data={byStatus} />
+              </div>
+            </div>
+
+            {/* Coordenadores */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-bold text-gray-700">Coordenadores com mais pessoas cadastradas</p>
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Top {byCoordenador.length}</span>
+              </div>
+              <HBarChart data={byCoordenador} colorFn={i => purplePalette[i % purplePalette.length]} />
+            </div>
+
+            {/* Lideranças */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-bold text-gray-700">Lideranças mais engajadas</p>
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Top {byLideranca.length}</span>
+              </div>
+              <HBarChart data={byLideranca} colorFn={i => lilacPalette[i % lilacPalette.length]} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
        GDOC PAGE
     ═══════════════════════════════════════════════════════ */
     function GDocPage({ gdocs, onAdd, onDelete, apiKey, addToast, currentUser }) {
@@ -8677,6 +8875,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [showProposalsPage,    setShowProposalsPage]    = useState(false);
       const [showGdocPage,         setShowGdocPage]         = useState(false);
       const [showArcanjoPage,      setShowArcanjoPage]      = useState(false);
+      const [showArcanjoGerencial, setShowArcanjoGerencial] = useState(false);
       const [arcanjoRecords,       setArcanjoRecords]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
@@ -9102,6 +9301,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         setShowInstallmentsPage(false);
         setShowProposalsPage(false);
         setShowGdocPage(false);
+        setShowArcanjoGerencial(false);
         if (ARCANJO_ONLY.has(currentUser?.username)) {
           setShowArcanjoPage(true);
         } else {
@@ -9866,7 +10066,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <SidebarBtn
                   icon={Clipboard}
                   label={`Contratos (${uniqueContractCount})`}
-                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
+                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
                   badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
                   active={showContractsPage && !activeContractNumber} />
               )}
@@ -9874,29 +10074,35 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={ParcelasIcon} label="Parcelas"
                   active={showInstallmentsPage}
-                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Briefcase} label="Propostas"
                   active={showProposalsPage}
-                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Layers} label="GDoc"
                   active={showGdocPage}
                   badge={gdocs.length > 0 ? 0 : 0}
-                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {ARCANJO_USERS.has(currentUser.username) && (
                 <SidebarBtn icon={ArcanjoIcon} label="Arcanjo's"
                   active={showArcanjoPage}
-                  onClick={() => { setShowArcanjoPage(true); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowArcanjoPage(true); setShowArcanjoGerencial(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
-              {showArcanjoPage && ARCANJO_USERS.has(currentUser.username) && (
+              {ARCANJO_USERS.has(currentUser.username) && (
+                <SidebarBtn icon={BarChart2} label="Painel Gerencial"
+                  active={showArcanjoGerencial}
+                  onClick={() => { setShowArcanjoGerencial(true); setShowArcanjoPage(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
+
+              {(showArcanjoPage || showArcanjoGerencial) && ARCANJO_USERS.has(currentUser.username) && (
                 <SidebarBtn icon={Download} label="Exportar Excel"
                   onClick={handleExportArcanjo} />
               )}
@@ -9944,7 +10150,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
 
               <div className="flex items-center gap-4">
-                {!showArcanjoPage && (<>
+                {!showArcanjoPage && !showArcanjoGerencial && (<>
                   {/* Indicador de alertas */}
                   {hasAlert_sb && (
                     <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
@@ -9964,7 +10170,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
             </header>
 
-          <main className={(showGdocPage || showProposalsPage || showArcanjoPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+          <main className={(showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
 
             {/* Form */}
             {showForm && (
@@ -10452,6 +10658,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 addToast={addToast}
                 currentUser={currentUser}
               />
+            ) : showArcanjoGerencial ? (
+              /* ── PAINEL GERENCIAL ARCANJO'S ── */
+              <ArcanjoGerencial records={arcanjoRecords} />
             ) : showInstallmentsPage && !activeContractNumber ? (
               /* ── PÁGINA DE PARCELAS ── */
               <InstallmentsPage
@@ -11203,7 +11412,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </>
             )}
 
-            {showArcanjoPage ? (
+            {(showArcanjoPage || showArcanjoGerencial) ? (
               <div className="text-center text-[10px] text-gray-400 pb-4">
                 <p>Desenvolvido por <span className="font-semibold text-gray-500">Neotrix</span> · 2026</p>
               </div>
