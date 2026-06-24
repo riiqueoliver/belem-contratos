@@ -5449,8 +5449,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [tab, setTab] = React.useState('cras');
       const [showModal, setShowModal] = React.useState(false);
       const [editing, setEditing] = React.useState(null);
-      const [search, setSearch] = React.useState('');
+      const [search,           setSearch]           = React.useState('');
+      const [filterLideranca,  setFilterLideranca]  = React.useState('');
+      const [filterCoordenador,setFilterCoordenador]= React.useState('');
       const [statusMenu, setStatusMenu] = React.useState(null);
+
+      React.useEffect(() => {
+        setSearch(''); setFilterLideranca(''); setFilterCoordenador('');
+      }, [tab]);
 
       React.useEffect(() => {
         if (!statusMenu) return;
@@ -5460,13 +5466,27 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }, [statusMenu]);
 
       const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
-      const filtered = records.filter(r => r.tipo === tab && (
-        !search ||
-        r.nome?.toLowerCase().includes(search.toLowerCase()) ||
-        r.cpf?.includes(search) ||
-        r.lideranca?.toLowerCase().includes(search.toLowerCase()) ||
-        r.coordenador?.toLowerCase().includes(search.toLowerCase())
-      ));
+      const tabRecords = records.filter(r => r.tipo === tab);
+
+      const liderancaOpts = React.useMemo(() => {
+        const vals = tabRecords.map(r => (r.lideranca || '').trim()).filter(Boolean);
+        return [...new Set(vals)].sort();
+      }, [tabRecords]);
+
+      const coordenadorOpts = React.useMemo(() => {
+        const vals = tabRecords.map(r => (r.coordenador || '').trim()).filter(Boolean);
+        return [...new Set(vals)].sort();
+      }, [tabRecords]);
+
+      const filtered = tabRecords.filter(r => {
+        if (search && !r.nome?.toLowerCase().includes(search.toLowerCase()) &&
+            !r.cpf?.includes(search) &&
+            !r.lideranca?.toLowerCase().includes(search.toLowerCase()) &&
+            !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
+        if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
+        if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
+        return true;
+      });
 
       function getStatus(key) { return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
 
@@ -5517,15 +5537,42 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               ))}
             </div>
 
-            {/* Search + count */}
-            <div className="flex items-center justify-between mb-5">
+            {/* Search + Filters + count */}
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="Buscar por nome, CPF ou liderança…" value={search} onChange={e => setSearch(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 w-80 transition-all"
+                <input type="text" placeholder="Buscar por nome, CPF…" value={search} onChange={e => setSearch(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 w-64 transition-all"
                   style={{'--tw-ring-color': accentColor + '44'}} />
               </div>
-              <span className="text-xs font-semibold text-gray-400 tracking-wide">
+
+              <select value={filterLideranca} onChange={e => setFilterLideranca(e.target.value)}
+                className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+                style={filterLideranca
+                  ? {borderColor: accentColor, color: accentColor, background: accentColor + '10', '--tw-ring-color': accentColor + '44'}
+                  : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff', '--tw-ring-color': accentColor + '44'}}>
+                <option value="">Todas as Lideranças</option>
+                {liderancaOpts.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+
+              <select value={filterCoordenador} onChange={e => setFilterCoordenador(e.target.value)}
+                className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+                style={filterCoordenador
+                  ? {borderColor: accentColor, color: accentColor, background: accentColor + '10', '--tw-ring-color': accentColor + '44'}
+                  : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff', '--tw-ring-color': accentColor + '44'}}>
+                <option value="">Todos os Coordenadores</option>
+                {coordenadorOpts.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              {(filterLideranca || filterCoordenador) && (
+                <button onClick={() => { setFilterLideranca(''); setFilterCoordenador(''); }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                  Limpar filtros
+                </button>
+              )}
+
+              <span className="ml-auto text-xs font-semibold text-gray-400 tracking-wide">
                 {filtered.length} {filtered.length === 1 ? 'pessoa' : 'pessoas'}
               </span>
             </div>
