@@ -3,6 +3,7 @@
   "buildCommand": "node build.js",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/moduloarcanjo", "destination": "/moduloarcanjo/index.html" },
     { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
   ]
 }

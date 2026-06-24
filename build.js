@@ -111,6 +111,14 @@ out = out.replace('</head>', lazyLoader + '\n</head>');
   if (fs.existsSync(src)) fs.copyFileSync(src, dst);
 });
 
+// ── 8b. Página de login do módulo Arcanjo em /moduloarcanjo ───────────────
+const arcanjoLoginSrc = path.join(__dirname, 'arcanjo-login.html');
+const arcanjoLoginDir = path.join(__dirname, 'dist', 'moduloarcanjo');
+if (fs.existsSync(arcanjoLoginSrc)) {
+  if (!fs.existsSync(arcanjoLoginDir)) fs.mkdirSync(arcanjoLoginDir, { recursive: true });
+  fs.copyFileSync(arcanjoLoginSrc, path.join(arcanjoLoginDir, 'index.html'));
+}
+
 // ── 9. Grava ───────────────────────────────────────────────────────────────
 fs.writeFileSync(DIST, out, 'utf8');
 
