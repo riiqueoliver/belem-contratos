@@ -11655,7 +11655,10 @@ function App() {
   useEffect(() => {
     if (sessionId && users.length > 0 && !currentUser) {
       const u = users.find(u => u.id === sessionId);
-      if (u) setCurrentUser(u);
+      if (u) {
+        setCurrentUser(u);
+        if (ARCANJO_ONLY.has(u.username)) setShowArcanjoPage(true);
+      }
     }
   }, [users, sessionId]);
   useEffect(() => {
