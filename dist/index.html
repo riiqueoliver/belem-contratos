@@ -12580,6 +12580,215 @@ function App() {
   async function handleDeleteArcanjoRecord(id) {
     await db.collection('arcanjo_social').doc(id).delete();
   }
+  async function handleExportArcanjo() {
+    addToast('Gerando planilha…');
+    try {
+      if (!window.ExcelJS) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+          s.onload = res;
+          s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      const ExcelJS = window.ExcelJS;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Instituto Arcanjo's";
+      wb.created = new Date();
+      let logoId = null;
+      try {
+        const resp = await fetch('arcanjo-logo.jpg');
+        const buf = await resp.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let b = '';
+        for (let i = 0; i < bytes.byteLength; i++) b += String.fromCharCode(bytes[i]);
+        logoId = wb.addImage({
+          base64: btoa(b),
+          extension: 'jpeg'
+        });
+      } catch (e) {}
+      const EXPORT_TABS = [{
+        key: 'cras',
+        name: "Análise CRA'S",
+        hex: '8B5CF6'
+      }, {
+        key: 'rg',
+        name: '2ª Via RG',
+        hex: '0EA5E9'
+      }, {
+        key: 'certidao',
+        name: '2ª Via Certidão',
+        hex: '10B981'
+      }];
+      const COLS = [{
+        header: 'Nome',
+        width: 32
+      }, {
+        header: 'CPF',
+        width: 16
+      }, {
+        header: 'Dt. Nasc.',
+        width: 13
+      }, {
+        header: 'Telefone',
+        width: 16
+      }, {
+        header: 'Liderança',
+        width: 22
+      }, {
+        header: 'Coordenador',
+        width: 22
+      }, {
+        header: 'Status',
+        width: 18
+      }, {
+        header: 'Observação',
+        width: 42
+      }];
+      for (const tab of EXPORT_TABS) {
+        const data = arcanjoRecords.filter(r => r.tipo === tab.key);
+        const ws = wb.addWorksheet(tab.name);
+        ws.getRow(1).height = 55;
+        ws.getRow(2).height = 14;
+        ws.getRow(3).height = 22;
+        if (logoId !== null) {
+          ws.addImage(logoId, {
+            tl: {
+              col: 0,
+              row: 0
+            },
+            ext: {
+              width: 65,
+              height: 65
+            }
+          });
+        }
+        ws.mergeCells('B1:I1');
+        const tc = ws.getCell('B1');
+        tc.value = "Instituto Arcanjo's  —  " + tab.name;
+        tc.font = {
+          bold: true,
+          size: 15,
+          color: {
+            argb: 'FF7B61C7'
+          }
+        };
+        tc.alignment = {
+          vertical: 'middle',
+          horizontal: 'left'
+        };
+        ws.mergeCells('B2:I2');
+        const sc = ws.getCell('B2');
+        const dt = new Date().toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric'
+        });
+        sc.value = 'Emitido em ' + dt + '  ·  ' + data.length + ' registro' + (data.length !== 1 ? 's' : '');
+        sc.font = {
+          size: 9,
+          color: {
+            argb: 'FF9CA3AF'
+          }
+        };
+        sc.alignment = {
+          vertical: 'middle'
+        };
+        ws.getColumn(1).width = 10;
+        COLS.forEach((c, i) => {
+          ws.getColumn(i + 2).width = c.width;
+        });
+        const hRow = ws.getRow(3);
+        COLS.forEach((c, i) => {
+          const cell = hRow.getCell(i + 2);
+          cell.value = c.header;
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: {
+              argb: 'FF' + tab.hex
+            }
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: {
+              argb: 'FFFFFFFF'
+            }
+          };
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: 'center'
+          };
+        });
+        data.forEach((r, idx) => {
+          const row = ws.getRow(idx + 4);
+          const stLabel = ARCANJO_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
+          const vals = [r.nome || '', r.cpf || '', r.dataNasc || '', r.telefone || '', r.lideranca || '', r.coordenador || '', stLabel, r.observacao || ''];
+          vals.forEach((v, ci) => {
+            const cell = row.getCell(ci + 2);
+            cell.value = v;
+            cell.font = {
+              size: 10
+            };
+            cell.alignment = {
+              vertical: 'middle',
+              wrapText: ci === 7
+            };
+            if (idx % 2 === 0) cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: {
+                argb: 'FFF9F5FF'
+              }
+            };
+            if (ci === 6) {
+              const st = ARCANJO_STATUSES.find(s => s.key === r.status);
+              if (st) {
+                cell.fill = {
+                  type: 'pattern',
+                  pattern: 'solid',
+                  fgColor: {
+                    argb: 'FF' + st.bg.replace('#', '').toUpperCase()
+                  }
+                };
+                cell.font = {
+                  size: 10,
+                  bold: true,
+                  color: {
+                    argb: 'FF' + st.color.replace('#', '').toUpperCase()
+                  }
+                };
+                cell.alignment = {
+                  horizontal: 'center',
+                  vertical: 'middle'
+                };
+              }
+            }
+          });
+          row.height = 18;
+        });
+        ws.views = [{
+          state: 'frozen',
+          ySplit: 3
+        }];
+      }
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'instituto-arcanjos-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast('Planilha exportada com sucesso!');
+    } catch (e) {
+      addToast('Erro ao exportar: ' + (e.message || 'falha'));
+    }
+  }
   async function handleUndo(id) {
     const c = contracts.find(x => x.id === id);
     if (!c || c.completedSteps.length <= 1) return;
@@ -12911,6 +13120,10 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
+  }), showArcanjoPage && ARCANJO_USERS.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Download,
+    label: "Exportar Excel",
+    onClick: handleExportArcanjo
   }), currentUser.role === 'admin' && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: LayoutDashboard,
     label: "Painel Admin",
