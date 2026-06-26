@@ -5347,6 +5347,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       { key: 'rg',       label: '2ª Via RG',        accent: '#0ea5e9' },
       { key: 'certidao', label: '2ª Via Certidão',  accent: '#10b981' },
     ];
+    const CERT_TIPOS = [
+      { key: 'federal',     label: 'Federal',     cor: '#1d4ed8' },
+      { key: 'estadual',    label: 'Estadual',    cor: '#7c3aed' },
+      { key: 'municipal',   label: 'Municipal',   cor: '#0891b2' },
+      { key: 'fgts',        label: 'FGTS',        cor: '#b45309' },
+      { key: 'cndt',        label: 'CNDT',        cor: '#15803d' },
+      { key: 'trabalhista', label: 'Trabalhista', cor: '#dc2626' },
+    ];
+
     const ARCANJO_COLOR = '#7b61c7';  // cor-base do módulo
     const ARCANJO_STATUSES = [
       { key: 'pendente',       label: 'Pendente',       color: '#6b7280', bg: '#f3f4f6' },
@@ -5971,6 +5980,269 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Top {byLideranca.length}</span>
               </div>
               <HBarChart data={byLideranca} colorFn={i => lilacPalette[i % lilacPalette.length]} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       MÓDULO CERTIDÕES NEGATIVAS
+    ═══════════════════════════════════════════════════════ */
+    function CertidoesPage({ certidoes, onAdd, onDelete, apiKey, addToast }) {
+      const todayMs = new Date().setHours(0,0,0,0);
+
+      function diasRestantes(val) {
+        if (!val) return null;
+        return Math.round((new Date(val + 'T00:00:00') - todayMs) / 86400000);
+      }
+
+      function getSit(val) {
+        const d = diasRestantes(val);
+        if (d === null) return { label: '—',             color:'#6b7280', bg:'#f3f4f6' };
+        if (d < 0)      return { label: 'Vencida',       color:'#dc2626', bg:'#fee2e2' };
+        if (d <= 15)    return { label: `Vence em ${d}d`,color:'#dc2626', bg:'#fef2f2' };
+        if (d <= 30)    return { label: `Vence em ${d}d`,color:'#d97706', bg:'#fef3c7' };
+        return           { label: `Válida (${d}d)`,      color:'#15803d', bg:'#dcfce7' };
+      }
+
+      const vigentes   = certidoes.filter(c => (diasRestantes(c.validade) ?? -1) >= 0);
+      const vencidas   = certidoes.filter(c => (diasRestantes(c.validade) ?? -1) < 0);
+      const alertCount = certidoes.filter(c => { const d = diasRestantes(c.validade); return d !== null && d < 30; }).length;
+
+      const [tab,         setTab]         = React.useState('vigentes');
+      const [form,        setForm]        = React.useState({ tipo:'federal', estabelecimento:'', validade:'' });
+      const [pdfFile,     setPdfFile]     = React.useState(null);
+      const [analyzing,   setAnalyzing]   = React.useState(false);
+      const [saving,      setSaving]      = React.useState(false);
+      const fileInputRef  = React.useRef(null);
+
+      const tableData = tab === 'vigentes' ? vigentes : vencidas;
+
+      async function handleAnalyze() {
+        if (!pdfFile || !apiKey) return;
+        setAnalyzing(true);
+        try {
+          const b64 = await new Promise((res, rej) => {
+            const r = new FileReader();
+            r.onload = e => res(e.target.result.split(',')[1]);
+            r.onerror = rej;
+            r.readAsDataURL(pdfFile);
+          });
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 128,
+              messages: [{ role: 'user', content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+                { type: 'text', text: 'Extraia a data de validade/vencimento desta certidão negativa. Retorne APENAS a data no formato DD/MM/AAAA, sem mais nada.' },
+              ]}],
+            }),
+          });
+          const json = await resp.json();
+          const txt  = json.content?.[0]?.text?.trim() || '';
+          const match = txt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if (match) {
+            setForm(f => ({ ...f, validade: `${match[3]}-${match[2]}-${match[1]}` }));
+            addToast('Data de validade extraída com sucesso!');
+          } else {
+            addToast('Não foi possível extrair a data. Preencha manualmente.');
+          }
+        } catch(e) {
+          addToast('Erro ao analisar PDF: ' + (e.message || 'falha'));
+        } finally {
+          setAnalyzing(false);
+        }
+      }
+
+      async function handleSubmit(e) {
+        e.preventDefault();
+        if (!form.estabelecimento.trim() || !form.validade) {
+          addToast('Preencha estabelecimento e validade.'); return;
+        }
+        setSaving(true);
+        try {
+          let pdfData = null, pdfName = null;
+          if (pdfFile) {
+            if (pdfFile.size > 900000) { addToast('PDF muito grande (máx 900 KB). Comprima o arquivo.'); setSaving(false); return; }
+            pdfData = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload = e => res(e.target.result.split(',')[1]);
+              r.onerror = rej;
+              r.readAsDataURL(pdfFile);
+            });
+            pdfName = pdfFile.name;
+          }
+          await onAdd({ tipo: form.tipo, estabelecimento: form.estabelecimento.trim(), validade: form.validade, pdfData, pdfName, uploadDate: new Date().toISOString().slice(0,10) });
+          setForm({ tipo:'federal', estabelecimento:'', validade:'' });
+          setPdfFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          addToast('Certidão adicionada com sucesso!');
+        } catch(e) {
+          addToast('Erro ao salvar: ' + (e.message || 'falha'));
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      function openPdf(pdfData) {
+        if (!pdfData) return;
+        const bytes = atob(pdfData), arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        window.open(URL.createObjectURL(new Blob([arr], { type:'application/pdf' })), '_blank');
+      }
+
+      const ic = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all";
+      const lc = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5";
+
+      return (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
+
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style={{background: BLUE}}>
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-black text-gray-800">Certidões Negativas</h1>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Repositório de certidões — validade lida automaticamente pelo PDF via IA</p>
+                </div>
+              </div>
+              <div className="text-right text-xs text-gray-400">
+                <p><span className="font-bold text-green-600">{vigentes.length}</span> vigente{vigentes.length!==1?'s':''} &nbsp;·&nbsp; <span className="font-bold text-red-500">{vencidas.length}</span> vencida{vencidas.length!==1?'s':''}</p>
+              </div>
+            </div>
+
+            {/* Alerta vencimento */}
+            {alertCount > 0 && (
+              <div className="rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2"
+                   style={{background:'#fef3c7', color:'#92400e', border:'1px solid #fde68a'}}>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {alertCount} certidão(ões) vencida(s) ou vencendo em menos de 30 dias — atualize antes de gerar a próxima medição.
+              </div>
+            )}
+
+            {/* Formulário */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="font-bold text-sm text-gray-700 mb-4">Adicionar certidão</h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className={lc}>Tipo *</label>
+                    <select value={form.tipo} onChange={e => setForm(f=>({...f, tipo:e.target.value}))} className={ic}>
+                      {CERT_TIPOS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={lc}>Estabelecimento *</label>
+                    <input value={form.estabelecimento} onChange={e => setForm(f=>({...f, estabelecimento:e.target.value}))}
+                      placeholder="Ex: Matriz, Filial 01…" className={ic} />
+                  </div>
+                  <div>
+                    <label className={lc}>Validade *</label>
+                    <input type="date" value={form.validade} onChange={e => setForm(f=>({...f, validade:e.target.value}))} className={ic} />
+                  </div>
+                </div>
+
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label className={lc}>PDF da certidão</label>
+                    <input ref={fileInputRef} type="file" accept="application/pdf"
+                      onChange={e => setPdfFile(e.target.files?.[0] || null)}
+                      className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                  </div>
+                  {pdfFile && apiKey && (
+                    <button type="button" onClick={handleAnalyze} disabled={analyzing}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold border whitespace-nowrap transition-all hover:opacity-90"
+                      style={{background: analyzing?'#f3f4f6':'#eff6ff', color:'#1d4ed8', borderColor:'#bfdbfe'}}>
+                      {analyzing ? '⏳ Analisando…' : '✨ Extrair data via IA'}
+                    </button>
+                  )}
+                  <button type="submit" disabled={saving}
+                    className="px-5 py-2.5 rounded-xl text-sm font-bold text-white whitespace-nowrap transition-all hover:opacity-90"
+                    style={{background: BLUE}}>
+                    {saving ? 'Salvando…' : '+ Adicionar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Tabs + Tabela */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="flex border-b border-gray-100">
+                {[
+                  { key:'vigentes', label:`Vigentes (${vigentes.length})` },
+                  { key:'vencidas',  label:`Vencidas (${vencidas.length})` },
+                ].map(t => (
+                  <button key={t.key} onClick={() => setTab(t.key)}
+                    className={`px-6 py-3.5 text-sm font-semibold transition-colors border-b-2 ${tab===t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {tableData.length === 0 ? (
+                <div className="text-center py-16 text-gray-300">
+                  <Shield className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-medium">Nenhuma certidão {tab === 'vigentes' ? 'vigente' : 'vencida'}</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead style={{background:'#f8fafc'}}>
+                    <tr>
+                      {['Tipo','Estabelecimento','Validade','Situação','Arquivo',''].map(h => (
+                        <th key={h} className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableData.map(c => {
+                      const sit      = getSit(c.validade);
+                      const tipoObj  = CERT_TIPOS.find(t => t.key === c.tipo);
+                      const valFormt = c.validade ? c.validade.split('-').reverse().join('/') : '—';
+                      return (
+                        <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3">
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
+                                  style={{background: tipoObj?.cor || BLUE}}>
+                              {tipoObj?.label || c.tipo}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 font-medium text-gray-700">{c.estabelecimento || '—'}</td>
+                          <td className="px-5 py-3 font-mono text-gray-600">{valFormt}</td>
+                          <td className="px-5 py-3">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold"
+                                  style={{background: sit.bg, color: sit.color}}>
+                              {sit.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            {c.pdfData
+                              ? <button onClick={() => openPdf(c.pdfData)}
+                                  className="text-xs font-semibold text-blue-600 hover:underline">
+                                  abrir &nbsp;<span className="text-gray-400 font-normal">{c.uploadDate || ''}</span>
+                                </button>
+                              : <span className="text-gray-300 text-xs">sem arquivo</span>}
+                          </td>
+                          <td className="px-5 py-3">
+                            <button onClick={() => { if(window.confirm('Excluir esta certidão?')) onDelete(c.id); }}
+                              className="text-xs font-semibold text-red-500 hover:underline">excluir</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
@@ -9041,6 +9313,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [showArcanjoPage,      setShowArcanjoPage]      = useState(false);
       const [showArcanjoGerencial, setShowArcanjoGerencial] = useState(false);
       const [showProposalBI,       setShowProposalBI]       = useState(false);
+      const [showCertidoesPage,    setShowCertidoesPage]    = useState(false);
+      const [certidoes,            setCertidoes]            = useState([]);
       const [arcanjoRecords,       setArcanjoRecords]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
@@ -9157,7 +9431,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         const unsubArcanjo = db.collection('arcanjo_social').orderBy('createdAt', 'desc').onSnapshot(snap => {
           setArcanjoRecords(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
-        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); };
+        const unsubCertidoes = db.collection('certidoes').orderBy('createdAt', 'desc').onSnapshot(snap => {
+          setCertidoes(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        });
+        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); unsubCertidoes(); };
       }, []);
 
       const uniqueContractCount = useMemo(() => {
@@ -9480,6 +9757,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         setShowGdocPage(false);
         setShowArcanjoGerencial(false);
         setShowProposalBI(false);
+        setShowCertidoesPage(false);
         if (ARCANJO_ONLY.has(currentUser?.username)) {
           setShowArcanjoPage(true);
         } else {
@@ -9914,6 +10192,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         await db.collection('arcanjo_social').doc(id).delete();
       }
 
+      async function handleAddCertidao(data) {
+        await db.collection('certidoes').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      }
+      async function handleDeleteCertidao(id) {
+        await db.collection('certidoes').doc(id).delete();
+      }
+
       async function handleExportArcanjo() {
         addToast('Gerando planilha…');
         try {
@@ -10244,7 +10529,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <SidebarBtn
                   icon={Clipboard}
                   label={`Contratos (${uniqueContractCount})`}
-                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
+                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setShowCertidoesPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
                   badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
                   active={showContractsPage && !activeContractNumber} />
               )}
@@ -10252,13 +10537,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={ParcelasIcon} label="Parcelas"
                   active={showInstallmentsPage}
-                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setShowCertidoesPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Briefcase} label="Propostas"
                   active={showProposalsPage}
-                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setShowCertidoesPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
@@ -10271,7 +10556,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <SidebarBtn icon={Layers} label="GDoc"
                   active={showGdocPage}
                   badge={gdocs.length > 0 ? 0 : 0}
-                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setShowCertidoesPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Shield} label="Certidões"
+                  active={showCertidoesPage}
+                  badge={(() => { const today = new Date().setHours(0,0,0,0); return certidoes.filter(c => { if (!c.validade) return false; const d = Math.round((new Date(c.validade+'T00:00:00') - today)/86400000); return d < 30; }).length; })() || 0}
+                  onClick={() => { setShowCertidoesPage(true); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {ARCANJO_USERS.has(currentUser.username) && (
@@ -10354,7 +10646,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
             </header>
 
-          <main className={(showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+          <main className={(showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCertidoesPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
 
             {/* Form */}
             {showForm && (
@@ -10848,6 +11140,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             ) : showProposalBI ? (
               /* ── BI PROPOSTAS ── */
               <ProposalBIPage proposals={proposals} />
+            ) : showCertidoesPage ? (
+              /* ── CERTIDÕES NEGATIVAS ── */
+              <CertidoesPage
+                certidoes={certidoes}
+                onAdd={handleAddCertidao}
+                onDelete={handleDeleteCertidao}
+                apiKey={apiKey}
+                addToast={addToast}
+              />
             ) : showInstallmentsPage && !activeContractNumber ? (
               /* ── PÁGINA DE PARCELAS ── */
               <InstallmentsPage

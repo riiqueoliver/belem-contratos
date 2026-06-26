@@ -7304,6 +7304,31 @@ const ARCANJO_TABS = [{
   label: '2ª Via Certidão',
   accent: '#10b981'
 }];
+const CERT_TIPOS = [{
+  key: 'federal',
+  label: 'Federal',
+  cor: '#1d4ed8'
+}, {
+  key: 'estadual',
+  label: 'Estadual',
+  cor: '#7c3aed'
+}, {
+  key: 'municipal',
+  label: 'Municipal',
+  cor: '#0891b2'
+}, {
+  key: 'fgts',
+  label: 'FGTS',
+  cor: '#b45309'
+}, {
+  key: 'cndt',
+  label: 'CNDT',
+  cor: '#15803d'
+}, {
+  key: 'trabalhista',
+  label: 'Trabalhista',
+  cor: '#dc2626'
+}];
 const ARCANJO_COLOR = '#7b61c7';
 const ARCANJO_STATUSES = [{
   key: 'pendente',
@@ -8293,6 +8318,353 @@ function ArcanjoGerencial({
     data: byLideranca,
     colorFn: i => lilacPalette[i % lilacPalette.length]
   }))));
+}
+function CertidoesPage({
+  certidoes,
+  onAdd,
+  onDelete,
+  apiKey,
+  addToast
+}) {
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  function diasRestantes(val) {
+    if (!val) return null;
+    return Math.round((new Date(val + 'T00:00:00') - todayMs) / 86400000);
+  }
+  function getSit(val) {
+    const d = diasRestantes(val);
+    if (d === null) return {
+      label: '—',
+      color: '#6b7280',
+      bg: '#f3f4f6'
+    };
+    if (d < 0) return {
+      label: 'Vencida',
+      color: '#dc2626',
+      bg: '#fee2e2'
+    };
+    if (d <= 15) return {
+      label: `Vence em ${d}d`,
+      color: '#dc2626',
+      bg: '#fef2f2'
+    };
+    if (d <= 30) return {
+      label: `Vence em ${d}d`,
+      color: '#d97706',
+      bg: '#fef3c7'
+    };
+    return {
+      label: `Válida (${d}d)`,
+      color: '#15803d',
+      bg: '#dcfce7'
+    };
+  }
+  const vigentes = certidoes.filter(c => (diasRestantes(c.validade) ?? -1) >= 0);
+  const vencidas = certidoes.filter(c => (diasRestantes(c.validade) ?? -1) < 0);
+  const alertCount = certidoes.filter(c => {
+    const d = diasRestantes(c.validade);
+    return d !== null && d < 30;
+  }).length;
+  const [tab, setTab] = React.useState('vigentes');
+  const [form, setForm] = React.useState({
+    tipo: 'federal',
+    estabelecimento: '',
+    validade: ''
+  });
+  const [pdfFile, setPdfFile] = React.useState(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+  const tableData = tab === 'vigentes' ? vigentes : vencidas;
+  async function handleAnalyze() {
+    if (!pdfFile || !apiKey) return;
+    setAnalyzing(true);
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(pdfFile);
+      });
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 128,
+          messages: [{
+            role: 'user',
+            content: [{
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: b64
+              }
+            }, {
+              type: 'text',
+              text: 'Extraia a data de validade/vencimento desta certidão negativa. Retorne APENAS a data no formato DD/MM/AAAA, sem mais nada.'
+            }]
+          }]
+        })
+      });
+      const json = await resp.json();
+      const txt = json.content?.[0]?.text?.trim() || '';
+      const match = txt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (match) {
+        setForm(f => ({
+          ...f,
+          validade: `${match[3]}-${match[2]}-${match[1]}`
+        }));
+        addToast('Data de validade extraída com sucesso!');
+      } else {
+        addToast('Não foi possível extrair a data. Preencha manualmente.');
+      }
+    } catch (e) {
+      addToast('Erro ao analisar PDF: ' + (e.message || 'falha'));
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.estabelecimento.trim() || !form.validade) {
+      addToast('Preencha estabelecimento e validade.');
+      return;
+    }
+    setSaving(true);
+    try {
+      let pdfData = null,
+        pdfName = null;
+      if (pdfFile) {
+        if (pdfFile.size > 900000) {
+          addToast('PDF muito grande (máx 900 KB). Comprima o arquivo.');
+          setSaving(false);
+          return;
+        }
+        pdfData = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = e => res(e.target.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(pdfFile);
+        });
+        pdfName = pdfFile.name;
+      }
+      await onAdd({
+        tipo: form.tipo,
+        estabelecimento: form.estabelecimento.trim(),
+        validade: form.validade,
+        pdfData,
+        pdfName,
+        uploadDate: new Date().toISOString().slice(0, 10)
+      });
+      setForm({
+        tipo: 'federal',
+        estabelecimento: '',
+        validade: ''
+      });
+      setPdfFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      addToast('Certidão adicionada com sucesso!');
+    } catch (e) {
+      addToast('Erro ao salvar: ' + (e.message || 'falha'));
+    } finally {
+      setSaving(false);
+    }
+  }
+  function openPdf(pdfData) {
+    if (!pdfData) return;
+    const bytes = atob(pdfData),
+      arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([arr], {
+      type: 'application/pdf'
+    })), '_blank');
+  }
+  const ic = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all";
+  const lc = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5";
+  return React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, React.createElement("div", {
+    className: "max-w-5xl mx-auto px-6 py-6 space-y-5"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Shield, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-xl font-black text-gray-800"
+  }, "Certid\xF5es Negativas"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, "Reposit\xF3rio de certid\xF5es \u2014 validade lida automaticamente pelo PDF via IA"))), React.createElement("div", {
+    className: "text-right text-xs text-gray-400"
+  }, React.createElement("p", null, React.createElement("span", {
+    className: "font-bold text-green-600"
+  }, vigentes.length), " vigente", vigentes.length !== 1 ? 's' : '', " \xA0\xB7\xA0 ", React.createElement("span", {
+    className: "font-bold text-red-500"
+  }, vencidas.length), " vencida", vencidas.length !== 1 ? 's' : ''))), alertCount > 0 && React.createElement("div", {
+    className: "rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2",
+    style: {
+      background: '#fef3c7',
+      color: '#92400e',
+      border: '1px solid #fde68a'
+    }
+  }, React.createElement(AlertTriangle, {
+    className: "w-4 h-4 flex-shrink-0"
+  }), alertCount, " certid\xE3o(\xF5es) vencida(s) ou vencendo em menos de 30 dias \u2014 atualize antes de gerar a pr\xF3xima medi\xE7\xE3o."), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700 mb-4"
+  }, "Adicionar certid\xE3o"), React.createElement("form", {
+    onSubmit: handleSubmit,
+    className: "space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-3 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Tipo *"), React.createElement("select", {
+    value: form.tipo,
+    onChange: e => setForm(f => ({
+      ...f,
+      tipo: e.target.value
+    })),
+    className: ic
+  }, CERT_TIPOS.map(t => React.createElement("option", {
+    key: t.key,
+    value: t.key
+  }, t.label)))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Estabelecimento *"), React.createElement("input", {
+    value: form.estabelecimento,
+    onChange: e => setForm(f => ({
+      ...f,
+      estabelecimento: e.target.value
+    })),
+    placeholder: "Ex: Matriz, Filial 01\u2026",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Validade *"), React.createElement("input", {
+    type: "date",
+    value: form.validade,
+    onChange: e => setForm(f => ({
+      ...f,
+      validade: e.target.value
+    })),
+    className: ic
+  }))), React.createElement("div", {
+    className: "flex items-end gap-3"
+  }, React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("label", {
+    className: lc
+  }, "PDF da certid\xE3o"), React.createElement("input", {
+    ref: fileInputRef,
+    type: "file",
+    accept: "application/pdf",
+    onChange: e => setPdfFile(e.target.files?.[0] || null),
+    className: "w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+  })), pdfFile && apiKey && React.createElement("button", {
+    type: "button",
+    onClick: handleAnalyze,
+    disabled: analyzing,
+    className: "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold border whitespace-nowrap transition-all hover:opacity-90",
+    style: {
+      background: analyzing ? '#f3f4f6' : '#eff6ff',
+      color: '#1d4ed8',
+      borderColor: '#bfdbfe'
+    }
+  }, analyzing ? '⏳ Analisando…' : '✨ Extrair data via IA'), React.createElement("button", {
+    type: "submit",
+    disabled: saving,
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white whitespace-nowrap transition-all hover:opacity-90",
+    style: {
+      background: BLUE
+    }
+  }, saving ? 'Salvando…' : '+ Adicionar')))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+  }, React.createElement("div", {
+    className: "flex border-b border-gray-100"
+  }, [{
+    key: 'vigentes',
+    label: `Vigentes (${vigentes.length})`
+  }, {
+    key: 'vencidas',
+    label: `Vencidas (${vencidas.length})`
+  }].map(t => React.createElement("button", {
+    key: t.key,
+    onClick: () => setTab(t.key),
+    className: `px-6 py-3.5 text-sm font-semibold transition-colors border-b-2 ${tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`
+  }, t.label))), tableData.length === 0 ? React.createElement("div", {
+    className: "text-center py-16 text-gray-300"
+  }, React.createElement(Shield, {
+    className: "w-10 h-10 mx-auto mb-3 opacity-30"
+  }), React.createElement("p", {
+    className: "text-sm font-medium"
+  }, "Nenhuma certid\xE3o ", tab === 'vigentes' ? 'vigente' : 'vencida')) : React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", {
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("tr", null, ['Tipo', 'Estabelecimento', 'Validade', 'Situação', 'Arquivo', ''].map(h => React.createElement("th", {
+    key: h,
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, h)))), React.createElement("tbody", null, tableData.map(c => {
+    const sit = getSit(c.validade);
+    const tipoObj = CERT_TIPOS.find(t => t.key === c.tipo);
+    const valFormt = c.validade ? c.validade.split('-').reverse().join('/') : '—';
+    return React.createElement("tr", {
+      key: c.id,
+      className: "border-t border-gray-50 hover:bg-gray-50 transition-colors"
+    }, React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("span", {
+      className: "px-2.5 py-1 rounded-lg text-xs font-bold text-white",
+      style: {
+        background: tipoObj?.cor || BLUE
+      }
+    }, tipoObj?.label || c.tipo)), React.createElement("td", {
+      className: "px-5 py-3 font-medium text-gray-700"
+    }, c.estabelecimento || '—'), React.createElement("td", {
+      className: "px-5 py-3 font-mono text-gray-600"
+    }, valFormt), React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("span", {
+      className: "px-2.5 py-1 rounded-full text-xs font-bold",
+      style: {
+        background: sit.bg,
+        color: sit.color
+      }
+    }, sit.label)), React.createElement("td", {
+      className: "px-5 py-3"
+    }, c.pdfData ? React.createElement("button", {
+      onClick: () => openPdf(c.pdfData),
+      className: "text-xs font-semibold text-blue-600 hover:underline"
+    }, "abrir \xA0", React.createElement("span", {
+      className: "text-gray-400 font-normal"
+    }, c.uploadDate || '')) : React.createElement("span", {
+      className: "text-gray-300 text-xs"
+    }, "sem arquivo")), React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("button", {
+      onClick: () => {
+        if (window.confirm('Excluir esta certidão?')) onDelete(c.id);
+      },
+      className: "text-xs font-semibold text-red-500 hover:underline"
+    }, "excluir")));
+  }))))));
 }
 function BIBigNum({
   label,
@@ -12193,6 +12565,8 @@ function App() {
   const [showArcanjoPage, setShowArcanjoPage] = useState(false);
   const [showArcanjoGerencial, setShowArcanjoGerencial] = useState(false);
   const [showProposalBI, setShowProposalBI] = useState(false);
+  const [showCertidoesPage, setShowCertidoesPage] = useState(false);
+  const [certidoes, setCertidoes] = useState([]);
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
@@ -12330,10 +12704,17 @@ function App() {
         id: d.id
       })));
     });
+    const unsubCertidoes = db.collection('certidoes').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setCertidoes(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     return () => {
       unsubs.forEach(u => u());
       unsubGdocs();
       unsubArcanjo();
+      unsubCertidoes();
     };
   }, []);
   const uniqueContractCount = useMemo(() => {
@@ -12657,6 +13038,7 @@ function App() {
     setShowGdocPage(false);
     setShowArcanjoGerencial(false);
     setShowProposalBI(false);
+    setShowCertidoesPage(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
     } else {
@@ -13177,6 +13559,15 @@ function App() {
   async function handleDeleteArcanjoRecord(id) {
     await db.collection('arcanjo_social').doc(id).delete();
   }
+  async function handleAddCertidao(data) {
+    await db.collection('certidoes').add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  async function handleDeleteCertidao(id) {
+    await db.collection('certidoes').doc(id).delete();
+  }
   async function handleExportArcanjo() {
     addToast('Gerando planilha…');
     try {
@@ -13657,6 +14048,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowProposalBI(false);
+      setShowCertidoesPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -13675,6 +14067,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowProposalBI(false);
+      setShowCertidoesPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -13691,6 +14084,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowProposalBI(false);
+      setShowCertidoesPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -13718,6 +14112,32 @@ function App() {
     badge: gdocs.length > 0 ? 0 : 0,
     onClick: () => {
       setShowGdocPage(true);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setShowProposalBI(false);
+      setShowCertidoesPage(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+    }
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Shield,
+    label: "Certid\xF5es",
+    active: showCertidoesPage,
+    badge: (() => {
+      const today = new Date().setHours(0, 0, 0, 0);
+      return certidoes.filter(c => {
+        if (!c.validade) return false;
+        const d = Math.round((new Date(c.validade + 'T00:00:00') - today) / 86400000);
+        return d < 30;
+      }).length;
+    })() || 0,
+    onClick: () => {
+      setShowCertidoesPage(true);
+      setShowGdocPage(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
@@ -13836,7 +14256,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCertidoesPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -14541,6 +14961,12 @@ function App() {
     records: arcanjoRecords
   }) : showProposalBI ? React.createElement(ProposalBIPage, {
     proposals: proposals
+  }) : showCertidoesPage ? React.createElement(CertidoesPage, {
+    certidoes: certidoes,
+    onAdd: handleAddCertidao,
+    onDelete: handleDeleteCertidao,
+    apiKey: apiKey,
+    addToast: addToast
   }) : showInstallmentsPage && !activeContractNumber ? React.createElement(InstallmentsPage, {
     contracts: contracts,
     contractMeta: contractMeta,
