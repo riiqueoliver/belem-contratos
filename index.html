@@ -5850,10 +5850,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }), [records, filterTipo, filterLideranca]);
 
       const stats = React.useMemo(() => ({
-        total:       filtered.length,
-        atendidos:    filtered.filter(r => r.status === 'atendido' || r.status === 'concluido').length,
-        emAndamento:  filtered.filter(r => r.status === 'encaminhado').length,
-        naoComp:     filtered.filter(r => r.status === 'nao_compareceu').length,
+        total:        filtered.length,
+        atendidos:    filtered.filter(r => r.status === 'atendido').length,
+        encaminhados: filtered.filter(r => r.status === 'encaminhado').length,
+        pendentes:    filtered.filter(r => r.status === 'pendente').length,
+        naoComp:      filtered.filter(r => r.status === 'nao_compareceu').length,
       }), [filtered]);
 
       const byCoordenador = React.useMemo(() => {
@@ -5920,12 +5921,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
             {/* KPI Cards */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-5 gap-3">
               {[
-                { label: 'Total cadastrados', value: stats.total,       icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe' },
-                { label: 'Atendidos',          value: stats.atendidos,   icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0' },
-                { label: 'Em andamento',       value: stats.emAndamento, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd' },
-                { label: 'Não compareceram',   value: stats.naoComp,     icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a' },
+                { label: 'Total cadastrados', value: stats.total,        icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe' },
+                { label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0' },
+                { label: 'Encaminhados',      value: stats.encaminhados, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd' },
+                { label: 'Pendente',          value: stats.pendentes,    icon: AlertTriangle, color: '#7c3aed',     bg: '#faf5ff', border: '#ddd6fe' },
+                { label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a' },
               ].map(({ label, value, icon: Icon, color, bg, border }) => (
                 <div key={label} className="rounded-2xl border p-4 flex items-center gap-3" style={{background: bg, borderColor: border}}>
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{background: color}}>
