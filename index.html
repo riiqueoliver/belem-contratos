@@ -586,7 +586,9 @@
     }
     function parseBRL(formatted) {
       if (!formatted) return 0;
-      return parseFloat(String(formatted).replace(/\./g, '').replace(',', '.')) || 0;
+      // Remove tudo que não é dígito nem vírgula (ex: "R$ ", pontos de milhar)
+      // depois troca vírgula decimal por ponto
+      return parseFloat(String(formatted).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
     }
     function maskBRL(input) {
       // Aplica máscara enquanto usuário digita

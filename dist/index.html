@@ -1502,7 +1502,7 @@ function formatBRL(raw) {
 }
 function parseBRL(formatted) {
   if (!formatted) return 0;
-  return parseFloat(String(formatted).replace(/\./g, '').replace(',', '.')) || 0;
+  return parseFloat(String(formatted).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
 }
 function maskBRL(input) {
   let v = String(input).replace(/[^0-9,]/g, '');
