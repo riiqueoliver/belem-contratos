@@ -5347,12 +5347,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     ];
     const ARCANJO_COLOR = '#7b61c7';  // cor-base do módulo
     const ARCANJO_STATUSES = [
-      { key: 'pendente',       label: 'Pendente',          color: '#6b7280', bg: '#f3f4f6' },
-      { key: 'encaminhado',    label: 'Encaminhado',       color: '#1d4ed8', bg: '#dbeafe' },
-      { key: 'atendido',       label: 'Atendido',          color: '#15803d', bg: '#dcfce7' },
-      { key: 'nao_compareceu', label: 'Não Compareceu',    color: '#b45309', bg: '#fef3c7' },
-      { key: 'concluido',      label: 'Concluído',         color: '#166534', bg: '#bbf7d0' },
-      { key: 'cancelado',      label: 'Cancelado',         color: '#991b1b', bg: '#fee2e2' },
+      { key: 'pendente',       label: 'Pendente',       color: '#6b7280', bg: '#f3f4f6' },
+      { key: 'encaminhado',    label: 'Encaminhado',    color: '#1d4ed8', bg: '#dbeafe' },
+      { key: 'atendido',       label: 'Atendido',       color: '#15803d', bg: '#dcfce7' },
+      { key: 'nao_compareceu', label: 'Não Compareceu', color: '#b45309', bg: '#fef3c7' },
     ];
 
     function ArcanjoModal({ tab, editing, onSubmit, onClose }) {
@@ -5507,10 +5505,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
         if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
         if (activeIndicator === 'atendidos'   && r.status !== 'atendido' && r.status !== 'concluido') return false;
-        if (activeIndicator === 'emAndamento' && r.status !== 'pendente' && r.status !== 'encaminhado') return false;
+        if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
+        if (activeIndicator === 'pendente'    && r.status !== 'pendente') return false;
         if (activeIndicator === 'naoComp'     && r.status !== 'nao_compareceu') return false;
         return true;
-      });
+      }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
       function getStatus(key) { return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
 
@@ -5533,14 +5532,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const accentColor = tabInfo.accent;
 
       const stats = React.useMemo(() => {
-        const total       = records.length;
-        const atendidos   = records.filter(r => r.status === 'atendido' || r.status === 'concluido').length;
-        const emAndamento = records.filter(r => r.status === 'pendente'  || r.status === 'encaminhado').length;
-        const naoComp     = records.filter(r => r.status === 'nao_compareceu').length;
-        const cras        = records.filter(r => r.tipo === 'cras').length;
-        const rg          = records.filter(r => r.tipo === 'rg').length;
-        const cert        = records.filter(r => r.tipo === 'certidao').length;
-        return { total, atendidos, emAndamento, naoComp, cras, rg, cert };
+        const total        = records.length;
+        const atendidos    = records.filter(r => r.status === 'atendido' || r.status === 'concluido').length;
+        const encaminhados = records.filter(r => r.status === 'encaminhado').length;
+        const pendentes    = records.filter(r => r.status === 'pendente').length;
+        const naoComp      = records.filter(r => r.status === 'nao_compareceu').length;
+        const cras         = records.filter(r => r.tipo === 'cras').length;
+        const rg           = records.filter(r => r.tipo === 'rg').length;
+        const cert         = records.filter(r => r.tipo === 'certidao').length;
+        return { total, atendidos, encaminhados, pendentes, naoComp, cras, rg, cert };
       }, [records]);
 
       return (
@@ -5568,13 +5568,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             {/* ── Indicadores ── */}
             {(() => {
               const ind = [
-                { key: null,          label: 'Total cadastrados', value: stats.total,       icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe', iconBg: ARCANJO_COLOR,  iconColor: '#fff' },
-                { key: 'atendidos',   label: 'Atendidos',         value: stats.atendidos,   icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0', iconBg: '#dcfce7',      iconColor: '#059669' },
-                { key: 'emAndamento', label: 'Em andamento',      value: stats.emAndamento, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd', iconBg: '#e0f2fe',      iconColor: '#0284c7' },
-                { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,     icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a', iconBg: '#fef3c7',      iconColor: '#d97706' },
+                { key: null,          label: 'Total cadastrados', value: stats.total,        icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe', iconBg: ARCANJO_COLOR, iconColor: '#fff'     },
+                { key: 'atendidos',   label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0', iconBg: '#dcfce7',     iconColor: '#059669'  },
+                { key: 'encaminhado', label: 'Encaminhados',      value: stats.encaminhados, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd', iconBg: '#e0f2fe',     iconColor: '#0284c7'  },
+                { key: 'pendente',    label: 'Pendente',          value: stats.pendentes,    icon: AlertTriangle, color: '#7c3aed',     bg: '#faf5ff', border: '#ddd6fe', iconBg: '#ede9fe',     iconColor: '#7c3aed'  },
+                { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a', iconBg: '#fef3c7',     iconColor: '#d97706'  },
               ];
               return (
-                <div className="grid grid-cols-4 gap-3 mb-6">
+                <div className="grid grid-cols-5 gap-3 mb-6">
                   {ind.map(({ key, label, value, icon: Icon, color, bg, border, iconBg, iconColor }) => {
                     const isActive = activeIndicator === key;
                     const isDimmed = activeIndicator !== undefined && activeIndicator !== null && !isActive && key !== null;
@@ -5850,8 +5851,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
       const stats = React.useMemo(() => ({
         total:       filtered.length,
-        atendidos:   filtered.filter(r => r.status === 'atendido' || r.status === 'concluido').length,
-        emAndamento: filtered.filter(r => r.status === 'pendente'  || r.status === 'encaminhado').length,
+        atendidos:    filtered.filter(r => r.status === 'atendido' || r.status === 'concluido').length,
+        emAndamento:  filtered.filter(r => r.status === 'encaminhado').length,
         naoComp:     filtered.filter(r => r.status === 'nao_compareceu').length,
       }), [filtered]);
 
