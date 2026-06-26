@@ -8283,26 +8283,80 @@ function ArcanjoGerencial({
     colorFn: i => lilacPalette[i % lilacPalette.length]
   }))));
 }
+function BIBigNum({
+  label,
+  value,
+  sub,
+  color,
+  bg,
+  border,
+  icon: Icon
+}) {
+  return React.createElement("div", {
+    className: "rounded-2xl border p-4 flex items-center gap-4",
+    style: {
+      background: bg,
+      borderColor: border
+    }
+  }, React.createElement("div", {
+    className: "w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: color
+    }
+  }, React.createElement(Icon, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+  }, label), React.createElement("p", {
+    className: "text-2xl font-black leading-tight mt-0.5",
+    style: {
+      color
+    }
+  }, value), sub && React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-0.5"
+  }, sub)));
+}
+function BIValCard({
+  label,
+  value,
+  sub,
+  color
+}) {
+  return React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 p-5 shadow-sm"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2"
+  }, label), React.createElement("p", {
+    className: "text-2xl font-black break-all",
+    style: {
+      color
+    }
+  }, value), sub && React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-1"
+  }, sub));
+}
 function ProposalBIPage({
   proposals
 }) {
   const [filterModelo, setFilterModelo] = React.useState('');
-  const filtered = React.useMemo(() => proposals.filter(p => !filterModelo || p.modelo === filterModelo), [proposals, filterModelo]);
-  const aceitas = filtered.filter(p => p.status === 'aceita');
-  const recusadas = filtered.filter(p => p.status === 'recusada');
-  const emAndamento = filtered.filter(p => ['demanda', 'elaboracao', 'despacho', 'aguardando'].includes(p.status));
-  const emAberto = filtered.filter(p => p.status !== 'recusada');
+  const filtered = React.useMemo(() => (proposals || []).filter(p => !filterModelo || p.modelo === filterModelo), [proposals, filterModelo]);
+  const aceitas = React.useMemo(() => filtered.filter(p => p.status === 'aceita'), [filtered]);
+  const recusadas = React.useMemo(() => filtered.filter(p => p.status === 'recusada'), [filtered]);
+  const emAndamento = React.useMemo(() => filtered.filter(p => ['demanda', 'elaboracao', 'despacho', 'aguardando'].includes(p.status)), [filtered]);
+  const emAberto = React.useMemo(() => filtered.filter(p => p.status !== 'recusada'), [filtered]);
   const total = filtered.length;
-  const valorNeg = emAberto.reduce((s, p) => s + parseBRL(p.value), 0);
-  const valorContrat = aceitas.reduce((s, p) => s + parseBRL(p.value), 0);
+  const valorNeg = React.useMemo(() => emAberto.reduce((s, p) => s + parseBRL(p.value), 0), [emAberto]);
+  const valorContrat = React.useMemo(() => aceitas.reduce((s, p) => s + parseBRL(p.value), 0), [aceitas]);
   const ticketMedio = aceitas.length ? valorContrat / aceitas.length : 0;
   const fechadas = aceitas.length + recusadas.length;
   const taxaConv = fechadas > 0 ? (aceitas.length / fechadas * 100).toFixed(1) : null;
-  const byStatus = PROPOSAL_COLS.map(c => ({
+  const byStatus = React.useMemo(() => PROPOSAL_COLS.map(c => ({
     label: c.label,
     value: filtered.filter(p => p.status === c.id).length,
     color: c.color
-  })).filter(s => s.value > 0);
+  })).filter(s => s.value > 0), [filtered]);
   const byModelo = React.useMemo(() => {
     const pal = {
       'SaaS': '#0B2B5E',
@@ -8330,62 +8384,8 @@ function ProposalBIPage({
     });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
-  const modelos = [...new Set(proposals.map(p => p.modelo).filter(Boolean))].sort();
-  const bluepal = ['#0B2B5E', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
-  function BigNum({
-    label,
-    value,
-    sub,
-    color,
-    bg,
-    border,
-    icon: Icon
-  }) {
-    return React.createElement("div", {
-      className: "rounded-2xl border p-4 flex items-center gap-4",
-      style: {
-        background: bg,
-        borderColor: border
-      }
-    }, React.createElement("div", {
-      className: "w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0",
-      style: {
-        background: color
-      }
-    }, React.createElement(Icon, {
-      className: "w-5 h-5 text-white"
-    })), React.createElement("div", {
-      className: "min-w-0"
-    }, React.createElement("p", {
-      className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-    }, label), React.createElement("p", {
-      className: "text-2xl font-black leading-tight mt-0.5",
-      style: {
-        color
-      }
-    }, value), sub && React.createElement("p", {
-      className: "text-[10px] text-gray-400 mt-0.5"
-    }, sub)));
-  }
-  function ValCard({
-    label,
-    value,
-    sub,
-    color
-  }) {
-    return React.createElement("div", {
-      className: "bg-white rounded-2xl border border-gray-100 p-5 shadow-sm"
-    }, React.createElement("p", {
-      className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2"
-    }, label), React.createElement("p", {
-      className: "text-2xl font-black break-all",
-      style: {
-        color
-      }
-    }, value), sub && React.createElement("p", {
-      className: "text-[11px] text-gray-400 mt-1"
-    }, sub));
-  }
+  const modelos = React.useMemo(() => [...new Set((proposals || []).map(p => p.modelo).filter(Boolean))].sort(), [proposals]);
+  const bluepal = ['#0B2B5E', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
   return React.createElement("div", {
     className: "flex-1 flex flex-col fade-in overflow-hidden"
   }, React.createElement("div", {
@@ -8429,7 +8429,7 @@ function ProposalBIPage({
     className: "flex-1 overflow-y-auto px-8 py-6 space-y-5"
   }, React.createElement("div", {
     className: "grid grid-cols-4 gap-3"
-  }, React.createElement(BigNum, {
+  }, React.createElement(BIBigNum, {
     label: "Total de Propostas",
     value: total,
     sub: "cadastradas",
@@ -8437,7 +8437,7 @@ function ProposalBIPage({
     bg: "#eff6ff",
     border: "#bfdbfe",
     icon: Briefcase
-  }), React.createElement(BigNum, {
+  }), React.createElement(BIBigNum, {
     label: "Em Andamento",
     value: emAndamento.length,
     sub: "no pipeline ativo",
@@ -8445,7 +8445,7 @@ function ProposalBIPage({
     bg: "#faf5ff",
     border: "#ddd6fe",
     icon: Clock
-  }), React.createElement(BigNum, {
+  }), React.createElement(BIBigNum, {
     label: "Aceitas",
     value: aceitas.length,
     sub: "propostas contratadas",
@@ -8453,7 +8453,7 @@ function ProposalBIPage({
     bg: "#f0fdf4",
     border: "#bbf7d0",
     icon: CheckCircle
-  }), React.createElement(BigNum, {
+  }), React.createElement(BIBigNum, {
     label: "Taxa de Convers\xE3o",
     value: taxaConv !== null ? taxaConv + '%' : '—',
     sub: fechadas > 0 ? `${aceitas.length} de ${fechadas} encerradas` : 'sem dados suficientes',
@@ -8463,17 +8463,17 @@ function ProposalBIPage({
     icon: TrendingUp
   })), React.createElement("div", {
     className: "grid grid-cols-3 gap-3"
-  }, React.createElement(ValCard, {
+  }, React.createElement(BIValCard, {
     label: "Valor em Negocia\xE7\xE3o",
     value: fmtCurrency(valorNeg),
     sub: `${emAberto.length} proposta${emAberto.length !== 1 ? 's' : ''} em aberto`,
     color: BLUE
-  }), React.createElement(ValCard, {
+  }), React.createElement(BIValCard, {
     label: "Valor Contratado",
     value: fmtCurrency(valorContrat),
     sub: `${aceitas.length} aceita${aceitas.length !== 1 ? 's' : ''}`,
     color: "#15803d"
-  }), React.createElement(ValCard, {
+  }), React.createElement(BIValCard, {
     label: "Ticket M\xE9dio",
     value: aceitas.length ? fmtCurrency(ticketMedio) : '—',
     sub: "por proposta aceita",

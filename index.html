@@ -5973,30 +5973,55 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     /* ═══════════════════════════════════════════════════════
-       BI PROPOSTAS
+       BI PROPOSTAS — helpers de card (fora do componente para evitar remount)
     ═══════════════════════════════════════════════════════ */
+    function BIBigNum({ label, value, sub, color, bg, border, icon: Icon }) {
+      return (
+        <div className="rounded-2xl border p-4 flex items-center gap-4" style={{background:bg, borderColor:border}}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:color}}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+            <p className="text-2xl font-black leading-tight mt-0.5" style={{color}}>{value}</p>
+            {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+          </div>
+        </div>
+      );
+    }
+
+    function BIValCard({ label, value, sub, color }) {
+      return (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+          <p className="text-2xl font-black break-all" style={{color}}>{value}</p>
+          {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
+        </div>
+      );
+    }
+
     function ProposalBIPage({ proposals }) {
       const [filterModelo, setFilterModelo] = React.useState('');
 
-      const filtered = React.useMemo(() => proposals.filter(p =>
+      const filtered = React.useMemo(() => (proposals || []).filter(p =>
         !filterModelo || p.modelo === filterModelo
       ), [proposals, filterModelo]);
 
-      const aceitas     = filtered.filter(p => p.status === 'aceita');
-      const recusadas   = filtered.filter(p => p.status === 'recusada');
-      const emAndamento = filtered.filter(p => ['demanda','elaboracao','despacho','aguardando'].includes(p.status));
-      const emAberto    = filtered.filter(p => p.status !== 'recusada');
+      const aceitas     = React.useMemo(() => filtered.filter(p => p.status === 'aceita'),    [filtered]);
+      const recusadas   = React.useMemo(() => filtered.filter(p => p.status === 'recusada'),  [filtered]);
+      const emAndamento = React.useMemo(() => filtered.filter(p => ['demanda','elaboracao','despacho','aguardando'].includes(p.status)), [filtered]);
+      const emAberto    = React.useMemo(() => filtered.filter(p => p.status !== 'recusada'),  [filtered]);
       const total       = filtered.length;
 
-      const valorNeg     = emAberto.reduce((s, p) => s + parseBRL(p.value), 0);
-      const valorContrat = aceitas.reduce((s, p) => s + parseBRL(p.value), 0);
+      const valorNeg     = React.useMemo(() => emAberto.reduce((s, p) => s + parseBRL(p.value), 0),     [emAberto]);
+      const valorContrat = React.useMemo(() => aceitas.reduce((s, p) => s + parseBRL(p.value), 0),      [aceitas]);
       const ticketMedio  = aceitas.length ? valorContrat / aceitas.length : 0;
       const fechadas     = aceitas.length + recusadas.length;
       const taxaConv     = fechadas > 0 ? (aceitas.length / fechadas * 100).toFixed(1) : null;
 
-      const byStatus = PROPOSAL_COLS
+      const byStatus = React.useMemo(() => PROPOSAL_COLS
         .map(c => ({ label: c.label, value: filtered.filter(p => p.status === c.id).length, color: c.color }))
-        .filter(s => s.value > 0);
+        .filter(s => s.value > 0), [filtered]);
 
       const byModelo = React.useMemo(() => {
         const pal = { 'SaaS':'#0B2B5E', 'Licença Perpétua':'#15803d', 'Consultoria':'#b45309', 'Implantação':'#0891b2', 'Outro':'#7b61c7' };
@@ -6011,33 +6036,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         return Object.entries(m).sort((a,b)=>b[1]-a[1]);
       }, [filtered]);
 
-      const modelos  = [...new Set(proposals.map(p => p.modelo).filter(Boolean))].sort();
-      const bluepal  = ['#0B2B5E','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe'];
-
-      function BigNum({ label, value, sub, color, bg, border, icon: Icon }) {
-        return (
-          <div className="rounded-2xl border p-4 flex items-center gap-4" style={{background:bg, borderColor:border}}>
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:color}}>
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-              <p className="text-2xl font-black leading-tight mt-0.5" style={{color}}>{value}</p>
-              {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-            </div>
-          </div>
-        );
-      }
-
-      function ValCard({ label, value, sub, color }) {
-        return (
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
-            <p className="text-2xl font-black break-all" style={{color}}>{value}</p>
-            {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
-          </div>
-        );
-      }
+      const modelos = React.useMemo(() => [...new Set((proposals||[]).map(p => p.modelo).filter(Boolean))].sort(), [proposals]);
+      const bluepal = ['#0B2B5E','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd'];
 
       return (
         <div className="flex-1 flex flex-col fade-in overflow-hidden">
@@ -6069,10 +6069,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
             {/* KPIs contagem */}
             <div className="grid grid-cols-4 gap-3">
-              <BigNum label="Total de Propostas" value={total}               sub="cadastradas"                     color={BLUE}    bg="#eff6ff" border="#bfdbfe" icon={Briefcase}  />
-              <BigNum label="Em Andamento"        value={emAndamento.length} sub="no pipeline ativo"               color="#7c3aed" bg="#faf5ff" border="#ddd6fe" icon={Clock}      />
-              <BigNum label="Aceitas"             value={aceitas.length}     sub="propostas contratadas"           color="#15803d" bg="#f0fdf4" border="#bbf7d0" icon={CheckCircle}/>
-              <BigNum label="Taxa de Conversão"
+              <BIBigNum label="Total de Propostas" value={total}               sub="cadastradas"                     color={BLUE}    bg="#eff6ff" border="#bfdbfe" icon={Briefcase}  />
+              <BIBigNum label="Em Andamento"        value={emAndamento.length} sub="no pipeline ativo"               color="#7c3aed" bg="#faf5ff" border="#ddd6fe" icon={Clock}      />
+              <BIBigNum label="Aceitas"             value={aceitas.length}     sub="propostas contratadas"           color="#15803d" bg="#f0fdf4" border="#bbf7d0" icon={CheckCircle}/>
+              <BIBigNum label="Taxa de Conversão"
                 value={taxaConv !== null ? taxaConv+'%' : '—'}
                 sub={fechadas>0 ? `${aceitas.length} de ${fechadas} encerradas` : 'sem dados suficientes'}
                 color="#0891b2" bg="#ecfeff" border="#a5f3fc" icon={TrendingUp} />
@@ -6080,15 +6080,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
             {/* KPIs valor */}
             <div className="grid grid-cols-3 gap-3">
-              <ValCard label="Valor em Negociação"
+              <BIValCard label="Valor em Negociação"
                 value={fmtCurrency(valorNeg)}
                 sub={`${emAberto.length} proposta${emAberto.length!==1?'s':''} em aberto`}
                 color={BLUE} />
-              <ValCard label="Valor Contratado"
+              <BIValCard label="Valor Contratado"
                 value={fmtCurrency(valorContrat)}
                 sub={`${aceitas.length} aceita${aceitas.length!==1?'s':''}`}
                 color="#15803d" />
-              <ValCard label="Ticket Médio"
+              <BIValCard label="Ticket Médio"
                 value={aceitas.length ? fmtCurrency(ticketMedio) : '—'}
                 sub="por proposta aceita"
                 color="#0891b2" />
