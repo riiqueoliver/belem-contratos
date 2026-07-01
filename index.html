@@ -5360,9 +5360,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
     function ArcanjoModal({ tab, editing, onSubmit, onClose }) {
       const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
-      const blank = { nome:'', cpf:'', endereco:'', lideranca:'', coordenador:'', telefone:'', observacao:'', dataAgendamento:'', status:'pendente', retorno:'', subtipo:'nascimento' };
+      const blank = { nome:'', nomeMae:'', cpf:'', endereco:'', lideranca:'', coordenador:'', telefone:'', observacao:'', dataAgendamento:'', status:'pendente', retorno:'', subtipo:'nascimento' };
       const [form, setForm] = React.useState(editing ? {
-        nome: editing.nome || '', cpf: editing.cpf || '', endereco: editing.endereco || '',
+        nome: editing.nome || '', nomeMae: editing.nomeMae || '', cpf: editing.cpf || '', endereco: editing.endereco || '',
         lideranca: editing.lideranca || '', coordenador: editing.coordenador || '',
         telefone: editing.telefone || '', observacao: editing.observacao || '',
         dataAgendamento: editing.dataAgendamento || '', status: editing.status || 'pendente',
@@ -5405,6 +5405,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   }} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" className={ic} />
                 </div>
               </div>
+              {tab === 'cras' && (
+                <div>
+                  <label className={lc}>Nome da Mãe</label>
+                  <input value={form.nomeMae} onChange={e => set('nomeMae', e.target.value)} placeholder="Nome completo da mãe" className={ic} />
+                </div>
+              )}
               <div>
                 <label className={lc}>Endereço</label>
                 <input value={form.endereco} onChange={e => set('endereco', e.target.value)} placeholder="Endereço completo" className={ic} />
@@ -5468,10 +5474,91 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
+    // Modal de visualização — abre ao clicar no nome; menu ⋮ com opção Editar
+    function ArcanjoViewModal({ record, tab, onClose, onEdit }) {
+      const [menuOpen, setMenuOpen] = React.useState(false);
+      const tabInfo = ARCANJO_TABS.find(t => t.key === tab) || ARCANJO_TABS[0];
+      const accent = tabInfo.accent;
+      const st = ARCANJO_ALL_STATUSES.find(s => s.key === record.status) || ARCANJO_ALL_STATUSES[0];
+
+      const rows = [
+        { label: 'Nome Completo', value: record.nome },
+        tab === 'cras' ? { label: 'Nome da Mãe', value: record.nomeMae } : null,
+        { label: 'CPF', value: record.cpf },
+        { label: 'Endereço', value: record.endereco },
+        { label: 'Telefone', value: record.telefone },
+        { label: 'Liderança', value: record.lideranca },
+        { label: 'Coordenador', value: record.coordenador },
+        { label: tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento', value: record.dataAgendamento },
+        tab === 'certidao' ? { label: 'Tipo de Certidão', value: record.subtipo } : null,
+        tab === 'rg' ? { label: 'Retorno', value: record.retorno } : null,
+        { label: 'Observação', value: record.observacao },
+      ].filter(Boolean);
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}} onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background: accent}}>
+                  <UserPlus className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-gray-800 text-sm">{record.nome}</h2>
+                  <p className="text-xs text-gray-400">{tabInfo.label}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="relative">
+                  <button onClick={() => setMenuOpen(o => !o)}
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                      <div className="absolute right-0 mt-1 z-20 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden min-w-36">
+                        <button onClick={() => { setMenuOpen(false); onEdit(); }}
+                          className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors">
+                          <Edit2 className="w-3.5 h-3.5 text-gray-400" />
+                          Editar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{background: st.bg, color: st.color}}>{st.label}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                {rows.map(({ label, value }) => (
+                  <div key={label} className={label === 'Endereço' || label === 'Observação' ? 'col-span-2' : ''}>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+                    <p className="text-sm text-gray-700 font-medium break-words">{value || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Fechar</button>
+              <button type="button" onClick={onEdit} className="px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95" style={{background: accent}}>
+                Editar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function ArcanjoPage({ records, onAdd, onUpdate, onDelete, addToast, currentUser }) {
       const [tab, setTab] = React.useState('cras');
       const [showModal, setShowModal] = React.useState(false);
       const [editing, setEditing] = React.useState(null);
+      const [viewing, setViewing] = React.useState(null);
       const [search,            setSearch]            = React.useState('');
       const [filterLideranca,   setFilterLideranca]   = React.useState('');
       const [filterCoordenador, setFilterCoordenador] = React.useState('');
@@ -5703,7 +5790,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       return (
                         <tr key={r.id} className={`border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-purple-50/20' : ''}`} style={{}} onMouseEnter={e=>e.currentTarget.style.background='#f5f3ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
                           <td className="px-5 py-3">
-                            <p className="font-semibold text-gray-800 leading-tight">{r.nome}</p>
+                            <button onClick={e => { e.stopPropagation(); setViewing(r); }}
+                              className="font-semibold text-gray-800 leading-tight text-left hover:underline transition-colors"
+                              style={{color: accentColor}}>
+                              {r.nome}
+                            </button>
                             <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{r.cpf || '—'}</p>
                           </td>
                           <td className="px-5 py-3 text-gray-500">{r.telefone || '—'}</td>
@@ -5784,6 +5875,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               editing={editing}
               onSubmit={handleSubmit}
               onClose={() => { setShowModal(false); setEditing(null); }}
+            />
+          )}
+
+          {viewing && (
+            <ArcanjoViewModal
+              record={viewing}
+              tab={tab}
+              onClose={() => setViewing(null)}
+              onEdit={() => { setEditing(viewing); setViewing(null); setShowModal(true); }}
             />
           )}
         </div>

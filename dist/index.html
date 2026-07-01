@@ -7343,6 +7343,7 @@ function ArcanjoModal({
   const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
   const blank = {
     nome: '',
+    nomeMae: '',
     cpf: '',
     endereco: '',
     lideranca: '',
@@ -7356,6 +7357,7 @@ function ArcanjoModal({
   };
   const [form, setForm] = React.useState(editing ? {
     nome: editing.nome || '',
+    nomeMae: editing.nomeMae || '',
     cpf: editing.cpf || '',
     endereco: editing.endereco || '',
     lideranca: editing.lideranca || '',
@@ -7432,7 +7434,14 @@ function ArcanjoModal({
     maxLength: 14,
     inputMode: "numeric",
     className: ic
-  }))), React.createElement("div", null, React.createElement("label", {
+  }))), tab === 'cras' && React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome da M\xE3e"), React.createElement("input", {
+    value: form.nomeMae,
+    onChange: e => set('nomeMae', e.target.value),
+    placeholder: "Nome completo da m\xE3e",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
     className: lc
   }, "Endere\xE7o"), React.createElement("input", {
     value: form.endereco,
@@ -7522,6 +7531,136 @@ function ArcanjoModal({
     }
   }, editing ? 'Salvar Alterações' : 'Cadastrar'))));
 }
+function ArcanjoViewModal({
+  record,
+  tab,
+  onClose,
+  onEdit
+}) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const tabInfo = ARCANJO_TABS.find(t => t.key === tab) || ARCANJO_TABS[0];
+  const accent = tabInfo.accent;
+  const st = ARCANJO_ALL_STATUSES.find(s => s.key === record.status) || ARCANJO_ALL_STATUSES[0];
+  const rows = [{
+    label: 'Nome Completo',
+    value: record.nome
+  }, tab === 'cras' ? {
+    label: 'Nome da Mãe',
+    value: record.nomeMae
+  } : null, {
+    label: 'CPF',
+    value: record.cpf
+  }, {
+    label: 'Endereço',
+    value: record.endereco
+  }, {
+    label: 'Telefone',
+    value: record.telefone
+  }, {
+    label: 'Liderança',
+    value: record.lideranca
+  }, {
+    label: 'Coordenador',
+    value: record.coordenador
+  }, {
+    label: tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento',
+    value: record.dataAgendamento
+  }, tab === 'certidao' ? {
+    label: 'Tipo de Certidão',
+    value: record.subtipo
+  } : null, tab === 'rg' ? {
+    label: 'Retorno',
+    value: record.retorno
+  } : null, {
+    label: 'Observação',
+    value: record.observacao
+  }].filter(Boolean);
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    },
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: accent
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("div", null, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, record.nome), React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, tabInfo.label))), React.createElement("div", {
+    className: "flex items-center gap-1"
+  }, React.createElement("div", {
+    className: "relative"
+  }, React.createElement("button", {
+    onClick: () => setMenuOpen(o => !o),
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+  }, React.createElement(MoreVertical, {
+    className: "w-4 h-4"
+  })), menuOpen && React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "fixed inset-0 z-10",
+    onClick: () => setMenuOpen(false)
+  }), React.createElement("div", {
+    className: "absolute right-0 mt-1 z-20 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden min-w-36"
+  }, React.createElement("button", {
+    onClick: () => {
+      setMenuOpen(false);
+      onEdit();
+    },
+    className: "w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+  }, React.createElement(Edit2, {
+    className: "w-3.5 h-3.5 text-gray-400"
+  }), "Editar")))), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  })))), React.createElement("div", {
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
+  }, React.createElement("div", null, React.createElement("span", {
+    className: "px-2.5 py-1 rounded-full text-xs font-semibold",
+    style: {
+      background: st.bg,
+      color: st.color
+    }
+  }, st.label)), React.createElement("div", {
+    className: "grid grid-cols-2 gap-x-5 gap-y-4"
+  }, rows.map(({
+    label,
+    value
+  }) => React.createElement("div", {
+    key: label,
+    className: label === 'Endereço' || label === 'Observação' ? 'col-span-2' : ''
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1"
+  }, label), React.createElement("p", {
+    className: "text-sm text-gray-700 font-medium break-words"
+  }, value || '—'))))), React.createElement("div", {
+    className: "flex justify-end gap-3 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+  }, "Fechar"), React.createElement("button", {
+    type: "button",
+    onClick: onEdit,
+    className: "px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95",
+    style: {
+      background: accent
+    }
+  }, "Editar"))));
+}
 function ArcanjoPage({
   records,
   onAdd,
@@ -7533,6 +7672,7 @@ function ArcanjoPage({
   const [tab, setTab] = React.useState('cras');
   const [showModal, setShowModal] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
+  const [viewing, setViewing] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [filterLideranca, setFilterLideranca] = React.useState('');
   const [filterCoordenador, setFilterCoordenador] = React.useState('');
@@ -7894,8 +8034,15 @@ function ArcanjoPage({
       onMouseLeave: e => e.currentTarget.style.background = ''
     }, React.createElement("td", {
       className: "px-5 py-3"
-    }, React.createElement("p", {
-      className: "font-semibold text-gray-800 leading-tight"
+    }, React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setViewing(r);
+      },
+      className: "font-semibold text-gray-800 leading-tight text-left hover:underline transition-colors",
+      style: {
+        color: accentColor
+      }
     }, r.nome), React.createElement("p", {
       className: "text-[11px] text-gray-400 mt-0.5 font-mono"
     }, r.cpf || '—')), React.createElement("td", {
@@ -8005,6 +8152,15 @@ function ArcanjoPage({
     onClose: () => {
       setShowModal(false);
       setEditing(null);
+    }
+  }), viewing && React.createElement(ArcanjoViewModal, {
+    record: viewing,
+    tab: tab,
+    onClose: () => setViewing(null),
+    onEdit: () => {
+      setEditing(viewing);
+      setViewing(null);
+      setShowModal(true);
     }
   }));
 }
