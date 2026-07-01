@@ -57,12 +57,10 @@ out = out
   .replace(/<meta http-equiv="Pragma"[^>]*>\s*/g, '')
   .replace(/<meta http-equiv="Expires"[^>]*>\s*/g, '');
 
-// ── 4. Troca unpkg → jsDelivr ─────────────────────────────────────────────
-out = out
-  .replace('https://unpkg.com/react@18/umd/react.production.min.js',
-           'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js')
-  .replace('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-           'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js');
+// ── 4. React via unpkg (jsDelivr retorna 400 nos UMD do React) ────────────
+// NÃO trocar para jsDelivr: os caminhos /npm/react@18/umd/*.min.js dão 400
+// no jsDelivr, o que deixa React undefined e quebra o app (tela em branco).
+// unpkg serve esses arquivos corretamente.
 
 // ── 5. Google Fonts com font-display:swap ─────────────────────────────────
 out = out.replace(
@@ -73,6 +71,7 @@ out = out.replace(
 
 // ── 6. Preconnect hints ───────────────────────────────────────────────────
 const preconnects = `
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
