@@ -5354,6 +5354,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       { key: 'atendido',       label: 'Atendido',       color: '#15803d', bg: '#dcfce7' },
       { key: 'nao_compareceu', label: 'Não Compareceu', color: '#b45309', bg: '#fef3c7' },
     ];
+    // Status "Visita" — exclusivo da aba CRAS (Análise CRA'S)
+    const ARCANJO_VISITA_STATUS = { key: 'visita', label: 'Visita', color: '#dc2626', bg: '#fee2e2' };
+    const ARCANJO_ALL_STATUSES  = [...ARCANJO_STATUSES, ARCANJO_VISITA_STATUS];
 
     function ArcanjoModal({ tab, editing, onSubmit, onClose }) {
       const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
@@ -5450,7 +5453,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div>
                 <label className={lc}>Status</label>
                 <select value={form.status} onChange={e => set('status', e.target.value)} className={ic}>
-                  {ARCANJO_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  {(tab === 'cras' ? ARCANJO_ALL_STATUSES : ARCANJO_STATUSES).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
               </div>
             </form>
@@ -5510,10 +5513,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
         if (activeIndicator === 'pendente'    && r.status !== 'pendente') return false;
         if (activeIndicator === 'naoComp'     && r.status !== 'nao_compareceu') return false;
+        if (activeIndicator === 'visita'      && r.status !== 'visita') return false;
         return true;
       }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
-      function getStatus(key) { return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
+      function getStatus(key) { return ARCANJO_ALL_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
+
+      // Opções de status do dropdown — "Visita" só aparece na aba CRAS
+      const statusOptions = tab === 'cras' ? ARCANJO_ALL_STATUSES : ARCANJO_STATUSES;
 
       async function handleSubmit(data) {
         try {
@@ -5539,10 +5546,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         const encaminhados = records.filter(r => r.status === 'encaminhado').length;
         const pendentes    = records.filter(r => r.status === 'pendente').length;
         const naoComp      = records.filter(r => r.status === 'nao_compareceu').length;
+        const visita       = records.filter(r => r.status === 'visita').length;
         const cras         = records.filter(r => r.tipo === 'cras').length;
         const rg           = records.filter(r => r.tipo === 'rg').length;
         const cert         = records.filter(r => r.tipo === 'certidao').length;
-        return { total, atendidos, encaminhados, pendentes, naoComp, cras, rg, cert };
+        return { total, atendidos, encaminhados, pendentes, naoComp, visita, cras, rg, cert };
       }, [records]);
 
       return (
@@ -5576,8 +5584,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 { key: 'pendente',    label: 'Pendente',          value: stats.pendentes,    icon: AlertTriangle, color: '#7c3aed',     bg: '#faf5ff', border: '#ddd6fe', iconBg: '#ede9fe',     iconColor: '#7c3aed'  },
                 { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a', iconBg: '#fef3c7',     iconColor: '#d97706'  },
               ];
+              // Indicador "Visita" — exclusivo da aba CRAS
+              if (tab === 'cras') {
+                ind.push({ key: 'visita', label: 'Visita', value: stats.visita, icon: Home, color: '#dc2626', bg: '#fef2f2', border: '#fecaca', iconBg: '#fee2e2', iconColor: '#dc2626' });
+              }
               return (
-                <div className="grid grid-cols-5 gap-3 mb-6">
+                <div className={tab === 'cras' ? "grid grid-cols-6 gap-3 mb-6" : "grid grid-cols-5 gap-3 mb-6"}>
                   {ind.map(({ key, label, value, icon: Icon, color, bg, border, iconBg, iconColor }) => {
                     const isActive = activeIndicator === key;
                     const isDimmed = activeIndicator !== undefined && activeIndicator !== null && !isActive && key !== null;
@@ -5717,7 +5729,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                   e.stopPropagation();
                                   if (statusMenu?.id === r.id) { setStatusMenu(null); return; }
                                   const rect = e.currentTarget.getBoundingClientRect();
-                                  const dropH = ARCANJO_STATUSES.length * 38;
+                                  const dropH = statusOptions.length * 38;
                                   const top = window.innerHeight - rect.bottom > dropH
                                     ? rect.bottom + 4
                                     : rect.top - dropH - 4;
@@ -5732,7 +5744,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                 <div onClick={e => e.stopPropagation()}
                                      style={{position:'fixed', zIndex:9999, left: statusMenu.left, top: statusMenu.top}}
                                      className="bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden min-w-44">
-                                  {ARCANJO_STATUSES.map(s => (
+                                  {statusOptions.map(s => (
                                     <button key={s.key}
                                       onClick={() => { onUpdate(r.id, { status: s.key }); setStatusMenu(null); }}
                                       className="w-full text-left px-3 py-2.5 text-xs font-semibold hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
@@ -10000,7 +10012,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             // Linhas de dados (row 4+, colunas B-I)
             data.forEach((r, idx) => {
               const row = ws.getRow(idx + 4);
-              const stLabel = ARCANJO_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
+              const stLabel = ARCANJO_ALL_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
               const vals = [r.nome||'', r.cpf||'', r.dataNasc||'', r.telefone||'', r.lideranca||'', r.coordenador||'', stLabel, r.observacao||''];
               vals.forEach((v, ci) => {
                 const cell = row.getCell(ci + 2);

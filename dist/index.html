@@ -7327,6 +7327,13 @@ const ARCANJO_STATUSES = [{
   color: '#b45309',
   bg: '#fef3c7'
 }];
+const ARCANJO_VISITA_STATUS = {
+  key: 'visita',
+  label: 'Visita',
+  color: '#dc2626',
+  bg: '#fee2e2'
+};
+const ARCANJO_ALL_STATUSES = [...ARCANJO_STATUSES, ARCANJO_VISITA_STATUS];
 function ArcanjoModal({
   tab,
   editing,
@@ -7497,7 +7504,7 @@ function ArcanjoModal({
     value: form.status,
     onChange: e => set('status', e.target.value),
     className: ic
-  }, ARCANJO_STATUSES.map(s => React.createElement("option", {
+  }, (tab === 'cras' ? ARCANJO_ALL_STATUSES : ARCANJO_STATUSES).map(s => React.createElement("option", {
     key: s.key,
     value: s.key
   }, s.label))))), React.createElement("div", {
@@ -7561,11 +7568,13 @@ function ArcanjoPage({
     if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
     if (activeIndicator === 'pendente' && r.status !== 'pendente') return false;
     if (activeIndicator === 'naoComp' && r.status !== 'nao_compareceu') return false;
+    if (activeIndicator === 'visita' && r.status !== 'visita') return false;
     return true;
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   function getStatus(key) {
-    return ARCANJO_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0];
+    return ARCANJO_ALL_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0];
   }
+  const statusOptions = tab === 'cras' ? ARCANJO_ALL_STATUSES : ARCANJO_STATUSES;
   async function handleSubmit(data) {
     try {
       if (editing) {
@@ -7594,6 +7603,7 @@ function ArcanjoPage({
     const encaminhados = records.filter(r => r.status === 'encaminhado').length;
     const pendentes = records.filter(r => r.status === 'pendente').length;
     const naoComp = records.filter(r => r.status === 'nao_compareceu').length;
+    const visita = records.filter(r => r.status === 'visita').length;
     const cras = records.filter(r => r.tipo === 'cras').length;
     const rg = records.filter(r => r.tipo === 'rg').length;
     const cert = records.filter(r => r.tipo === 'certidao').length;
@@ -7603,6 +7613,7 @@ function ArcanjoPage({
       encaminhados,
       pendentes,
       naoComp,
+      visita,
       cras,
       rg,
       cert
@@ -7693,8 +7704,21 @@ function ArcanjoPage({
       iconBg: '#fef3c7',
       iconColor: '#d97706'
     }];
+    if (tab === 'cras') {
+      ind.push({
+        key: 'visita',
+        label: 'Visita',
+        value: stats.visita,
+        icon: Home,
+        color: '#dc2626',
+        bg: '#fef2f2',
+        border: '#fecaca',
+        iconBg: '#fee2e2',
+        iconColor: '#dc2626'
+      });
+    }
     return React.createElement("div", {
-      className: "grid grid-cols-5 gap-3 mb-6"
+      className: tab === 'cras' ? "grid grid-cols-6 gap-3 mb-6" : "grid grid-cols-5 gap-3 mb-6"
     }, ind.map(({
       key,
       label,
@@ -7910,7 +7934,7 @@ function ArcanjoPage({
           return;
         }
         const rect = e.currentTarget.getBoundingClientRect();
-        const dropH = ARCANJO_STATUSES.length * 38;
+        const dropH = statusOptions.length * 38;
         const top = window.innerHeight - rect.bottom > dropH ? rect.bottom + 4 : rect.top - dropH - 4;
         setStatusMenu({
           id: r.id,
@@ -7934,7 +7958,7 @@ function ArcanjoPage({
         top: statusMenu.top
       },
       className: "bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden min-w-44"
-    }, ARCANJO_STATUSES.map(s => React.createElement("button", {
+    }, statusOptions.map(s => React.createElement("button", {
       key: s.key,
       onClick: () => {
         onUpdate(r.id, {
@@ -13322,7 +13346,7 @@ function App() {
         });
         data.forEach((r, idx) => {
           const row = ws.getRow(idx + 4);
-          const stLabel = ARCANJO_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
+          const stLabel = ARCANJO_ALL_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
           const vals = [r.nome || '', r.cpf || '', r.dataNasc || '', r.telefone || '', r.lideranca || '', r.coordenador || '', stLabel, r.observacao || ''];
           vals.forEach((v, ci) => {
             const cell = row.getCell(ci + 2);
