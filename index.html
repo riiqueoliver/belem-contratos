@@ -5791,8 +5791,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         <tr key={r.id} className={`border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-purple-50/20' : ''}`} style={{}} onMouseEnter={e=>e.currentTarget.style.background='#f5f3ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
                           <td className="px-5 py-3">
                             <button onClick={e => { e.stopPropagation(); setViewing(r); }}
-                              className="font-semibold text-gray-800 leading-tight text-left hover:underline transition-colors"
-                              style={{color: accentColor}}>
+                              className="font-semibold text-gray-800 leading-tight text-left hover:underline transition-colors">
                               {r.nome}
                             </button>
                             <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{r.cpf || '—'}</p>
