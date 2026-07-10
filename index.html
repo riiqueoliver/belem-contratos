@@ -11043,9 +11043,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     </div>
                   </div>
 
-                  {/* Valor Global em Contratos Ativos — indicador de destaque */}
-                  <div className="rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4"
-                       style={{background:'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 55%, #f0fdfa 100%)', borderColor:'#bbf7d0'}}>
+                  {/* Valor Global em Contratos Ativos — indicador de destaque (clicável) */}
+                  <div onClick={() => setActiveHomeCard(activeHomeCard === 'global' ? null : 'global')}
+                       className="rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all duration-200 select-none"
+                       style={{background:'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 55%, #f0fdfa 100%)',
+                               borderColor: activeHomeCard === 'global' ? GREEN : '#bbf7d0',
+                               boxShadow: activeHomeCard === 'global' ? `0 0 0 3px ${GREEN}33, 0 4px 16px rgba(5,150,105,0.18)` : undefined}}>
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{background: GREEN}}>
                       <DollarSign className="w-6 h-6 text-white" />
                     </div>
@@ -11056,6 +11059,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         {financialKPIs.activeContractsCount} contrato{financialKPIs.activeContractsCount!==1?'s':''} ativo{financialKPIs.activeContractsCount!==1?'s':''} · soma do valor total (inclui a parte destinada a parceiros)
                       </p>
                     </div>
+                    <ChevronRight className={`w-5 h-5 text-green-500 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`} />
                   </div>
 
                   {/* Financial KPI strip — clicável */}
@@ -11182,7 +11186,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     const nfsYear = contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === statsYear);
                     const fmtV = v => { const n = Number(v); if (!n) return '—'; return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
                     const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—';
-                    const titles = { portfolio:'Contratos do Portfólio', faturado:`NFs Emitidas em ${statsYear}`, recebido:`NFs Recebidas em ${statsYear}`, transito:`NFs em Trânsito — ${statsYear}`, anual:`Receita Prevista ${statsYear} — por Contrato`, parceiros:`Repasse em ${statsYear}` };
+                    const titles = { global:'Contratos Ativos — Valor Global', portfolio:'Contratos do Portfólio', faturado:`NFs Emitidas em ${statsYear}`, recebido:`NFs Recebidas em ${statsYear}`, transito:`NFs em Trânsito — ${statsYear}`, anual:`Receita Prevista ${statsYear} — por Contrato`, parceiros:`Repasse em ${statsYear}` };
 
                     return (
                       <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden fade-in">
@@ -11200,6 +11204,60 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         </div>
 
                         <div className="overflow-x-auto">
+
+                          {/* ── VALOR GLOBAL — CONTRATOS ATIVOS ── */}
+                          {activeHomeCard === 'global' && (() => {
+                            const rows = Object.entries(contractMeta)
+                              .filter(([,m]) => effectiveSituation(m) === 'ativo')
+                              .sort(([,a],[,b]) => (parseFloat(b.globalValue)||0) - (parseFloat(a.globalValue)||0));
+                            const total = rows.reduce((s,[,m]) => s + (parseFloat(m.globalValue)||0), 0);
+                            return (
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr style={{background:'#f1f5f9'}}>
+                                    {['Nº Contrato','Órgão','Objeto','Contratada','Valor Global','Vigência'].map(h => (
+                                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                  {rows.map(([cn, m]) => {
+                                    const sigla = getUnitSigla(m.unit||'');
+                                    const isParceria = m.contractType === 'parceria';
+                                    return (
+                                      <tr key={cn} className="hover:bg-green-50 transition-colors cursor-pointer"
+                                          onClick={() => { setActiveContractNumber(cn); setActiveHomeCard(null); }}>
+                                        <td className="px-4 py-2.5 font-black whitespace-nowrap" style={{color: BLUE}}>{cn}</td>
+                                        <td className="px-4 py-2.5 whitespace-nowrap">
+                                          {sigla
+                                            ? <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background: BLUE+'14', color: BLUE}}>{sigla}</span>
+                                            : <span className="text-gray-400">{m.unit||'—'}</span>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-gray-700 max-w-[220px]">
+                                          <p className="truncate">{m.object||'—'}</p>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-gray-500 max-w-[160px]">
+                                          <p className="truncate">{m.contractorName||'—'}{isParceria && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{background:'#dbeafe', color:'#1d4ed8'}}>parceria</span>}</p>
+                                        </td>
+                                        <td className="px-4 py-2.5 font-bold whitespace-nowrap" style={{color: GREEN}}>{fmtV(m.globalValue)}</td>
+                                        <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtD(m.startDate)} — {fmtD(m.endDate)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {rows.length > 0 && (
+                                    <tr style={{background:'#f0fdf4'}}>
+                                      <td colSpan={4} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Valor global total ({rows.length} contrato{rows.length!==1?'s':''} ativo{rows.length!==1?'s':''})</td>
+                                      <td className="px-4 py-3 font-black text-sm whitespace-nowrap" style={{color: GREEN}}>{fmtV(total)}</td>
+                                      <td />
+                                    </tr>
+                                  )}
+                                  {rows.length === 0 && (
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-gray-400">Nenhum contrato ativo cadastrado</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            );
+                          })()}
 
                           {/* ── PORTFÓLIO ── */}
                           {activeHomeCard === 'portfolio' && (() => {

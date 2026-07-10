@@ -14817,10 +14817,12 @@ function App() {
       color: BLUE
     }
   }, "Ver contratos"))), React.createElement("div", {
-    className: "rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4",
+    onClick: () => setActiveHomeCard(activeHomeCard === 'global' ? null : 'global'),
+    className: "rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all duration-200 select-none",
     style: {
       background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 55%, #f0fdfa 100%)',
-      borderColor: '#bbf7d0'
+      borderColor: activeHomeCard === 'global' ? GREEN : '#bbf7d0',
+      boxShadow: activeHomeCard === 'global' ? `0 0 0 3px ${GREEN}33, 0 4px 16px rgba(5,150,105,0.18)` : undefined
     }
   }, React.createElement("div", {
     className: "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm",
@@ -14837,7 +14839,9 @@ function App() {
     className: "text-2xl sm:text-3xl font-black leading-tight text-green-800 truncate"
   }, fmtCurrency(financialKPIs.activeGlobalTotal)), React.createElement("p", {
     className: "text-[11px] text-green-600 mt-0.5"
-  }, financialKPIs.activeContractsCount, " contrato", financialKPIs.activeContractsCount !== 1 ? 's' : '', " ativo", financialKPIs.activeContractsCount !== 1 ? 's' : '', " \xB7 soma do valor total (inclui a parte destinada a parceiros)"))), (() => {
+  }, financialKPIs.activeContractsCount, " contrato", financialKPIs.activeContractsCount !== 1 ? 's' : '', " ativo", financialKPIs.activeContractsCount !== 1 ? 's' : '', " \xB7 soma do valor total (inclui a parte destinada a parceiros)")), React.createElement(ChevronRight, {
+    className: `w-5 h-5 text-green-500 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`
+  })), (() => {
     const homeCardDefs = [{
       key: 'portfolio',
       label: 'Portfólio Total',
@@ -14950,6 +14954,7 @@ function App() {
     };
     const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
     const titles = {
+      global: 'Contratos Ativos — Valor Global',
       portfolio: 'Contratos do Portfólio',
       faturado: `NFs Emitidas em ${statsYear}`,
       recebido: `NFs Recebidas em ${statsYear}`,
@@ -14983,7 +14988,84 @@ function App() {
       className: "w-4 h-4"
     }))), React.createElement("div", {
       className: "overflow-x-auto"
-    }, activeHomeCard === 'portfolio' && (() => {
+    }, activeHomeCard === 'global' && (() => {
+      const rows = Object.entries(contractMeta).filter(([, m]) => effectiveSituation(m) === 'ativo').sort(([, a], [, b]) => (parseFloat(b.globalValue) || 0) - (parseFloat(a.globalValue) || 0));
+      const total = rows.reduce((s, [, m]) => s + (parseFloat(m.globalValue) || 0), 0);
+      return React.createElement("table", {
+        className: "w-full text-xs"
+      }, React.createElement("thead", null, React.createElement("tr", {
+        style: {
+          background: '#f1f5f9'
+        }
+      }, ['Nº Contrato', 'Órgão', 'Objeto', 'Contratada', 'Valor Global', 'Vigência'].map(h => React.createElement("th", {
+        key: h,
+        className: "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap"
+      }, h)))), React.createElement("tbody", {
+        className: "divide-y divide-gray-50"
+      }, rows.map(([cn, m]) => {
+        const sigla = getUnitSigla(m.unit || '');
+        const isParceria = m.contractType === 'parceria';
+        return React.createElement("tr", {
+          key: cn,
+          className: "hover:bg-green-50 transition-colors cursor-pointer",
+          onClick: () => {
+            setActiveContractNumber(cn);
+            setActiveHomeCard(null);
+          }
+        }, React.createElement("td", {
+          className: "px-4 py-2.5 font-black whitespace-nowrap",
+          style: {
+            color: BLUE
+          }
+        }, cn), React.createElement("td", {
+          className: "px-4 py-2.5 whitespace-nowrap"
+        }, sigla ? React.createElement("span", {
+          className: "text-[10px] font-black px-2 py-0.5 rounded-md",
+          style: {
+            background: BLUE + '14',
+            color: BLUE
+          }
+        }, sigla) : React.createElement("span", {
+          className: "text-gray-400"
+        }, m.unit || '—')), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-700 max-w-[220px]"
+        }, React.createElement("p", {
+          className: "truncate"
+        }, m.object || '—')), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-500 max-w-[160px]"
+        }, React.createElement("p", {
+          className: "truncate"
+        }, m.contractorName || '—', isParceria && React.createElement("span", {
+          className: "ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded",
+          style: {
+            background: '#dbeafe',
+            color: '#1d4ed8'
+          }
+        }, "parceria"))), React.createElement("td", {
+          className: "px-4 py-2.5 font-bold whitespace-nowrap",
+          style: {
+            color: GREEN
+          }
+        }, fmtV(m.globalValue)), React.createElement("td", {
+          className: "px-4 py-2.5 text-gray-500 whitespace-nowrap"
+        }, fmtD(m.startDate), " \u2014 ", fmtD(m.endDate)));
+      }), rows.length > 0 && React.createElement("tr", {
+        style: {
+          background: '#f0fdf4'
+        }
+      }, React.createElement("td", {
+        colSpan: 4,
+        className: "px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500"
+      }, "Valor global total (", rows.length, " contrato", rows.length !== 1 ? 's' : '', " ativo", rows.length !== 1 ? 's' : '', ")"), React.createElement("td", {
+        className: "px-4 py-3 font-black text-sm whitespace-nowrap",
+        style: {
+          color: GREEN
+        }
+      }, fmtV(total)), React.createElement("td", null)), rows.length === 0 && React.createElement("tr", null, React.createElement("td", {
+        colSpan: 6,
+        className: "px-4 py-8 text-center text-xs text-gray-400"
+      }, "Nenhum contrato ativo cadastrado"))));
+    })(), activeHomeCard === 'portfolio' && (() => {
       const rows = Object.entries(contractMeta).filter(([, m]) => !m.startDate || m.startDate.slice(0, 4) <= statsYear).sort(([a], [b]) => a.localeCompare(b));
       return React.createElement("table", {
         className: "w-full text-xs"
