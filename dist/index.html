@@ -14820,27 +14820,20 @@ function App() {
     onClick: () => setActiveHomeCard(activeHomeCard === 'global' ? null : 'global'),
     className: "rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all duration-200 select-none",
     style: {
-      background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 55%, #f0fdfa 100%)',
-      borderColor: activeHomeCard === 'global' ? GREEN : '#bbf7d0',
-      boxShadow: activeHomeCard === 'global' ? `0 0 0 3px ${GREEN}33, 0 4px 16px rgba(5,150,105,0.18)` : undefined
+      background: '#eff6ff',
+      borderColor: activeHomeCard === 'global' ? BLUE : '#bfdbfe',
+      boxShadow: activeHomeCard === 'global' ? `0 0 0 3px ${BLUE}33, 0 4px 16px rgba(11,43,94,0.18)` : undefined
     }
   }, React.createElement("div", {
-    className: "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm",
-    style: {
-      background: GREEN
-    }
-  }, React.createElement(DollarSign, {
-    className: "w-6 h-6 text-white"
-  })), React.createElement("div", {
     className: "min-w-0 flex-1"
   }, React.createElement("p", {
-    className: "text-[10px] font-bold uppercase tracking-widest text-green-600"
+    className: "text-[10px] font-bold uppercase tracking-widest text-blue-400"
   }, "Valor Global em Contratos Ativos"), React.createElement("p", {
-    className: "text-2xl sm:text-3xl font-black leading-tight text-green-800 truncate"
+    className: "text-2xl sm:text-3xl font-black leading-tight text-blue-900 truncate"
   }, fmtCurrency(financialKPIs.activeGlobalTotal)), React.createElement("p", {
-    className: "text-[11px] text-green-600 mt-0.5"
+    className: "text-[11px] text-blue-400 mt-0.5"
   }, financialKPIs.activeContractsCount, " contrato", financialKPIs.activeContractsCount !== 1 ? 's' : '', " ativo", financialKPIs.activeContractsCount !== 1 ? 's' : '', " \xB7 soma do valor total (inclui a parte destinada a parceiros)")), React.createElement(ChevronRight, {
-    className: `w-5 h-5 text-green-500 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`
+    className: `w-5 h-5 text-blue-400 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`
   })), (() => {
     const homeCardDefs = [{
       key: 'portfolio',
