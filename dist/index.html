@@ -12660,6 +12660,9 @@ function App() {
     const billedYTD = byYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
     const paidYTD = byYear.filter(c => c.currentStep > TOTAL_STEPS).reduce((s, c) => s + parseBRL(c.billingValue), 0);
     const pendingYTD = billedYTD - paidYTD;
+    const activeMetas = Object.values(contractMeta).filter(m => effectiveSituation(m) === 'ativo');
+    const activeGlobalTotal = activeMetas.reduce((s, m) => s + (parseFloat(m.globalValue) || 0), 0);
+    const activeContractsCount = activeMetas.length;
     return {
       portfolioTotal,
       partnerRepasse,
@@ -12667,7 +12670,9 @@ function App() {
       contractCount,
       billedYTD,
       paidYTD,
-      pendingYTD
+      pendingYTD,
+      activeGlobalTotal,
+      activeContractsCount
     };
   }, [contracts, contractMeta, statsYear]);
   const pipelineData = useMemo(() => {
@@ -14811,7 +14816,28 @@ function App() {
     style: {
       color: BLUE
     }
-  }, "Ver contratos"))), (() => {
+  }, "Ver contratos"))), React.createElement("div", {
+    className: "rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4",
+    style: {
+      background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 55%, #f0fdfa 100%)',
+      borderColor: '#bbf7d0'
+    }
+  }, React.createElement("div", {
+    className: "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm",
+    style: {
+      background: GREEN
+    }
+  }, React.createElement(DollarSign, {
+    className: "w-6 h-6 text-white"
+  })), React.createElement("div", {
+    className: "min-w-0 flex-1"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-green-600"
+  }, "Valor Global em Contratos Ativos"), React.createElement("p", {
+    className: "text-2xl sm:text-3xl font-black leading-tight text-green-800 truncate"
+  }, fmtCurrency(financialKPIs.activeGlobalTotal)), React.createElement("p", {
+    className: "text-[11px] text-green-600 mt-0.5"
+  }, financialKPIs.activeContractsCount, " contrato", financialKPIs.activeContractsCount !== 1 ? 's' : '', " ativo", financialKPIs.activeContractsCount !== 1 ? 's' : '', " \xB7 soma do valor total (inclui a parte destinada a parceiros)"))), (() => {
     const homeCardDefs = [{
       key: 'portfolio',
       label: 'Portfólio Total',
