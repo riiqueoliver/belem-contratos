@@ -5245,8 +5245,10 @@ function ContractDetailView({
   currentUser,
   onUpdateNfData,
   onDelete,
+  cronogramas,
   addToast
 }) {
+  const cronoVinculado = (cronogramas || []).find(c => c.contratoVinculado === contractNumber) || null;
   function buildForm() {
     const m = contractMeta[contractNumber] || {};
     const fc = contracts.find(c => c.contractNumber === contractNumber) || {};
@@ -7203,7 +7205,59 @@ function ContractDetailView({
     }, React.createElement(Trash2, {
       className: "w-3.5 h-3.5"
     }), " Excluir esta parcela"))));
-  }))));
+  }))), cronoVinculado && (() => {
+    const aliq = cronSomaAliq(cronoVinculado.params?.tributos || CRON_TRIBUTOS_PADRAO);
+    const pctBD = cronoVinculado.params?.pctBD ?? 15;
+    const base = cronoVinculado.params?.base || 'LIQUIDO';
+    const przo = Math.max(1, Math.round(cronNum(cronoVinculado.contrato?.prazo_meses)) || 1);
+    const cal = calcCronograma({
+      itens: cronoVinculado.itens,
+      prazo: przo,
+      pctBD,
+      base,
+      aliquotaTotal: aliq
+    });
+    const nBD = cronoVinculado.contrato?.contratada_emissora_nf || 'Contratada';
+    const nPar = cronoVinculado.contrato?.parceiro_executor || 'Parceira';
+    return React.createElement("div", {
+      className: "mt-6 space-y-4"
+    }, React.createElement("div", {
+      className: "flex items-center gap-2 flex-wrap"
+    }, React.createElement("div", {
+      className: "w-8 h-8 rounded-xl flex items-center justify-center",
+      style: {
+        background: BLUE
+      }
+    }, React.createElement(Calculator, {
+      className: "w-4 h-4 text-white"
+    })), React.createElement("h2", {
+      className: "text-sm font-black",
+      style: {
+        color: BLUE
+      }
+    }, "Cronograma Financeiro"), React.createElement("span", {
+      className: "text-[10px] font-bold px-2 py-0.5 rounded-full",
+      style: {
+        background: base === 'BRUTO' ? '#fee2e2' : '#dcfce7',
+        color: base === 'BRUTO' ? '#b91c1c' : '#15803d'
+      }
+    }, "repasse sobre o ", base === 'BRUTO' ? 'BRUTO' : 'LÍQUIDO'), React.createElement("span", {
+      className: "text-[10px] text-gray-400"
+    }, "\xB7 ", cronPctTxt(pctBD), " ", nBD, " / ", cronPctTxt(100 - cronNum(pctBD)), " ", nPar)), React.createElement("div", {
+      className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+    }, React.createElement(CronogramaResumo, {
+      calc: cal,
+      pctBD: pctBD,
+      nomeBD: nBD,
+      nomeParc: nPar,
+      aliquotaTotal: aliq
+    })), React.createElement(CronogramaTabelaMensal, {
+      calc: cal,
+      prazo: przo,
+      nomeBD: nBD,
+      nomeParc: nPar
+    }));
+  })());
 }
 function DashKpiCard({
   icon,
@@ -8540,7 +8594,11 @@ const CRON_TRIBUTOS_PADRAO = [{
   aliquota: 5.00
 }];
 function cronNum(v) {
-  const n = parseFloat(v);
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  let s = String(v ?? '').trim().replace(/\s|R\$/gi, '');
+  if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 function cronPctTxt(v) {
@@ -8548,6 +8606,20 @@ function cronPctTxt(v) {
 }
 function cronSomaAliq(tributos) {
   return (tributos || []).reduce((s, t) => s + cronNum(t.aliquota), 0);
+}
+function cronBRL(v) {
+  return 'R$ ' + cronNum(v).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function cronCompact(v) {
+  const n = cronNum(v);
+  if (!n) return '—';
+  return n.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
 }
 function calcCronograma({
   itens,
@@ -8672,14 +8744,263 @@ const CRON_ALERT_STYLE = {
     label: 'INFO'
   }
 };
+function cronLinhas(nomeBD, nomeParc) {
+  return [{
+    k: 'bruto',
+    l: 'Total bruto (NF emitida)',
+    c: '#1e3a8a',
+    bg: '#eff6ff',
+    bar: '#3b82f6'
+  }, {
+    k: 'imposto',
+    l: '(−) Impostos recolhidos',
+    c: '#9a3412',
+    bg: '#FCE4D6',
+    bar: '#ea580c',
+    neg: true
+  }, {
+    k: 'liquido',
+    l: '(=) Líquido após impostos',
+    c: '#334155',
+    bg: '#f1f5f9',
+    bar: '#64748b'
+  }, {
+    k: 'repasse',
+    l: `Repasse — ${nomeParc}`,
+    c: '#92400e',
+    bg: '#FFE699',
+    bar: '#d97706'
+  }, {
+    k: 'bd',
+    l: `Retido — ${nomeBD}`,
+    c: '#166534',
+    bg: '#E2EFDA',
+    bar: '#16a34a'
+  }, {
+    k: 'acum',
+    l: 'Acumulado retido',
+    c: '#14532d',
+    bg: '#C6E0B4',
+    bar: '#15803d'
+  }];
+}
+function CronogramaTabelaMensal({
+  calc,
+  prazo,
+  nomeBD,
+  nomeParc
+}) {
+  const blocos = Math.ceil(prazo / 12);
+  const linhas = cronLinhas(nomeBD, nomeParc);
+  return React.createElement(React.Fragment, null, Array.from({
+    length: blocos
+  }, (_, b) => {
+    const ini = b * 12 + 1,
+      fim = Math.min(prazo, (b + 1) * 12);
+    const cols = calc.meses.slice(ini - 1, fim);
+    return React.createElement("div", {
+      key: b,
+      className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    }, React.createElement("div", {
+      className: "px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2"
+    }, React.createElement("h2", {
+      className: "font-bold text-sm text-gray-700"
+    }, "Cronograma f\xEDsico-financeiro", React.createElement("span", {
+      className: "ml-2 text-[11px] font-semibold text-gray-400"
+    }, "meses ", ini, " a ", fim)), React.createElement("span", {
+      className: "text-[10px] font-bold px-2 py-1 rounded-md",
+      style: {
+        background: '#f1f5f9',
+        color: '#64748b'
+      }
+    }, "valores em R$")), React.createElement("div", {
+      className: "overflow-x-auto"
+    }, React.createElement("table", {
+      className: "text-[11px] w-full",
+      style: {
+        borderCollapse: 'separate',
+        borderSpacing: 0
+      }
+    }, React.createElement("thead", null, React.createElement("tr", {
+      style: {
+        background: '#f8fafc'
+      }
+    }, React.createElement("th", {
+      className: "px-3 py-2.5 text-left text-[9px] font-black uppercase tracking-widest text-gray-400 sticky left-0 z-10",
+      style: {
+        background: '#f8fafc',
+        minWidth: 190,
+        borderBottom: '2px solid #e2e8f0'
+      }
+    }, "Linha"), cols.map(c => React.createElement("th", {
+      key: c.m,
+      className: "px-2.5 py-2.5 text-right text-[9px] font-black uppercase text-gray-400 whitespace-nowrap",
+      style: {
+        borderBottom: '2px solid #e2e8f0',
+        background: c.bruto ? '#f8fafc' : '#fdfdfe'
+      }
+    }, "M", String(c.m).padStart(2, '0'))), React.createElement("th", {
+      className: "px-3 py-2.5 text-right text-[9px] font-black uppercase tracking-widest whitespace-nowrap",
+      style: {
+        borderBottom: '2px solid #e2e8f0',
+        background: '#eef2ff',
+        color: '#3730a3'
+      }
+    }, "Total R$"))), React.createElement("tbody", null, linhas.map((ln, li) => {
+      const soma = ln.k === 'acum' ? cols.length ? cols[cols.length - 1].acum : 0 : cols.reduce((s, c) => s + c[ln.k], 0);
+      return React.createElement("tr", {
+        key: ln.k
+      }, React.createElement("td", {
+        className: "px-3 py-2 font-bold sticky left-0 z-10 whitespace-nowrap",
+        style: {
+          background: ln.bg,
+          color: ln.c,
+          borderBottom: '1px solid #f1f5f9',
+          borderLeft: `3px solid ${ln.bar}`
+        }
+      }, ln.l), cols.map(c => React.createElement("td", {
+        key: c.m,
+        className: "px-2.5 py-2 text-right whitespace-nowrap",
+        style: {
+          color: c[ln.k] ? ln.c : '#cbd5e1',
+          fontVariantNumeric: 'tabular-nums',
+          fontWeight: ln.k === 'bd' || ln.k === 'acum' ? 700 : 500,
+          background: li % 2 === 0 ? '#fff' : '#fcfdfe',
+          borderBottom: '1px solid #f1f5f9'
+        }
+      }, c[ln.k] ? (ln.neg ? '−' : '') + cronCompact(c[ln.k]) : '—')), React.createElement("td", {
+        className: "px-3 py-2 text-right font-black whitespace-nowrap",
+        style: {
+          background: ln.bg,
+          color: ln.c,
+          fontVariantNumeric: 'tabular-nums',
+          borderBottom: '1px solid #f1f5f9'
+        }
+      }, (ln.neg ? '−' : '') + cronCompact(soma)));
+    })))));
+  }));
+}
+function CronogramaResumo({
+  calc,
+  pctBD,
+  nomeBD,
+  nomeParc,
+  aliquotaTotal
+}) {
+  const linhas = [{
+    l: `Valor bruto do contrato — NF emitida por ${nomeBD}`,
+    v: calc.tot.bruto,
+    c: '#1e3a8a',
+    bg: '#eff6ff',
+    bar: '#3b82f6'
+  }, {
+    l: `(−) Impostos recolhidos (${cronPctTxt(aliquotaTotal)})`,
+    v: -calc.tot.imposto,
+    c: '#9a3412',
+    bg: '#FCE4D6',
+    bar: '#ea580c'
+  }, {
+    l: '(=) Valor líquido após impostos',
+    v: calc.tot.liquido,
+    c: '#334155',
+    bg: '#f1f5f9',
+    bar: '#64748b'
+  }, {
+    l: `Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)})`,
+    v: calc.tot.repasse,
+    c: '#92400e',
+    bg: '#FFE699',
+    bar: '#d97706'
+  }, {
+    l: `Resultado líquido — ${nomeBD}`,
+    v: calc.tot.bd,
+    c: '#166534',
+    bg: '#E2EFDA',
+    bar: '#16a34a',
+    destaque: true
+  }];
+  const maxAbs = Math.max(...linhas.map(r => Math.abs(r.v)), 1);
+  return React.createElement("div", {
+    className: "space-y-2"
+  }, linhas.map((r, i) => React.createElement("div", {
+    key: i,
+    className: "rounded-xl overflow-hidden",
+    style: {
+      background: r.bg,
+      borderLeft: `4px solid ${r.bar}`
+    }
+  }, React.createElement("div", {
+    className: "px-4 py-2.5 flex items-center justify-between gap-4"
+  }, React.createElement("span", {
+    className: `${r.destaque ? 'font-black' : 'font-semibold'} text-[13px]`,
+    style: {
+      color: r.c
+    }
+  }, r.l), React.createElement("span", {
+    className: `${r.destaque ? 'font-black text-lg' : 'font-bold text-sm'} whitespace-nowrap`,
+    style: {
+      color: r.c,
+      fontVariantNumeric: 'tabular-nums'
+    }
+  }, cronBRL(r.v))), React.createElement("div", {
+    style: {
+      height: 3,
+      background: 'rgba(0,0,0,.06)'
+    }
+  }, React.createElement("div", {
+    style: {
+      height: '100%',
+      width: `${Math.abs(r.v) / maxAbs * 100}%`,
+      background: r.bar,
+      opacity: .55
+    }
+  })))), React.createElement("div", {
+    className: "grid grid-cols-2 gap-3 pt-1"
+  }, React.createElement("div", {
+    className: "rounded-xl border p-3",
+    style: {
+      background: '#f8fafc',
+      borderColor: '#e2e8f0'
+    }
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+  }, "Margem nominal"), React.createElement("p", {
+    className: "text-2xl font-black text-gray-700"
+  }, cronPctTxt(pctBD)), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-0.5"
+  }, "percentual acordado")), React.createElement("div", {
+    className: "rounded-xl border p-3",
+    style: {
+      background: '#E2EFDA',
+      borderColor: '#a7d08c'
+    }
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-wider",
+    style: {
+      color: '#3f6212'
+    }
+  }, "Margem efetiva"), React.createElement("p", {
+    className: "text-2xl font-black",
+    style: {
+      color: '#166534'
+    }
+  }, cronPctTxt(calc.margemEfetiva)), React.createElement("p", {
+    className: "text-[10px] mt-0.5",
+    style: {
+      color: '#4d7c0f'
+    }
+  }, "ap\xF3s impostos \xB7 \u2212", cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)))));
+}
 function CronogramaPage({
   cronogramas,
+  contractMeta,
   onAdd,
   onUpdate,
   onDelete,
   apiKey,
   addToast
 }) {
+  const contratosAtivos = React.useMemo(() => Object.entries(contractMeta || {}).filter(([, m]) => effectiveSituation(m) === 'ativo').sort(([a], [b]) => a.localeCompare(b)), [contractMeta]);
   const [selId, setSelId] = React.useState(null);
   const [draft, setDraft] = React.useState(null);
   const [pdfFile, setPdfFile] = React.useState(null);
@@ -8710,6 +9031,7 @@ function CronogramaPage({
           ...t
         }))
       },
+      contratoVinculado: c.contratoVinculado || '',
       alertasIA: c.alertasIA || [],
       naoLocaliz: c.naoLocaliz || [],
       confianca: c.confianca
@@ -8921,6 +9243,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         contrato: draft.contrato,
         itens: draft.itens,
         params: draft.params,
+        contratoVinculado: draft.contratoVinculado || '',
         nome: draft.contrato.objeto || ''
       });
       addToast('Cronograma salvo com sucesso!');
@@ -9001,7 +9324,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       style: {
         background: '#f8fafc'
       }
-    }, React.createElement("tr", null, ['Objeto', 'Contratante', 'Parceira', 'Prazo', 'Valor Global', ''].map(h => React.createElement("th", {
+    }, React.createElement("tr", null, ['Objeto', 'Contratante', 'Parceira', 'Prazo', 'Valor Global', 'Contrato', ''].map(h => React.createElement("th", {
       key: h,
       className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
     }, h)))), React.createElement("tbody", null, cronogramas.map(c => React.createElement("tr", {
@@ -9025,7 +9348,17 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       style: {
         color: GREEN
       }
-    }, fmtCurrency(c.contrato?.valor_global)), React.createElement("td", {
+    }, cronBRL(c.contrato?.valor_global)), React.createElement("td", {
+      className: "px-5 py-3 whitespace-nowrap"
+    }, c.contratoVinculado ? React.createElement("span", {
+      className: "text-[10px] font-bold px-2 py-0.5 rounded-md",
+      style: {
+        background: '#dcfce7',
+        color: '#15803d'
+      }
+    }, c.contratoVinculado) : React.createElement("span", {
+      className: "text-gray-300 text-[11px]"
+    }, "\u2014")), React.createElement("td", {
       className: "px-5 py-3 text-right"
     }, React.createElement("button", {
       onClick: e => {
@@ -9069,6 +9402,35 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       background: BLUE
     }
   }, saving ? 'Salvando…' : 'Salvar alterações')), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between mb-1 flex-wrap gap-2"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700"
+  }, "Contrato vinculado"), draft.contratoVinculado && React.createElement("span", {
+    className: "text-[10px] font-bold px-2.5 py-1 rounded-full",
+    style: {
+      background: '#dcfce7',
+      color: '#15803d'
+    }
+  }, "vinculado ao contrato ", draft.contratoVinculado)), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mb-3"
+  }, "Ao vincular, este cronograma tamb\xE9m fica vis\xEDvel dentro da p\xE1gina do contrato."), React.createElement("select", {
+    value: draft.contratoVinculado,
+    onChange: e => setDraft(d => ({
+      ...d,
+      contratoVinculado: e.target.value
+    })),
+    className: icY,
+    style: yStyle
+  }, React.createElement("option", {
+    value: ""
+  }, "\u2014 N\xE3o vinculado \u2014"), contratosAtivos.map(([cn, m]) => React.createElement("option", {
+    key: cn,
+    value: cn
+  }, cn, " \xB7 ", (m.object || 'sem objeto').slice(0, 70), " \xB7 ", cronBRL(m.globalValue)))), contratosAtivos.length === 0 && React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-2"
+  }, "Nenhum contrato ativo cadastrado no sistema.")), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
   }, React.createElement("h2", {
     className: "font-bold text-sm text-gray-700 mb-4"
@@ -9114,34 +9476,50 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
   })))), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
   }, React.createElement("div", {
-    className: "flex items-center justify-between mb-1"
+    className: "flex items-center justify-between mb-1 flex-wrap gap-2"
   }, React.createElement("h2", {
     className: "font-bold text-sm text-gray-700"
-  }, "Tributos sobre a NF"), React.createElement("span", {
-    className: "text-sm font-black",
+  }, "Tributos sobre a NF"), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("span", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+  }, "Al\xEDquota total"), React.createElement("span", {
+    className: "text-base font-black px-3 py-1 rounded-lg",
     style: {
-      color: '#b45309'
+      background: '#FCE4D6',
+      color: '#9a3412'
     }
-  }, "Total: ", cronPctTxt(aliquotaTotal))), React.createElement("p", {
+  }, cronPctTxt(aliquotaTotal)))), React.createElement("p", {
     className: "text-[11px] text-gray-400 mb-4"
-  }, "Zere as linhas que n\xE3o se aplicam ao regime tribut\xE1rio da contratada."), React.createElement("div", {
+  }, "Aceita ponto ou v\xEDrgula (ex.: ", React.createElement("span", {
+    className: "font-semibold text-gray-500"
+  }, "1,8"), " ou ", React.createElement("span", {
+    className: "font-semibold text-gray-500"
+  }, "1.8"), "). Zere as linhas que n\xE3o se aplicam ao regime tribut\xE1rio da contratada."), React.createElement("div", {
     className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
   }, draft.params.tributos.map((t, i) => React.createElement("div", {
     key: i
   }, React.createElement("label", {
     className: lc
-  }, t.nome), React.createElement("input", {
-    type: "number",
-    step: "0.01",
-    min: "0",
+  }, t.nome), React.createElement("div", {
+    className: "relative"
+  }, React.createElement("input", {
+    type: "text",
+    inputMode: "decimal",
     value: t.aliquota,
-    onChange: e => setTrib(i, 'aliquota', e.target.value === '' ? '' : cronNum(e.target.value)),
-    className: icY,
+    onChange: e => setTrib(i, 'aliquota', e.target.value.replace(/[^\d.,]/g, '')),
+    className: icY + " pr-6",
     style: {
       background: '#FCE4D6',
-      borderColor: '#e8b48c'
+      borderColor: '#e8b48c',
+      color: '#9a3412'
     }
-  }))))), React.createElement("div", {
+  }), React.createElement("span", {
+    className: "absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold pointer-events-none",
+    style: {
+      color: '#c2703f'
+    }
+  }, "%")))))), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
   }, React.createElement("div", {
     className: "px-5 py-3 border-b border-gray-100"
@@ -9152,138 +9530,132 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
   }, "O m\xEAs de in\xEDcio comanda a distribui\xE7\xE3o no cronograma.")), React.createElement("div", {
     className: "overflow-x-auto"
   }, React.createElement("table", {
-    className: "w-full text-xs"
-  }, React.createElement("thead", {
+    className: "w-full text-xs",
+    style: {
+      borderCollapse: 'separate',
+      borderSpacing: 0
+    }
+  }, React.createElement("thead", null, React.createElement("tr", {
     style: {
       background: '#f8fafc'
     }
-  }, React.createElement("tr", null, ['#', 'Descrição', 'Tipo', 'Qtde', 'Valor Unitário', 'Valor Total', 'Mês Início'].map(h => React.createElement("th", {
+  }, ['#', 'Descrição', 'Tipo', 'Qtde', 'Valor unitário (R$)', 'Valor total (R$)', 'Mês início'].map((h, hi) => React.createElement("th", {
     key: h,
-    className: "px-3 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap"
-  }, h)))), React.createElement("tbody", null, draft.itens.map((it, i) => React.createElement("tr", {
-    key: i,
-    className: "border-t border-gray-50"
-  }, React.createElement("td", {
-    className: "px-3 py-2 text-gray-500"
-  }, it.item), React.createElement("td", {
-    className: "px-3 py-2 text-gray-700 max-w-[320px]"
-  }, React.createElement("p", {
-    className: "truncate",
-    title: it.descricao
-  }, it.descricao)), React.createElement("td", {
-    className: "px-3 py-2"
-  }, React.createElement("select", {
-    value: it.tipo_recorrencia,
-    onChange: e => setItem(i, 'tipo_recorrencia', e.target.value),
-    className: "border rounded-lg px-2 py-1 text-xs font-bold",
-    style: yStyle
-  }, React.createElement("option", {
-    value: "UNICO"
-  }, "\xDAnico"), React.createElement("option", {
-    value: "MENSAL"
-  }, "Mensal"))), React.createElement("td", {
-    className: "px-3 py-2 text-gray-600"
-  }, it.quantidade), React.createElement("td", {
-    className: "px-3 py-2 text-gray-600 whitespace-nowrap"
-  }, fmtCurrency(it.valor_unitario)), React.createElement("td", {
-    className: "px-3 py-2 font-bold whitespace-nowrap",
+    className: `px-3 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap ${hi >= 3 ? 'text-right' : 'text-left'}`,
     style: {
-      color: GREEN
+      borderBottom: '2px solid #e2e8f0'
     }
-  }, fmtCurrency(it.valor_total)), React.createElement("td", {
-    className: "px-3 py-2"
-  }, React.createElement("input", {
-    type: "number",
-    min: "1",
-    value: it.mes_inicio,
-    onChange: e => setItem(i, 'mes_inicio', cronNum(e.target.value)),
-    className: "w-16 border rounded-lg px-2 py-1 text-xs font-bold",
-    style: yStyle
-  })))), React.createElement("tr", {
-    className: "border-t-2 border-gray-100",
+  }, h)))), React.createElement("tbody", null, draft.itens.map((it, i) => {
+    const mensal = it.tipo_recorrencia === 'MENSAL';
+    return React.createElement("tr", {
+      key: i,
+      style: {
+        background: i % 2 ? '#fcfdfe' : '#fff'
+      }
+    }, React.createElement("td", {
+      className: "px-3 py-2.5 text-gray-400 font-bold",
+      style: {
+        borderBottom: '1px solid #f1f5f9'
+      }
+    }, it.item), React.createElement("td", {
+      className: "px-3 py-2.5 text-gray-700 max-w-[300px]",
+      style: {
+        borderBottom: '1px solid #f1f5f9'
+      }
+    }, React.createElement("p", {
+      className: "truncate font-medium",
+      title: it.descricao
+    }, it.descricao)), React.createElement("td", {
+      className: "px-3 py-2.5",
+      style: {
+        borderBottom: '1px solid #f1f5f9'
+      }
+    }, React.createElement("select", {
+      value: it.tipo_recorrencia,
+      onChange: e => setItem(i, 'tipo_recorrencia', e.target.value),
+      className: "border rounded-lg px-2 py-1 text-[11px] font-bold cursor-pointer",
+      style: mensal ? {
+        background: '#eff6ff',
+        borderColor: '#bfdbfe',
+        color: '#1d4ed8'
+      } : {
+        background: '#f5f3ff',
+        borderColor: '#ddd6fe',
+        color: '#6d28d9'
+      }
+    }, React.createElement("option", {
+      value: "UNICO"
+    }, "\xDAnico"), React.createElement("option", {
+      value: "MENSAL"
+    }, "Mensal"))), React.createElement("td", {
+      className: "px-3 py-2.5 text-right text-gray-600 font-semibold",
+      style: {
+        borderBottom: '1px solid #f1f5f9',
+        fontVariantNumeric: 'tabular-nums'
+      }
+    }, it.quantidade, mensal && React.createElement("span", {
+      className: "text-gray-300 font-normal"
+    }, " \xD7")), React.createElement("td", {
+      className: "px-3 py-2.5 text-right text-gray-600 whitespace-nowrap",
+      style: {
+        borderBottom: '1px solid #f1f5f9',
+        fontVariantNumeric: 'tabular-nums'
+      }
+    }, cronBRL(it.valor_unitario)), React.createElement("td", {
+      className: "px-3 py-2.5 text-right font-bold whitespace-nowrap",
+      style: {
+        borderBottom: '1px solid #f1f5f9',
+        color: '#166534',
+        fontVariantNumeric: 'tabular-nums'
+      }
+    }, cronBRL(it.valor_total)), React.createElement("td", {
+      className: "px-3 py-2.5 text-right",
+      style: {
+        borderBottom: '1px solid #f1f5f9'
+      }
+    }, React.createElement("input", {
+      type: "number",
+      min: "1",
+      value: it.mes_inicio,
+      onChange: e => setItem(i, 'mes_inicio', cronNum(e.target.value)),
+      className: "w-16 border rounded-lg px-2 py-1 text-xs font-bold text-right",
+      style: yStyle
+    })));
+  }), React.createElement("tr", {
     style: {
-      background: '#f8fafc'
+      background: '#eef2ff'
     }
   }, React.createElement("td", {
     colSpan: 5,
-    className: "px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500"
-  }, "Valor global do contrato (", prazo, " meses)"), React.createElement("td", {
-    className: "px-3 py-2.5 font-black text-sm whitespace-nowrap",
+    className: "px-3 py-3 text-[10px] font-black uppercase tracking-widest",
     style: {
-      color: BLUE
+      color: '#3730a3',
+      borderTop: '2px solid #c7d2fe'
     }
-  }, fmtCurrency(draft.itens.reduce((s, it) => s + cronNum(it.valor_total), 0))), React.createElement("td", null)))))), React.createElement("div", {
+  }, "Valor global do contrato \xB7 ", prazo, " meses"), React.createElement("td", {
+    className: "px-3 py-3 text-right font-black text-sm whitespace-nowrap",
+    style: {
+      color: '#3730a3',
+      borderTop: '2px solid #c7d2fe',
+      fontVariantNumeric: 'tabular-nums'
+    }
+  }, cronBRL(draft.itens.reduce((s, it) => s + cronNum(it.valor_total), 0))), React.createElement("td", {
+    style: {
+      borderTop: '2px solid #c7d2fe'
+    }
+  })))))), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
   }, React.createElement("h2", {
-    className: "font-bold text-sm text-gray-700 mb-4"
-  }, "Resumo da divis\xE3o \u2014 vis\xE3o de negocia\xE7\xE3o"), React.createElement("div", {
-    className: "space-y-1.5 text-sm"
-  }, [{
-    l: `Valor bruto do contrato (NF emitida por ${nomeBD})`,
-    v: calc.tot.bruto,
-    c: '#374151'
-  }, {
-    l: '(−) Impostos recolhidos',
-    v: -calc.tot.imposto,
-    c: '#b45309',
-    bg: '#FCE4D6'
-  }, {
-    l: '(=) Valor líquido após impostos',
-    v: calc.tot.liquido,
-    c: '#374151'
-  }, {
-    l: `Repasse à ${nomeParc}`,
-    v: calc.tot.repasse,
-    c: '#92400e',
-    bg: '#FFE699'
-  }, {
-    l: `Resultado líquido — ${nomeBD}`,
-    v: calc.tot.bd,
-    c: '#166534',
-    bg: '#E2EFDA',
-    bold: true
-  }].map((r, i) => React.createElement("div", {
-    key: i,
-    className: "flex items-center justify-between px-3 py-2 rounded-lg",
-    style: {
-      background: r.bg || 'transparent'
-    }
-  }, React.createElement("span", {
-    className: `${r.bold ? 'font-black' : 'font-medium'} text-gray-700`
-  }, r.l), React.createElement("span", {
-    className: `${r.bold ? 'font-black text-base' : 'font-bold'} whitespace-nowrap`,
-    style: {
-      color: r.c
-    }
-  }, fmtCurrency(r.v))))), React.createElement("div", {
-    className: "mt-4 grid grid-cols-2 gap-3"
-  }, React.createElement("div", {
-    className: "rounded-xl border p-3",
-    style: {
-      background: '#f8fafc',
-      borderColor: '#e5e7eb'
-    }
-  }, React.createElement("p", {
-    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-  }, "Margem nominal"), React.createElement("p", {
-    className: "text-xl font-black text-gray-700"
-  }, cronPctTxt(draft.params.pctBD))), React.createElement("div", {
-    className: "rounded-xl border p-3",
-    style: {
-      background: '#E2EFDA',
-      borderColor: '#a7d08c'
-    }
-  }, React.createElement("p", {
-    className: "text-[10px] font-bold uppercase tracking-wider",
-    style: {
-      color: '#3f6212'
-    }
-  }, "Margem efetiva (sobre o bruto)"), React.createElement("p", {
-    className: "text-xl font-black",
-    style: {
-      color: '#166534'
-    }
-  }, cronPctTxt(calc.margemEfetiva))))), (alertas.length > 0 || draft.alertasIA.length > 0) && React.createElement("div", {
+    className: "font-bold text-sm text-gray-700 mb-1"
+  }, "Resumo da divis\xE3o \u2014 vis\xE3o de negocia\xE7\xE3o"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mb-4"
+  }, "Totais do contrato inteiro (", prazo, " meses). Valores em reais."), React.createElement(CronogramaResumo, {
+    calc: calc,
+    pctBD: draft.params.pctBD,
+    nomeBD: nomeBD,
+    nomeParc: nomeParc,
+    aliquotaTotal: aliquotaTotal
+  })), (alertas.length > 0 || draft.alertasIA.length > 0) && React.createElement("div", {
     className: "space-y-2"
   }, alertas.map((a, i) => {
     const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
@@ -9312,96 +9684,11 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     className: "text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0"
   }, "IA"), React.createElement("span", {
     className: "font-medium"
-  }, a)))), Array.from({
-    length: blocos
-  }, (_, b) => {
-    const ini = b * 12 + 1,
-      fim = Math.min(prazo, (b + 1) * 12);
-    const cols = calc.meses.slice(ini - 1, fim);
-    const linhas = [{
-      l: 'TOTAL BRUTO (NF)',
-      k: 'bruto',
-      c: '#1f2937',
-      bg: '#eef2ff'
-    }, {
-      l: '(−) Impostos',
-      k: 'imposto',
-      c: '#b45309',
-      bg: '#FCE4D6',
-      neg: true
-    }, {
-      l: '(=) Líquido após imp.',
-      k: 'liquido',
-      c: '#1f2937',
-      bg: '#f8fafc'
-    }, {
-      l: `Repasse ${nomeParc}`,
-      k: 'repasse',
-      c: '#92400e',
-      bg: '#FFE699'
-    }, {
-      l: `${nomeBD} (retido)`,
-      k: 'bd',
-      c: '#166534',
-      bg: '#E2EFDA'
-    }, {
-      l: 'Acumulado',
-      k: 'acum',
-      c: '#14532d',
-      bg: '#C6E0B4'
-    }];
-    return React.createElement("div", {
-      key: b,
-      className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
-    }, React.createElement("div", {
-      className: "px-5 py-3 border-b border-gray-100"
-    }, React.createElement("h2", {
-      className: "font-bold text-sm text-gray-700"
-    }, "Cronograma f\xEDsico-financeiro \u2014 meses ", ini, " a ", fim)), React.createElement("div", {
-      className: "overflow-x-auto"
-    }, React.createElement("table", {
-      className: "text-[11px] w-full"
-    }, React.createElement("thead", {
-      style: {
-        background: '#f1f5f9'
-      }
-    }, React.createElement("tr", null, React.createElement("th", {
-      className: "px-3 py-2 text-left text-[9px] font-black uppercase tracking-widest text-gray-400 sticky left-0 z-10",
-      style: {
-        background: '#f1f5f9',
-        minWidth: 150
-      }
-    }, "Linha"), cols.map(c => React.createElement("th", {
-      key: c.m,
-      className: "px-2 py-2 text-right text-[9px] font-black uppercase text-gray-400 whitespace-nowrap"
-    }, "M", String(c.m).padStart(2, '0'))), React.createElement("th", {
-      className: "px-3 py-2 text-right text-[9px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap"
-    }, "Total"))), React.createElement("tbody", null, linhas.map(ln => {
-      const soma = ln.k === 'acum' ? cols.length ? cols[cols.length - 1].acum : 0 : cols.reduce((s, c) => s + c[ln.k], 0);
-      return React.createElement("tr", {
-        key: ln.k,
-        className: "border-t border-gray-50"
-      }, React.createElement("td", {
-        className: "px-3 py-1.5 font-bold sticky left-0 z-10 whitespace-nowrap",
-        style: {
-          background: ln.bg,
-          color: ln.c
-        }
-      }, ln.l), cols.map(c => React.createElement("td", {
-        key: c.m,
-        className: "px-2 py-1.5 text-right whitespace-nowrap",
-        style: {
-          color: ln.c,
-          opacity: c[ln.k] ? 1 : .3
-        }
-      }, c[ln.k] ? (ln.neg ? '-' : '') + fc(c[ln.k]) : '—')), React.createElement("td", {
-        className: "px-3 py-1.5 text-right font-black whitespace-nowrap",
-        style: {
-          background: ln.bg,
-          color: ln.c
-        }
-      }, (ln.neg ? '-' : '') + fc(soma)));
-    })))));
+  }, a)))), React.createElement(CronogramaTabelaMensal, {
+    calc: calc,
+    prazo: prazo,
+    nomeBD: nomeBD,
+    nomeParc: nomeParc
   }), React.createElement("p", {
     className: "text-[10px] text-gray-400 text-center pb-2"
   }, "Valores em reais. As al\xEDquotas tribut\xE1rias pr\xE9-preenchidas s\xE3o valores de REFER\xCANCIA e devem ser confirmadas pela contabilidade.")));
@@ -15707,6 +15994,7 @@ function App() {
     proposals: proposals
   }) : showCronogramaPage ? React.createElement(CronogramaPage, {
     cronogramas: cronogramas,
+    contractMeta: contractMeta,
     onAdd: handleAddCronograma,
     onUpdate: handleUpdateCronograma,
     onDelete: handleDeleteCronograma,
@@ -15765,6 +16053,7 @@ function App() {
     apiKey: apiKey,
     currentUser: currentUser,
     onUpdateNfData: handleUpdateNfData,
+    cronogramas: cronogramas,
     onDelete: cn => handleDeleteContract(cn, () => {
       setActiveContractNumber(null);
     })
