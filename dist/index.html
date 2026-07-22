@@ -7253,7 +7253,9 @@ function ContractDetailView({
       aliquotaTotal: aliq
     })), React.createElement(CronogramaTabelaMensal, {
       calc: cal,
-      prazo: przo
+      prazo: przo,
+      nomeBD: nBD,
+      nomeParc: nPar
     }));
   })());
 }
@@ -8614,7 +8616,7 @@ function cronBRL(v) {
 function cronCompact(v) {
   const n = cronNum(v);
   if (!n) return '—';
-  return n.toLocaleString('pt-BR', {
+  return 'R$ ' + n.toLocaleString('pt-BR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   });
@@ -8745,8 +8747,8 @@ const CRON_ALERT_STYLE = {
     label: 'INFO'
   }
 };
-function cronLinhas() {
-  return [{
+function cronLinhas(mostrarRepasses, nomeBD, nomeParc) {
+  const base = [{
     k: 'bruto',
     l: 'Faturamento bruto',
     sub: 'NF emitida',
@@ -8768,22 +8770,52 @@ function cronLinhas() {
     c: '#334155',
     bg: '#f1f5f9',
     bar: '#64748b'
-  }, {
+  }];
+  if (mostrarRepasses) {
+    base.push({
+      k: 'repasse',
+      l: `Repasse — ${nomeParc}`,
+      sub: 'valor transferido',
+      c: '#92400e',
+      bg: '#FFE699',
+      bar: '#d97706'
+    }, {
+      k: 'bd',
+      l: `Retido — ${nomeBD}`,
+      sub: 'resultado no mês',
+      c: '#166534',
+      bg: '#E2EFDA',
+      bar: '#16a34a'
+    }, {
+      k: 'acum',
+      l: `Acumulado — ${nomeBD}`,
+      sub: 'retido acumulado',
+      c: '#14532d',
+      bg: '#d9ecc7',
+      bar: '#15803d',
+      acumulado: true
+    });
+  }
+  base.push({
     k: 'acumBruto',
     l: 'Acumulado',
-    sub: 'total no contrato',
+    sub: 'total faturado no contrato',
     c: '#14532d',
     bg: '#C6E0B4',
     bar: '#15803d',
     acumulado: true
-  }];
+  });
+  return base;
 }
 function CronogramaTabelaMensal({
   calc,
-  prazo
+  prazo,
+  nomeBD = 'Contratada',
+  nomeParc = 'Parceira'
 }) {
+  const [mostrarRepasses, setMostrarRepasses] = React.useState(false);
   const blocos = Math.ceil(prazo / 12);
-  const linhas = cronLinhas();
+  const linhas = cronLinhas(mostrarRepasses, nomeBD, nomeParc);
   return React.createElement(React.Fragment, null, Array.from({
     length: blocos
   }, (_, b) => {
@@ -8807,6 +8839,8 @@ function CronogramaTabelaMensal({
         color: '#4338ca'
       }
     }, "Ano ", b + 1, " \xB7 meses ", ini, "\u2013", fim)), React.createElement("div", {
+      className: "flex items-center gap-4 flex-wrap"
+    }, React.createElement("div", {
       className: "flex items-center gap-2"
     }, React.createElement("span", {
       className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
@@ -8815,7 +8849,29 @@ function CronogramaTabelaMensal({
       style: {
         color: '#1e3a8a'
       }
-    }, cronBRL(brutoBloco)))), React.createElement("div", {
+    }, cronBRL(brutoBloco))), React.createElement("button", {
+      onClick: () => setMostrarRepasses(v => !v),
+      className: "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all",
+      style: mostrarRepasses ? {
+        background: '#E2EFDA',
+        borderColor: '#a7d08c',
+        color: '#166534'
+      } : {
+        background: '#fff',
+        borderColor: '#e2e8f0',
+        color: '#64748b'
+      }
+    }, React.createElement("span", {
+      className: "w-8 h-4 rounded-full relative transition-all flex-shrink-0",
+      style: {
+        background: mostrarRepasses ? '#16a34a' : '#cbd5e1'
+      }
+    }, React.createElement("span", {
+      className: "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all",
+      style: {
+        left: mostrarRepasses ? 18 : 2
+      }
+    })), "Mostrar repasses"))), React.createElement("div", {
       className: "overflow-x-auto"
     }, React.createElement("table", {
       className: "text-[11px] w-full",
@@ -9004,6 +9060,497 @@ function CronogramaResumo({
     }
   }, "ap\xF3s impostos \xB7 \u2212", cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)))));
 }
+async function exportCronogramaExcel({
+  contrato,
+  itens,
+  params,
+  calc,
+  aliquotaTotal,
+  prazo,
+  nomeBD,
+  nomeParc
+}) {
+  if (!window.ExcelJS) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+      s.onload = res;
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const ExcelJS = window.ExcelJS;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Belém Digital';
+  wb.created = new Date();
+  const AZUL = 'FF1F4E78',
+    AZUL2 = 'FF2E5A94';
+  const MOEDA = 'R$ #,##0.00',
+    PCT = '0.00%';
+  const fill = argb => ({
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: {
+      argb
+    }
+  });
+  const thin = {
+    style: 'thin',
+    color: {
+      argb: 'FFD9D9D9'
+    }
+  };
+  const boxAll = {
+    top: thin,
+    left: thin,
+    bottom: thin,
+    right: thin
+  };
+  const ws = wb.addWorksheet('Resumo');
+  ws.columns = [{
+    width: 4
+  }, {
+    width: 42
+  }, {
+    width: 16
+  }, {
+    width: 10
+  }, {
+    width: 18
+  }, {
+    width: 18
+  }, {
+    width: 14
+  }];
+  let r = 1;
+  const faixa = (txt, span = 'B:G') => {
+    const row = ws.getRow(r);
+    ws.mergeCells(`${span.split(':')[0]}${r}:${span.split(':')[1]}${r}`);
+    const c = ws.getCell(`B${r}`);
+    c.value = txt;
+    c.fill = fill(AZUL);
+    c.font = {
+      bold: true,
+      size: 11,
+      color: {
+        argb: 'FFFFFFFF'
+      }
+    };
+    c.alignment = {
+      vertical: 'middle',
+      horizontal: 'left'
+    };
+    row.height = 20;
+    r++;
+  };
+  const par = (label, valor, fmt) => {
+    ws.getCell(`B${r}`).value = label;
+    ws.getCell(`B${r}`).font = {
+      size: 10,
+      color: {
+        argb: 'FF555555'
+      }
+    };
+    const c = ws.getCell(`C${r}`);
+    c.value = valor;
+    if (fmt) c.numFmt = fmt;
+    c.font = {
+      bold: true,
+      size: 10
+    };
+    c.alignment = {
+      horizontal: 'left'
+    };
+    ws.getCell(`B${r}`).border = boxAll;
+    c.border = boxAll;
+    r++;
+  };
+  ws.mergeCells(`B${r}:G${r}`);
+  const tit = ws.getCell(`B${r}`);
+  tit.value = 'CRONOGRAMA FINANCEIRO';
+  tit.fill = fill(AZUL);
+  tit.font = {
+    bold: true,
+    size: 16,
+    color: {
+      argb: 'FFFFFFFF'
+    }
+  };
+  tit.alignment = {
+    vertical: 'middle',
+    horizontal: 'center'
+  };
+  ws.getRow(r).height = 30;
+  r += 2;
+  faixa('IDENTIFICAÇÃO');
+  par('Objeto', contrato.objeto || '—');
+  par('Contratante', contrato.contratante || '—');
+  par('Nº do contrato', contrato.numero || '—');
+  par('Contratada (emite a NF)', nomeBD);
+  par('Parceira executora', nomeParc);
+  par('Prazo (meses)', prazo);
+  par('Valor global do contrato', calc.tot.bruto, MOEDA);
+  r++;
+  faixa('PARÂMETROS DA PARCERIA');
+  par(`% de participação — ${nomeBD}`, cronNum(params.pctBD) / 100, PCT);
+  par(`% de repasse — ${nomeParc}`, calc.pctParc / 100, PCT);
+  par('Base de cálculo do repasse', params.base === 'BRUTO' ? 'BRUTO (contratada absorve o imposto)' : 'LÍQUIDO (imposto rateado)');
+  (params.tributos || []).forEach(t => par(`Tributo — ${t.nome}`, cronNum(t.aliquota) / 100, PCT));
+  par('ALÍQUOTA TOTAL DE IMPOSTOS', aliquotaTotal / 100, PCT);
+  ws.getCell(`C${r - 1}`).fill = fill('FFFCE4D6');
+  r++;
+  faixa('ITENS CONTRATADOS');
+  const hdrItens = ['Item', 'Descrição', 'Tipo', 'Qtde', 'Valor unitário', 'Valor total', 'Mês início'];
+  hdrItens.forEach((h, i) => {
+    const c = ws.getCell(r, i + 1);
+    c.value = h;
+    c.fill = fill(AZUL2);
+    c.font = {
+      bold: true,
+      size: 10,
+      color: {
+        argb: 'FFFFFFFF'
+      }
+    };
+    c.alignment = {
+      horizontal: 'center',
+      vertical: 'middle'
+    };
+    c.border = boxAll;
+  });
+  r++;
+  (itens || []).forEach(it => {
+    const vals = [it.item, it.descricao, it.tipo_recorrencia === 'MENSAL' ? 'Mensal' : 'Único', cronNum(it.quantidade), cronNum(it.valor_unitario), cronNum(it.valor_total), cronNum(it.mes_inicio)];
+    vals.forEach((v, i) => {
+      const c = ws.getCell(r, i + 1);
+      c.value = v;
+      c.border = boxAll;
+      c.font = {
+        size: 10
+      };
+      if (i === 4 || i === 5) c.numFmt = MOEDA;
+      if (i === 0 || i === 3 || i === 6) c.alignment = {
+        horizontal: 'center'
+      };
+      if (i === 5) c.font = {
+        size: 10,
+        bold: true,
+        color: {
+          argb: 'FF166534'
+        }
+      };
+    });
+    r++;
+  });
+  ws.mergeCells(`A${r}:E${r}`);
+  const totLbl = ws.getCell(`A${r}`);
+  totLbl.value = `VALOR GLOBAL DO CONTRATO (${prazo} meses)`;
+  totLbl.font = {
+    bold: true,
+    size: 10,
+    color: {
+      argb: 'FF3730A3'
+    }
+  };
+  totLbl.fill = fill('FFEEF2FF');
+  totLbl.border = boxAll;
+  totLbl.alignment = {
+    horizontal: 'right'
+  };
+  const totVal = ws.getCell(`F${r}`);
+  totVal.value = (itens || []).reduce((s, it) => s + cronNum(it.valor_total), 0);
+  totVal.numFmt = MOEDA;
+  totVal.font = {
+    bold: true,
+    size: 11,
+    color: {
+      argb: 'FF3730A3'
+    }
+  };
+  totVal.fill = fill('FFEEF2FF');
+  totVal.border = boxAll;
+  ws.getCell(`G${r}`).fill = fill('FFEEF2FF');
+  ws.getCell(`G${r}`).border = boxAll;
+  r += 2;
+  faixa('RESUMO DA DIVISÃO');
+  const resumo = [[`Valor bruto do contrato (NF emitida por ${nomeBD})`, calc.tot.bruto, null], ['(−) Impostos recolhidos', -calc.tot.imposto, 'FFFCE4D6'], ['(=) Valor líquido após impostos', calc.tot.liquido, null], [`REPASSE À ${nomeParc.toUpperCase()}`, calc.tot.repasse, 'FFFFE699'], [`RESULTADO LÍQUIDO — ${nomeBD.toUpperCase()}`, calc.tot.bd, 'FFE2EFDA']];
+  resumo.forEach(([l, v, bg]) => {
+    ws.mergeCells(`B${r}:E${r}`);
+    const cl = ws.getCell(`B${r}`);
+    cl.value = l;
+    cl.font = {
+      bold: true,
+      size: 10
+    };
+    cl.border = boxAll;
+    const cv = ws.getCell(`F${r}`);
+    cv.value = v;
+    cv.numFmt = MOEDA;
+    cv.font = {
+      bold: true,
+      size: 11
+    };
+    cv.border = boxAll;
+    if (bg) {
+      cl.fill = fill(bg);
+      cv.fill = fill(bg);
+    }
+    r++;
+  });
+  ws.mergeCells(`B${r}:E${r}`);
+  const ml = ws.getCell(`B${r}`);
+  ml.value = 'MARGEM NOMINAL (percentual acordado)';
+  ml.font = {
+    bold: true,
+    size: 10
+  };
+  ml.border = boxAll;
+  const mv = ws.getCell(`F${r}`);
+  mv.value = cronNum(params.pctBD) / 100;
+  mv.numFmt = PCT;
+  mv.font = {
+    bold: true,
+    size: 11
+  };
+  mv.border = boxAll;
+  r++;
+  ws.mergeCells(`B${r}:E${r}`);
+  const el = ws.getCell(`B${r}`);
+  el.value = 'MARGEM EFETIVA DA CONTRATADA (sobre o bruto)';
+  el.font = {
+    bold: true,
+    size: 10,
+    color: {
+      argb: 'FF166534'
+    }
+  };
+  el.fill = fill('FFC6E0B4');
+  el.border = boxAll;
+  const ev = ws.getCell(`F${r}`);
+  ev.value = calc.margemEfetiva / 100;
+  ev.numFmt = PCT;
+  ev.font = {
+    bold: true,
+    size: 12,
+    color: {
+      argb: 'FF166534'
+    }
+  };
+  ev.fill = fill('FFC6E0B4');
+  ev.border = boxAll;
+  r += 2;
+  ws.mergeCells(`B${r}:G${r}`);
+  const nota = ws.getCell(`B${r}`);
+  nota.value = 'As alíquotas tributárias pré-preenchidas são valores de REFERÊNCIA e devem ser confirmadas pela contabilidade.';
+  nota.font = {
+    italic: true,
+    size: 9,
+    color: {
+      argb: 'FF888888'
+    }
+  };
+  ws.views = [{
+    state: 'frozen',
+    ySplit: 2
+  }];
+  ws.pageSetup = {
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    paperSize: 9
+  };
+  const ws2 = wb.addWorksheet('Cronograma');
+  ws2.columns = [{
+    width: 34
+  }, ...Array.from({
+    length: 12
+  }, () => ({
+    width: 15
+  })), {
+    width: 18
+  }];
+  let r2 = 1;
+  ws2.mergeCells(`A${r2}:N${r2}`);
+  const t2 = ws2.getCell(`A${r2}`);
+  t2.value = `CRONOGRAMA FÍSICO-FINANCEIRO — ${contrato.objeto || 'Contrato'}`;
+  t2.fill = fill(AZUL);
+  t2.font = {
+    bold: true,
+    size: 14,
+    color: {
+      argb: 'FFFFFFFF'
+    }
+  };
+  t2.alignment = {
+    vertical: 'middle',
+    horizontal: 'center'
+  };
+  ws2.getRow(r2).height = 26;
+  r2 += 2;
+  const linhasX = [{
+    k: 'bruto',
+    l: 'TOTAL BRUTO (NF emitida)',
+    bg: 'FFEFF6FF',
+    cor: 'FF1E3A8A'
+  }, {
+    k: 'imposto',
+    l: '(−) Impostos recolhidos',
+    bg: 'FFFCE4D6',
+    cor: 'FF9A3412',
+    neg: true
+  }, {
+    k: 'liquido',
+    l: '(=) LÍQUIDO APÓS IMPOSTOS',
+    bg: 'FFF1F5F9',
+    cor: 'FF334155'
+  }, {
+    k: 'repasse',
+    l: `REPASSE À ${nomeParc.toUpperCase()}`,
+    bg: 'FFFFE699',
+    cor: 'FF92400E'
+  }, {
+    k: 'bd',
+    l: `${nomeBD.toUpperCase()} (retido)`,
+    bg: 'FFE2EFDA',
+    cor: 'FF166534'
+  }, {
+    k: 'acum',
+    l: `ACUMULADO — ${nomeBD.toUpperCase()}`,
+    bg: 'FFD9ECC7',
+    cor: 'FF14532D',
+    acum: true
+  }, {
+    k: 'acumBruto',
+    l: 'ACUMULADO — TOTAL FATURADO',
+    bg: 'FFC6E0B4',
+    cor: 'FF14532D',
+    acum: true
+  }];
+  const nBlocos = Math.ceil(prazo / 12);
+  for (let b = 0; b < nBlocos; b++) {
+    const ini = b * 12 + 1,
+      fim = Math.min(prazo, (b + 1) * 12);
+    const cols = calc.meses.slice(ini - 1, fim);
+    ws2.mergeCells(`A${r2}:N${r2}`);
+    const fx = ws2.getCell(`A${r2}`);
+    fx.value = `ANO ${b + 1} — MESES ${ini} A ${fim}`;
+    fx.fill = fill(AZUL2);
+    fx.font = {
+      bold: true,
+      size: 11,
+      color: {
+        argb: 'FFFFFFFF'
+      }
+    };
+    ws2.getRow(r2).height = 18;
+    r2++;
+    const hc = ws2.getCell(r2, 1);
+    hc.value = 'LINHA';
+    hc.fill = fill(AZUL2);
+    hc.font = {
+      bold: true,
+      size: 9,
+      color: {
+        argb: 'FFFFFFFF'
+      }
+    };
+    hc.border = boxAll;
+    cols.forEach((c, i) => {
+      const cc = ws2.getCell(r2, i + 2);
+      cc.value = `MÊS ${String(c.m).padStart(2, '0')}`;
+      cc.fill = fill(AZUL2);
+      cc.font = {
+        bold: true,
+        size: 9,
+        color: {
+          argb: 'FFFFFFFF'
+        }
+      };
+      cc.alignment = {
+        horizontal: 'center'
+      };
+      cc.border = boxAll;
+    });
+    const tc = ws2.getCell(r2, 14);
+    tc.value = 'TOTAL';
+    tc.fill = fill(AZUL);
+    tc.font = {
+      bold: true,
+      size: 9,
+      color: {
+        argb: 'FFFFFFFF'
+      }
+    };
+    tc.alignment = {
+      horizontal: 'center'
+    };
+    tc.border = boxAll;
+    r2++;
+    linhasX.forEach(ln => {
+      const cl = ws2.getCell(r2, 1);
+      cl.value = ln.l;
+      cl.fill = fill(ln.bg);
+      cl.font = {
+        bold: true,
+        size: 9,
+        color: {
+          argb: ln.cor
+        }
+      };
+      cl.border = boxAll;
+      cols.forEach((c, i) => {
+        const cc = ws2.getCell(r2, i + 2);
+        cc.value = ln.neg ? -c[ln.k] : c[ln.k];
+        cc.numFmt = MOEDA;
+        cc.font = {
+          size: 9,
+          color: {
+            argb: ln.cor
+          }
+        };
+        cc.border = boxAll;
+      });
+      const soma = ln.acum ? cols.length ? cols[cols.length - 1][ln.k] : 0 : cols.reduce((s, c) => s + c[ln.k], 0);
+      const ct = ws2.getCell(r2, 14);
+      ct.value = ln.neg ? -soma : soma;
+      ct.numFmt = MOEDA;
+      ct.fill = fill(ln.bg);
+      ct.font = {
+        bold: true,
+        size: 10,
+        color: {
+          argb: ln.cor
+        }
+      };
+      ct.border = boxAll;
+      r2++;
+    });
+    r2++;
+  }
+  ws2.views = [{
+    state: 'frozen',
+    xSplit: 1,
+    ySplit: 2
+  }];
+  ws2.pageSetup = {
+    orientation: 'landscape',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    paperSize: 9
+  };
+  const buf = await wb.xlsx.writeBuffer();
+  const nomeArq = `Cronograma - ${(contrato.objeto || 'contrato').replace(/[\\/:*?"<>|]/g, '').slice(0, 60)}.xlsx`;
+  const url = URL.createObjectURL(new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArq;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
 function CronogramaPage({
   cronogramas,
   contractMeta,
@@ -9019,6 +9566,7 @@ function CronogramaPage({
   const [pdfFile, setPdfFile] = React.useState(null);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
   const fileRef = React.useRef(null);
   React.useEffect(() => {
     if (!selId) {
@@ -9324,6 +9872,28 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       setSaving(false);
     }
   }
+  async function exportar() {
+    if (!draft || !calc) return;
+    setExporting(true);
+    addToast('Gerando planilha…');
+    try {
+      await exportCronogramaExcel({
+        contrato: draft.contrato,
+        itens: draft.itens,
+        params: draft.params,
+        calc,
+        aliquotaTotal,
+        prazo: Math.max(1, Math.round(cronNum(draft.contrato.prazo_meses)) || 1),
+        nomeBD: draft.contrato.contratada_emissora_nf || 'Contratada',
+        nomeParc: draft.contrato.parceiro_executor || 'Parceira'
+      });
+      addToast('Planilha exportada com sucesso!');
+    } catch (e) {
+      addToast('Erro ao exportar: ' + (e.message || 'falha'));
+    } finally {
+      setExporting(false);
+    }
+  }
   async function salvar() {
     if (!draft || !selId) return;
     setSaving(true);
@@ -9522,14 +10092,26 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     className: "text-lg font-black text-gray-800 truncate"
   }, draft.contrato.objeto || 'Cronograma Financeiro'), React.createElement("p", {
     className: "text-[11px] text-gray-400 mt-0.5 truncate"
-  }, draft.contrato.numero ? `Contrato ${draft.contrato.numero} · ` : '', draft.contrato.contratante || '—'))), React.createElement("button", {
+  }, draft.contrato.numero ? `Contrato ${draft.contrato.numero} · ` : '', draft.contrato.contratante || '—'))), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("button", {
+    onClick: exportar,
+    disabled: exporting,
+    className: "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all hover:bg-green-50 disabled:opacity-50",
+    style: {
+      borderColor: '#16a34a',
+      color: '#166534'
+    }
+  }, React.createElement(Download, {
+    className: "w-4 h-4"
+  }), exporting ? 'Gerando…' : 'Exportar Excel'), React.createElement("button", {
     onClick: salvar,
     disabled: saving,
     className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90",
     style: {
       background: BLUE
     }
-  }, saving ? 'Salvando…' : 'Salvar alterações')), React.createElement("div", {
+  }, saving ? 'Salvando…' : 'Salvar alterações'))), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
   }, React.createElement("h2", {
     className: "font-bold text-sm text-gray-700 mb-1"
@@ -9902,7 +10484,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     className: "font-medium"
   }, a)))), React.createElement(CronogramaTabelaMensal, {
     calc: calc,
-    prazo: prazo
+    prazo: prazo,
+    nomeBD: nomeBD,
+    nomeParc: nomeParc
   }), React.createElement("p", {
     className: "text-[10px] text-gray-400 text-center pb-2"
   }, "Valores em reais. As al\xEDquotas tribut\xE1rias pr\xE9-preenchidas s\xE3o valores de REFER\xCANCIA e devem ser confirmadas pela contabilidade.")));
