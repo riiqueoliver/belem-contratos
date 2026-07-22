@@ -694,6 +694,57 @@ const DollarSign = ({
 }), React.createElement("path", {
   d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
 }));
+const Calculator = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("rect", {
+  x: "4",
+  y: "2",
+  width: "16",
+  height: "20",
+  rx: "2"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "6",
+  x2: "16",
+  y2: "6"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "11",
+  x2: "8",
+  y2: "11"
+}), React.createElement("line", {
+  x1: "12",
+  y1: "11",
+  x2: "12",
+  y2: "11"
+}), React.createElement("line", {
+  x1: "16",
+  y1: "11",
+  x2: "16",
+  y2: "11"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "15",
+  x2: "8",
+  y2: "15"
+}), React.createElement("line", {
+  x1: "12",
+  y1: "15",
+  x2: "12",
+  y2: "15"
+}), React.createElement("line", {
+  x1: "16",
+  y1: "15",
+  x2: "16",
+  y2: "19"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "19",
+  x2: "12",
+  y2: "19"
+}));
 const TrendingUp = ({
   className
 }) => React.createElement(SVG, {
@@ -8472,6 +8523,863 @@ function ArcanjoGerencial({
     colorFn: i => lilacPalette[i % lilacPalette.length]
   }))));
 }
+const CRON_TRIBUTOS_PADRAO = [{
+  nome: 'IR/IRPJ',
+  aliquota: 4.80
+}, {
+  nome: 'CSLL',
+  aliquota: 1.00
+}, {
+  nome: 'PIS',
+  aliquota: 0.65
+}, {
+  nome: 'COFINS',
+  aliquota: 3.00
+}, {
+  nome: 'ISS',
+  aliquota: 5.00
+}];
+function cronNum(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+function cronPctTxt(v) {
+  return cronNum(v).toFixed(2).replace('.', ',') + '%';
+}
+function cronSomaAliq(tributos) {
+  return (tributos || []).reduce((s, t) => s + cronNum(t.aliquota), 0);
+}
+function calcCronograma({
+  itens,
+  prazo,
+  pctBD,
+  base,
+  aliquotaTotal
+}) {
+  const nPrazo = Math.max(1, Math.round(cronNum(prazo)) || 1);
+  const pctParc = 100 - cronNum(pctBD);
+  const meses = [];
+  let acum = 0;
+  for (let m = 1; m <= nPrazo; m++) {
+    let bruto = 0;
+    (itens || []).forEach(it => {
+      const ini = Math.round(cronNum(it.mes_inicio)) || 1;
+      if (it.tipo_recorrencia === 'MENSAL') {
+        const dur = Math.round(cronNum(it.meses_duracao)) || Math.round(cronNum(it.quantidade)) || 1;
+        if (m >= ini && m < ini + dur) bruto += cronNum(it.valor_unitario);
+      } else {
+        if (m === ini) bruto += cronNum(it.valor_total);
+      }
+    });
+    const imposto = bruto * (cronNum(aliquotaTotal) / 100);
+    const liquido = bruto - imposto;
+    const repasse = base === 'BRUTO' ? bruto * (pctParc / 100) : liquido * (pctParc / 100);
+    const bd = liquido - repasse;
+    acum += bd;
+    meses.push({
+      m,
+      bruto,
+      imposto,
+      liquido,
+      repasse,
+      bd,
+      acum
+    });
+  }
+  const tot = meses.reduce((a, x) => ({
+    bruto: a.bruto + x.bruto,
+    imposto: a.imposto + x.imposto,
+    liquido: a.liquido + x.liquido,
+    repasse: a.repasse + x.repasse,
+    bd: a.bd + x.bd
+  }), {
+    bruto: 0,
+    imposto: 0,
+    liquido: 0,
+    repasse: 0,
+    bd: 0
+  });
+  const margemEfetiva = tot.bruto > 0 ? tot.bd / tot.bruto * 100 : 0;
+  return {
+    meses,
+    tot,
+    margemEfetiva,
+    pctParc
+  };
+}
+function cronAlertas({
+  calc,
+  pctBD,
+  base,
+  itens,
+  valorGlobal,
+  prazo
+}) {
+  const out = [];
+  const somaItens = (itens || []).reduce((s, it) => s + cronNum(it.valor_total), 0);
+  if (base === 'BRUTO' && calc.margemEfetiva < 5) {
+    out.push({
+      nivel: 'CRITICO',
+      txt: `Com repasse sobre o valor BRUTO, a contratada retém apenas ${cronPctTxt(calc.margemEfetiva)} do contrato. Verifique se a cláusula de repasse especifica que o percentual incide sobre o valor LÍQUIDO.`
+    });
+  }
+  if (calc.margemEfetiva < 0) {
+    out.push({
+      nivel: 'CRITICO',
+      txt: 'Configuração gera prejuízo à contratada (margem efetiva negativa).'
+    });
+  }
+  if (cronNum(valorGlobal) > 0 && Math.abs(somaItens - cronNum(valorGlobal)) > 0.5) {
+    out.push({
+      nivel: 'ALERTA',
+      txt: `Divergência entre itens e valor global: soma dos itens ${fmtCurrency(somaItens)} × valor global ${fmtCurrency(valorGlobal)}.`
+    });
+  }
+  const mesesComFat = calc.meses.filter(x => x.bruto > 0).length;
+  if (mesesComFat < cronNum(prazo)) {
+    out.push({
+      nivel: 'ALERTA',
+      txt: `${mesesComFat} faturamentos em contrato de ${Math.round(cronNum(prazo))} meses — ${Math.round(cronNum(prazo)) - mesesComFat} mês(es) sem faturamento. Confirmar distribuição.`
+    });
+  }
+  out.push({
+    nivel: 'INFO',
+    txt: `Margem nominal ${cronPctTxt(pctBD)} × margem efetiva ${cronPctTxt(calc.margemEfetiva)} — a diferença de ${cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)} é o efeito do imposto que a contratada carrega.`
+  });
+  out.push({
+    nivel: 'INFO',
+    txt: 'As alíquotas tributárias pré-preenchidas são valores de REFERÊNCIA e devem ser confirmadas pela contabilidade.'
+  });
+  return out;
+}
+const CRON_ALERT_STYLE = {
+  CRITICO: {
+    bg: '#fef2f2',
+    border: '#fecaca',
+    color: '#b91c1c',
+    label: 'CRÍTICO'
+  },
+  ALERTA: {
+    bg: '#fffbeb',
+    border: '#fde68a',
+    color: '#b45309',
+    label: 'ALERTA'
+  },
+  INFO: {
+    bg: '#f0f9ff',
+    border: '#bae6fd',
+    color: '#0369a1',
+    label: 'INFO'
+  }
+};
+function CronogramaPage({
+  cronogramas,
+  onAdd,
+  onUpdate,
+  onDelete,
+  apiKey,
+  addToast
+}) {
+  const [selId, setSelId] = React.useState(null);
+  const [draft, setDraft] = React.useState(null);
+  const [pdfFile, setPdfFile] = React.useState(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const fileRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!selId) {
+      setDraft(null);
+      return;
+    }
+    const c = cronogramas.find(x => x.id === selId);
+    if (!c) {
+      setDraft(null);
+      return;
+    }
+    setDraft({
+      contrato: {
+        ...(c.contrato || {})
+      },
+      itens: (c.itens || []).map(i => ({
+        ...i
+      })),
+      params: {
+        pctBD: c.params?.pctBD ?? 15,
+        base: c.params?.base || 'LIQUIDO',
+        tributos: (c.params?.tributos || CRON_TRIBUTOS_PADRAO).map(t => ({
+          ...t
+        }))
+      },
+      alertasIA: c.alertasIA || [],
+      naoLocaliz: c.naoLocaliz || [],
+      confianca: c.confianca
+    });
+  }, [selId]);
+  const setC = (k, v) => setDraft(d => ({
+    ...d,
+    contrato: {
+      ...d.contrato,
+      [k]: v
+    }
+  }));
+  const setP = (k, v) => setDraft(d => ({
+    ...d,
+    params: {
+      ...d.params,
+      [k]: v
+    }
+  }));
+  const setItem = (idx, k, v) => setDraft(d => ({
+    ...d,
+    itens: d.itens.map((it, i) => i === idx ? {
+      ...it,
+      [k]: v
+    } : it)
+  }));
+  const setTrib = (idx, k, v) => setDraft(d => ({
+    ...d,
+    params: {
+      ...d.params,
+      tributos: d.params.tributos.map((t, i) => i === idx ? {
+        ...t,
+        [k]: v
+      } : t)
+    }
+  }));
+  const aliquotaTotal = draft ? cronSomaAliq(draft.params.tributos) : 0;
+  const calc = draft ? calcCronograma({
+    itens: draft.itens,
+    prazo: draft.contrato.prazo_meses,
+    pctBD: draft.params.pctBD,
+    base: draft.params.base,
+    aliquotaTotal
+  }) : null;
+  const alertas = draft && calc ? cronAlertas({
+    calc,
+    pctBD: draft.params.pctBD,
+    base: draft.params.base,
+    itens: draft.itens,
+    valorGlobal: draft.contrato.valor_global,
+    prazo: draft.contrato.prazo_meses
+  }) : [];
+  async function analisarPdf() {
+    if (!pdfFile || !apiKey) return;
+    setAnalyzing(true);
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(pdfFile);
+      });
+      const prompt = `Você é um analista de contratos públicos. Analise o contrato/proposta comercial anexado e EXTRAIA os dados financeiros para montar um cronograma físico-financeiro com rateio entre a empresa contratada e sua parceira executora.
+
+REGRA DE NEGÓCIO CENTRAL: A CONTRATADA emite a Nota Fiscal de 100% do valor ao órgão público, recolhe os tributos, e só então repassa um percentual à PARCEIRA. Portanto a margem real da contratada é sempre menor que o percentual nominal acordado.
+
+Retorne EXCLUSIVAMENTE um JSON válido (sem markdown, sem bloco de código) no schema abaixo. NÃO invente valores. Todo campo não localizado deve vir como null e ser listado em "campos_nao_localizados".
+
+{
+  "contrato": {
+    "numero": "string|null",
+    "objeto": "string",
+    "contratante": "string",
+    "contratada_emissora_nf": "string",
+    "parceiro_executor": "string|null",
+    "prazo_meses": number,
+    "data_inicio": "YYYY-MM-DD|null",
+    "valor_global": number
+  },
+  "itens": [
+    { "item": number, "descricao": "string", "quantidade": number, "valor_unitario": number,
+      "valor_total": number, "tipo_recorrencia": "UNICO"|"MENSAL", "mes_inicio": number, "meses_duracao": number }
+  ],
+  "tributos_identificados": [ { "tributo": "string", "aliquota": number, "fonte": "string" } ],
+  "campos_nao_localizados": ["string"],
+  "alertas": ["string"],
+  "confianca": number
+}
+
+REGRAS DE INTERPRETAÇÃO:
+1. Item com quantidade > 1 e descrição de serviço continuado (licenciamento, suporte, sustentação, manutenção, hospedagem) => tipo_recorrencia "MENSAL", meses_duracao = quantidade.
+2. Item com quantidade = 1 e natureza pontual (implantação, treinamento, setup, migração) => tipo_recorrencia "UNICO", meses_duracao = 1.
+3. Valide: soma dos valor_total deve ser igual ao valor_global. Se divergir, registre em "alertas" e NÃO ajuste os números.
+4. Valide a cobertura do prazo: se a soma dos eventos de faturamento for menor que prazo_meses, registre em "alertas" quantos meses ficam sem faturamento.
+5. Se o documento não indicar mês de início de cada item, assuma sequencial (item pontual 1 no mês 1, item pontual 2 no mês 2, recorrente na sequência) e registre a premissa em "alertas".
+6. Se não houver alíquotas tributárias explícitas no contrato, retorne "tributos_identificados": [].
+Todos os valores monetários devem ser números (sem "R$" e sem separador de milhar).`;
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-5',
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: [{
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: b64
+              }
+            }, {
+              type: 'text',
+              text: prompt
+            }]
+          }]
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      let txt = (data.content?.[0]?.text || '').trim();
+      if (txt.startsWith('```')) txt = txt.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      const ex = JSON.parse(txt);
+      const tribIA = (ex.tributos_identificados || []).map(t => ({
+        nome: t.tributo,
+        aliquota: cronNum(t.aliquota)
+      }));
+      const novo = {
+        nome: ex.contrato?.objeto || pdfFile.name.replace(/\.pdf$/i, ''),
+        contrato: {
+          numero: ex.contrato?.numero || '',
+          objeto: ex.contrato?.objeto || '',
+          contratante: ex.contrato?.contratante || '',
+          contratada_emissora_nf: ex.contrato?.contratada_emissora_nf || '',
+          parceiro_executor: ex.contrato?.parceiro_executor || '',
+          prazo_meses: cronNum(ex.contrato?.prazo_meses) || 12,
+          data_inicio: ex.contrato?.data_inicio || '',
+          valor_global: cronNum(ex.contrato?.valor_global)
+        },
+        itens: (ex.itens || []).map((it, i) => ({
+          item: cronNum(it.item) || i + 1,
+          descricao: it.descricao || '',
+          quantidade: cronNum(it.quantidade) || 1,
+          valor_unitario: cronNum(it.valor_unitario),
+          valor_total: cronNum(it.valor_total),
+          tipo_recorrencia: it.tipo_recorrencia === 'MENSAL' ? 'MENSAL' : 'UNICO',
+          mes_inicio: cronNum(it.mes_inicio) || i + 1,
+          meses_duracao: cronNum(it.meses_duracao) || (it.tipo_recorrencia === 'MENSAL' ? cronNum(it.quantidade) || 1 : 1)
+        })),
+        params: {
+          pctBD: 15,
+          base: 'LIQUIDO',
+          tributos: (tribIA.length ? tribIA : CRON_TRIBUTOS_PADRAO).map(t => ({
+            ...t
+          }))
+        },
+        alertasIA: ex.alertas || [],
+        naoLocaliz: ex.campos_nao_localizados || [],
+        confianca: cronNum(ex.confianca)
+      };
+      const id = await onAdd(novo);
+      setPdfFile(null);
+      if (fileRef.current) fileRef.current.value = '';
+      addToast('Contrato analisado e cronograma criado!');
+      if (id) setSelId(id);
+    } catch (e) {
+      addToast('Erro ao analisar contrato: ' + (e.message || 'falha'));
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+  async function salvar() {
+    if (!draft || !selId) return;
+    setSaving(true);
+    try {
+      await onUpdate(selId, {
+        contrato: draft.contrato,
+        itens: draft.itens,
+        params: draft.params,
+        nome: draft.contrato.objeto || ''
+      });
+      addToast('Cronograma salvo com sucesso!');
+    } catch (e) {
+      addToast('Erro ao salvar: ' + (e.message || 'falha'));
+    } finally {
+      setSaving(false);
+    }
+  }
+  const ic = "w-full border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all";
+  const icY = ic + " font-bold";
+  const yStyle = {
+    background: '#FFF2CC',
+    borderColor: '#e5c96a'
+  };
+  const lc = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1";
+  const fc = v => Math.round(v).toLocaleString('pt-BR');
+  if (!draft) {
+    return React.createElement("div", {
+      className: "flex-1 overflow-y-auto"
+    }, React.createElement("div", {
+      className: "max-w-6xl mx-auto px-6 py-6 space-y-5"
+    }, React.createElement("div", {
+      className: "flex items-center gap-3"
+    }, React.createElement("div", {
+      className: "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
+      style: {
+        background: BLUE
+      }
+    }, React.createElement(Calculator, {
+      className: "w-5 h-5 text-white"
+    })), React.createElement("div", null, React.createElement("h1", {
+      className: "text-xl font-black text-gray-800"
+    }, "Cronograma Financeiro"), React.createElement("p", {
+      className: "text-[11px] text-gray-400 mt-0.5"
+    }, "Rateio entre contratada e parceira, com c\xE1lculo de impostos e margem efetiva"))), React.createElement("div", {
+      className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+    }, React.createElement("h2", {
+      className: "font-bold text-sm text-gray-700 mb-1"
+    }, "Novo cronograma"), React.createElement("p", {
+      className: "text-[11px] text-gray-400 mb-4"
+    }, "Envie o contrato ou a proposta em PDF \u2014 a IA extrai os itens, valores e prazo automaticamente."), React.createElement("div", {
+      className: "flex items-end gap-3 flex-wrap"
+    }, React.createElement("div", {
+      className: "flex-1 min-w-[240px]"
+    }, React.createElement("label", {
+      className: lc
+    }, "Contrato / Proposta (PDF)"), React.createElement("input", {
+      ref: fileRef,
+      type: "file",
+      accept: "application/pdf",
+      onChange: e => setPdfFile(e.target.files?.[0] || null),
+      className: "w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+    })), React.createElement("button", {
+      onClick: analisarPdf,
+      disabled: !pdfFile || analyzing,
+      className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white whitespace-nowrap transition-all hover:opacity-90 disabled:opacity-40",
+      style: {
+        background: BLUE
+      }
+    }, analyzing ? '⏳ Analisando contrato…' : '✨ Analisar e criar cronograma'))), React.createElement("div", {
+      className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    }, React.createElement("div", {
+      className: "px-5 py-3 border-b border-gray-100 flex items-center justify-between"
+    }, React.createElement("h2", {
+      className: "font-bold text-sm text-gray-700"
+    }, "Cronogramas salvos"), React.createElement("span", {
+      className: "text-[11px] text-gray-400"
+    }, cronogramas.length, " registro", cronogramas.length !== 1 ? 's' : '')), cronogramas.length === 0 ? React.createElement("div", {
+      className: "text-center py-14 text-gray-300"
+    }, React.createElement(Calculator, {
+      className: "w-10 h-10 mx-auto mb-3 opacity-30"
+    }), React.createElement("p", {
+      className: "text-sm font-medium"
+    }, "Nenhum cronograma criado ainda")) : React.createElement("table", {
+      className: "w-full text-sm"
+    }, React.createElement("thead", {
+      style: {
+        background: '#f8fafc'
+      }
+    }, React.createElement("tr", null, ['Objeto', 'Contratante', 'Parceira', 'Prazo', 'Valor Global', ''].map(h => React.createElement("th", {
+      key: h,
+      className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+    }, h)))), React.createElement("tbody", null, cronogramas.map(c => React.createElement("tr", {
+      key: c.id,
+      className: "border-t border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer",
+      onClick: () => setSelId(c.id)
+    }, React.createElement("td", {
+      className: "px-5 py-3 font-semibold text-gray-800 max-w-[280px]"
+    }, React.createElement("p", {
+      className: "truncate"
+    }, c.contrato?.objeto || c.nome || '—')), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600 max-w-[180px]"
+    }, React.createElement("p", {
+      className: "truncate"
+    }, c.contrato?.contratante || '—')), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, c.contrato?.parceiro_executor || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
+    }, Math.round(cronNum(c.contrato?.prazo_meses)), " meses"), React.createElement("td", {
+      className: "px-5 py-3 font-bold whitespace-nowrap",
+      style: {
+        color: GREEN
+      }
+    }, fmtCurrency(c.contrato?.valor_global)), React.createElement("td", {
+      className: "px-5 py-3 text-right"
+    }, React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        if (window.confirm('Excluir este cronograma?')) onDelete(c.id);
+      },
+      className: "text-xs font-semibold text-red-500 hover:underline"
+    }, "excluir")))))))));
+  }
+  const prazo = Math.max(1, Math.round(cronNum(draft.contrato.prazo_meses)) || 1);
+  const blocos = Math.ceil(prazo / 12);
+  const nomeBD = draft.contrato.contratada_emissora_nf || 'Contratada';
+  const nomeParc = draft.contrato.parceiro_executor || 'Parceira';
+  return React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, React.createElement("div", {
+    className: "max-w-[1200px] mx-auto px-6 py-6 space-y-5"
+  }, React.createElement("div", {
+    className: "flex items-start justify-between gap-4 flex-wrap"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 min-w-0"
+  }, React.createElement("button", {
+    onClick: () => {
+      setSelId(null);
+      setDraft(null);
+    },
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+  }, React.createElement(ChevronRight, {
+    className: "w-4 h-4 rotate-180"
+  })), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h1", {
+    className: "text-lg font-black text-gray-800 truncate"
+  }, draft.contrato.objeto || 'Cronograma Financeiro'), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5 truncate"
+  }, draft.contrato.numero ? `Contrato ${draft.contrato.numero} · ` : '', draft.contrato.contratante || '—'))), React.createElement("button", {
+    onClick: salvar,
+    disabled: saving,
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90",
+    style: {
+      background: BLUE
+    }
+  }, saving ? 'Salvando…' : 'Salvar alterações')), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700 mb-4"
+  }, "Par\xE2metros da parceria"), React.createElement("div", {
+    className: "grid grid-cols-2 lg:grid-cols-4 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "% ", nomeBD), React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    min: "0",
+    max: "100",
+    value: draft.params.pctBD,
+    onChange: e => setP('pctBD', e.target.value === '' ? '' : cronNum(e.target.value)),
+    className: icY,
+    style: yStyle
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "% ", nomeParc, " (autom\xE1tico)"), React.createElement("input", {
+    readOnly: true,
+    value: cronPctTxt(calc.pctParc),
+    className: ic + " bg-gray-50 text-gray-500 border-gray-200"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Base de c\xE1lculo do repasse"), React.createElement("select", {
+    value: draft.params.base,
+    onChange: e => setP('base', e.target.value),
+    className: icY,
+    style: yStyle
+  }, React.createElement("option", {
+    value: "LIQUIDO"
+  }, "L\xCDQUIDO \u2014 imposto rateado"), React.createElement("option", {
+    value: "BRUTO"
+  }, "BRUTO \u2014 contratada absorve o imposto"))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Prazo (meses)"), React.createElement("input", {
+    type: "number",
+    min: "1",
+    value: draft.contrato.prazo_meses,
+    onChange: e => setC('prazo_meses', cronNum(e.target.value)),
+    className: icY,
+    style: yStyle
+  })))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between mb-1"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700"
+  }, "Tributos sobre a NF"), React.createElement("span", {
+    className: "text-sm font-black",
+    style: {
+      color: '#b45309'
+    }
+  }, "Total: ", cronPctTxt(aliquotaTotal))), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mb-4"
+  }, "Zere as linhas que n\xE3o se aplicam ao regime tribut\xE1rio da contratada."), React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+  }, draft.params.tributos.map((t, i) => React.createElement("div", {
+    key: i
+  }, React.createElement("label", {
+    className: lc
+  }, t.nome), React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    min: "0",
+    value: t.aliquota,
+    onChange: e => setTrib(i, 'aliquota', e.target.value === '' ? '' : cronNum(e.target.value)),
+    className: icY,
+    style: {
+      background: '#FCE4D6',
+      borderColor: '#e8b48c'
+    }
+  }))))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+  }, React.createElement("div", {
+    className: "px-5 py-3 border-b border-gray-100"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700"
+  }, "Itens contratados"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, "O m\xEAs de in\xEDcio comanda a distribui\xE7\xE3o no cronograma.")), React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-xs"
+  }, React.createElement("thead", {
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("tr", null, ['#', 'Descrição', 'Tipo', 'Qtde', 'Valor Unitário', 'Valor Total', 'Mês Início'].map(h => React.createElement("th", {
+    key: h,
+    className: "px-3 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap"
+  }, h)))), React.createElement("tbody", null, draft.itens.map((it, i) => React.createElement("tr", {
+    key: i,
+    className: "border-t border-gray-50"
+  }, React.createElement("td", {
+    className: "px-3 py-2 text-gray-500"
+  }, it.item), React.createElement("td", {
+    className: "px-3 py-2 text-gray-700 max-w-[320px]"
+  }, React.createElement("p", {
+    className: "truncate",
+    title: it.descricao
+  }, it.descricao)), React.createElement("td", {
+    className: "px-3 py-2"
+  }, React.createElement("select", {
+    value: it.tipo_recorrencia,
+    onChange: e => setItem(i, 'tipo_recorrencia', e.target.value),
+    className: "border rounded-lg px-2 py-1 text-xs font-bold",
+    style: yStyle
+  }, React.createElement("option", {
+    value: "UNICO"
+  }, "\xDAnico"), React.createElement("option", {
+    value: "MENSAL"
+  }, "Mensal"))), React.createElement("td", {
+    className: "px-3 py-2 text-gray-600"
+  }, it.quantidade), React.createElement("td", {
+    className: "px-3 py-2 text-gray-600 whitespace-nowrap"
+  }, fmtCurrency(it.valor_unitario)), React.createElement("td", {
+    className: "px-3 py-2 font-bold whitespace-nowrap",
+    style: {
+      color: GREEN
+    }
+  }, fmtCurrency(it.valor_total)), React.createElement("td", {
+    className: "px-3 py-2"
+  }, React.createElement("input", {
+    type: "number",
+    min: "1",
+    value: it.mes_inicio,
+    onChange: e => setItem(i, 'mes_inicio', cronNum(e.target.value)),
+    className: "w-16 border rounded-lg px-2 py-1 text-xs font-bold",
+    style: yStyle
+  })))), React.createElement("tr", {
+    className: "border-t-2 border-gray-100",
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("td", {
+    colSpan: 5,
+    className: "px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500"
+  }, "Valor global do contrato (", prazo, " meses)"), React.createElement("td", {
+    className: "px-3 py-2.5 font-black text-sm whitespace-nowrap",
+    style: {
+      color: BLUE
+    }
+  }, fmtCurrency(draft.itens.reduce((s, it) => s + cronNum(it.valor_total), 0))), React.createElement("td", null)))))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
+  }, React.createElement("h2", {
+    className: "font-bold text-sm text-gray-700 mb-4"
+  }, "Resumo da divis\xE3o \u2014 vis\xE3o de negocia\xE7\xE3o"), React.createElement("div", {
+    className: "space-y-1.5 text-sm"
+  }, [{
+    l: `Valor bruto do contrato (NF emitida por ${nomeBD})`,
+    v: calc.tot.bruto,
+    c: '#374151'
+  }, {
+    l: '(−) Impostos recolhidos',
+    v: -calc.tot.imposto,
+    c: '#b45309',
+    bg: '#FCE4D6'
+  }, {
+    l: '(=) Valor líquido após impostos',
+    v: calc.tot.liquido,
+    c: '#374151'
+  }, {
+    l: `Repasse à ${nomeParc}`,
+    v: calc.tot.repasse,
+    c: '#92400e',
+    bg: '#FFE699'
+  }, {
+    l: `Resultado líquido — ${nomeBD}`,
+    v: calc.tot.bd,
+    c: '#166534',
+    bg: '#E2EFDA',
+    bold: true
+  }].map((r, i) => React.createElement("div", {
+    key: i,
+    className: "flex items-center justify-between px-3 py-2 rounded-lg",
+    style: {
+      background: r.bg || 'transparent'
+    }
+  }, React.createElement("span", {
+    className: `${r.bold ? 'font-black' : 'font-medium'} text-gray-700`
+  }, r.l), React.createElement("span", {
+    className: `${r.bold ? 'font-black text-base' : 'font-bold'} whitespace-nowrap`,
+    style: {
+      color: r.c
+    }
+  }, fmtCurrency(r.v))))), React.createElement("div", {
+    className: "mt-4 grid grid-cols-2 gap-3"
+  }, React.createElement("div", {
+    className: "rounded-xl border p-3",
+    style: {
+      background: '#f8fafc',
+      borderColor: '#e5e7eb'
+    }
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+  }, "Margem nominal"), React.createElement("p", {
+    className: "text-xl font-black text-gray-700"
+  }, cronPctTxt(draft.params.pctBD))), React.createElement("div", {
+    className: "rounded-xl border p-3",
+    style: {
+      background: '#E2EFDA',
+      borderColor: '#a7d08c'
+    }
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-wider",
+    style: {
+      color: '#3f6212'
+    }
+  }, "Margem efetiva (sobre o bruto)"), React.createElement("p", {
+    className: "text-xl font-black",
+    style: {
+      color: '#166534'
+    }
+  }, cronPctTxt(calc.margemEfetiva))))), (alertas.length > 0 || draft.alertasIA.length > 0) && React.createElement("div", {
+    className: "space-y-2"
+  }, alertas.map((a, i) => {
+    const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
+    return React.createElement("div", {
+      key: i,
+      className: "rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border",
+      style: {
+        background: st.bg,
+        borderColor: st.border,
+        color: st.color
+      }
+    }, React.createElement("span", {
+      className: "text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0"
+    }, st.label), React.createElement("span", {
+      className: "font-medium"
+    }, a.txt));
+  }), draft.alertasIA.map((a, i) => React.createElement("div", {
+    key: 'ia' + i,
+    className: "rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border",
+    style: {
+      background: '#faf5ff',
+      borderColor: '#ddd6fe',
+      color: '#6d28d9'
+    }
+  }, React.createElement("span", {
+    className: "text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0"
+  }, "IA"), React.createElement("span", {
+    className: "font-medium"
+  }, a)))), Array.from({
+    length: blocos
+  }, (_, b) => {
+    const ini = b * 12 + 1,
+      fim = Math.min(prazo, (b + 1) * 12);
+    const cols = calc.meses.slice(ini - 1, fim);
+    const linhas = [{
+      l: 'TOTAL BRUTO (NF)',
+      k: 'bruto',
+      c: '#1f2937',
+      bg: '#eef2ff'
+    }, {
+      l: '(−) Impostos',
+      k: 'imposto',
+      c: '#b45309',
+      bg: '#FCE4D6',
+      neg: true
+    }, {
+      l: '(=) Líquido após imp.',
+      k: 'liquido',
+      c: '#1f2937',
+      bg: '#f8fafc'
+    }, {
+      l: `Repasse ${nomeParc}`,
+      k: 'repasse',
+      c: '#92400e',
+      bg: '#FFE699'
+    }, {
+      l: `${nomeBD} (retido)`,
+      k: 'bd',
+      c: '#166534',
+      bg: '#E2EFDA'
+    }, {
+      l: 'Acumulado',
+      k: 'acum',
+      c: '#14532d',
+      bg: '#C6E0B4'
+    }];
+    return React.createElement("div", {
+      key: b,
+      className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    }, React.createElement("div", {
+      className: "px-5 py-3 border-b border-gray-100"
+    }, React.createElement("h2", {
+      className: "font-bold text-sm text-gray-700"
+    }, "Cronograma f\xEDsico-financeiro \u2014 meses ", ini, " a ", fim)), React.createElement("div", {
+      className: "overflow-x-auto"
+    }, React.createElement("table", {
+      className: "text-[11px] w-full"
+    }, React.createElement("thead", {
+      style: {
+        background: '#f1f5f9'
+      }
+    }, React.createElement("tr", null, React.createElement("th", {
+      className: "px-3 py-2 text-left text-[9px] font-black uppercase tracking-widest text-gray-400 sticky left-0 z-10",
+      style: {
+        background: '#f1f5f9',
+        minWidth: 150
+      }
+    }, "Linha"), cols.map(c => React.createElement("th", {
+      key: c.m,
+      className: "px-2 py-2 text-right text-[9px] font-black uppercase text-gray-400 whitespace-nowrap"
+    }, "M", String(c.m).padStart(2, '0'))), React.createElement("th", {
+      className: "px-3 py-2 text-right text-[9px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap"
+    }, "Total"))), React.createElement("tbody", null, linhas.map(ln => {
+      const soma = ln.k === 'acum' ? cols.length ? cols[cols.length - 1].acum : 0 : cols.reduce((s, c) => s + c[ln.k], 0);
+      return React.createElement("tr", {
+        key: ln.k,
+        className: "border-t border-gray-50"
+      }, React.createElement("td", {
+        className: "px-3 py-1.5 font-bold sticky left-0 z-10 whitespace-nowrap",
+        style: {
+          background: ln.bg,
+          color: ln.c
+        }
+      }, ln.l), cols.map(c => React.createElement("td", {
+        key: c.m,
+        className: "px-2 py-1.5 text-right whitespace-nowrap",
+        style: {
+          color: ln.c,
+          opacity: c[ln.k] ? 1 : .3
+        }
+      }, c[ln.k] ? (ln.neg ? '-' : '') + fc(c[ln.k]) : '—')), React.createElement("td", {
+        className: "px-3 py-1.5 text-right font-black whitespace-nowrap",
+        style: {
+          background: ln.bg,
+          color: ln.c
+        }
+      }, (ln.neg ? '-' : '') + fc(soma)));
+    })))));
+  }), React.createElement("p", {
+    className: "text-[10px] text-gray-400 text-center pb-2"
+  }, "Valores em reais. As al\xEDquotas tribut\xE1rias pr\xE9-preenchidas s\xE3o valores de REFER\xCANCIA e devem ser confirmadas pela contabilidade.")));
+}
 function BIBigNum({
   label,
   value,
@@ -12371,6 +13279,8 @@ function App() {
   const [showArcanjoPage, setShowArcanjoPage] = useState(false);
   const [showArcanjoGerencial, setShowArcanjoGerencial] = useState(false);
   const [showProposalBI, setShowProposalBI] = useState(false);
+  const [showCronogramaPage, setShowCronogramaPage] = useState(false);
+  const [cronogramas, setCronogramas] = useState([]);
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
@@ -12508,10 +13418,17 @@ function App() {
         id: d.id
       })));
     });
+    const unsubCron = db.collection('cronogramas').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setCronogramas(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     return () => {
       unsubs.forEach(u => u());
       unsubGdocs();
       unsubArcanjo();
+      unsubCron();
     };
   }, []);
   const uniqueContractCount = useMemo(() => {
@@ -12839,6 +13756,7 @@ function App() {
     setShowProposalsPage(false);
     setShowGdocPage(false);
     setShowArcanjoGerencial(false);
+    setShowCronogramaPage(false);
     setShowProposalBI(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
@@ -13348,6 +14266,19 @@ function App() {
   async function handleDeleteGdoc(id) {
     await db.collection('gdocs').doc(id).delete();
   }
+  async function handleAddCronograma(data) {
+    const ref = await db.collection('cronogramas').add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return ref.id;
+  }
+  async function handleUpdateCronograma(id, data) {
+    await db.collection('cronogramas').doc(id).update(data);
+  }
+  async function handleDeleteCronograma(id) {
+    await db.collection('cronogramas').doc(id).delete();
+  }
   async function handleAddArcanjoRecord(data) {
     await db.collection('arcanjo_social').add({
       ...data,
@@ -13839,6 +14770,7 @@ function App() {
       setShowGdocPage(false);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -13857,6 +14789,7 @@ function App() {
       setShowGdocPage(false);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -13873,6 +14806,7 @@ function App() {
       setShowGdocPage(false);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -13890,9 +14824,27 @@ function App() {
       setShowGdocPage(false);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
+    }
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Calculator,
+    label: "Cronograma Financeiro",
+    active: showCronogramaPage,
+    onClick: () => {
+      setShowProposalBI(false);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowGdocPage(false);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+      setShowCronogramaPage(true);
     }
   }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Layers,
@@ -13906,6 +14858,7 @@ function App() {
       setShowContractsPage(false);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -13918,6 +14871,7 @@ function App() {
     onClick: () => {
       setShowArcanjoPage(true);
       setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
       setShowGdocPage(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -13937,6 +14891,7 @@ function App() {
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
+      setShowCronogramaPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -14019,7 +14974,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -14724,6 +15679,13 @@ function App() {
     records: arcanjoRecords
   }) : showProposalBI ? React.createElement(ProposalBIPage, {
     proposals: proposals
+  }) : showCronogramaPage ? React.createElement(CronogramaPage, {
+    cronogramas: cronogramas,
+    onAdd: handleAddCronograma,
+    onUpdate: handleUpdateCronograma,
+    onDelete: handleDeleteCronograma,
+    apiKey: apiKey,
+    addToast: addToast
   }) : showInstallmentsPage && !activeContractNumber ? React.createElement(InstallmentsPage, {
     contracts: contracts,
     contractMeta: contractMeta,
