@@ -8764,6 +8764,10 @@ function CronogramaPage({
   }) : [];
   async function analisarPdf() {
     if (!pdfFile || !apiKey) return;
+    if (pdfFile.size > 20 * 1024 * 1024) {
+      addToast('PDF muito grande (máx. 20 MB). Envie apenas as páginas com os itens e valores.');
+      return;
+    }
     setAnalyzing(true);
     try {
       const b64 = await new Promise((res, rej) => {
@@ -8817,7 +8821,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         },
         body: JSON.stringify({
           model: 'claude-sonnet-5',
-          max_tokens: 4096,
+          max_tokens: 16000,
           messages: [{
             role: 'user',
             content: [{
@@ -8834,11 +8838,33 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           }]
         })
       });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      let txt = (data.content?.[0]?.text || '').trim();
+      const raw = await resp.text();
+      if (!raw) throw new Error(`Resposta vazia da API (HTTP ${resp.status}). Verifique a chave de API e o tamanho do PDF.`);
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(`Resposta inválida da API (HTTP ${resp.status}): ${raw.slice(0, 200)}`);
+      }
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${raw.slice(0, 200)}`);
+      const bloco = (data.content || []).find(b => b.type === 'text');
+      let txt = (bloco?.text || '').trim();
+      if (!txt) throw new Error('A IA não retornou texto. Resposta: ' + JSON.stringify(data).slice(0, 250));
+      if (data.stop_reason === 'max_tokens') {
+        throw new Error('O contrato é extenso e a resposta foi truncada. Tente enviar apenas as páginas com a planilha de itens e valores.');
+      }
       if (txt.startsWith('```')) txt = txt.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-      const ex = JSON.parse(txt);
+      const ini = txt.indexOf('{'),
+        fim = txt.lastIndexOf('}');
+      if (ini === -1 || fim === -1) throw new Error('A IA não retornou JSON. Início da resposta: ' + txt.slice(0, 200));
+      txt = txt.slice(ini, fim + 1);
+      let ex;
+      try {
+        ex = JSON.parse(txt);
+      } catch (pe) {
+        throw new Error('JSON inválido retornado pela IA: ' + pe.message + ' | Trecho: ' + txt.slice(0, 200));
+      }
       const tribIA = (ex.tributos_identificados || []).map(t => ({
         nome: t.tributo,
         aliquota: cronNum(t.aliquota)
