@@ -2654,19 +2654,34 @@ function LoginScreen({
     style: {
       background: BLUE
     }
-  }, SYS.id === 'gcsp' ? React.createElement("img", {
-    src: "gcsp-lockup-white.png",
-    alt: "GCSP \u2014 Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio",
+  }, SYS.id === 'gcsp' ? React.createElement("div", {
+    className: "flex items-center justify-center gap-3.5"
+  }, React.createElement("img", {
+    src: "gcsp-symbol-white.png",
+    alt: "GCSP",
     style: {
-      height: 66,
-      width: 'auto',
-      maxWidth: 300,
-      margin: '0 auto',
-      display: 'block',
-      objectFit: 'contain'
+      height: 62,
+      width: 62,
+      objectFit: 'contain',
+      flexShrink: 0
     },
     onError: e => e.currentTarget.style.display = 'none'
-  }) : React.createElement("img", {
+  }), React.createElement("div", {
+    className: "text-left"
+  }, React.createElement("p", {
+    className: "text-white font-black tracking-tight",
+    style: {
+      fontSize: 34,
+      lineHeight: 1
+    }
+  }, "GCSP"), React.createElement("p", {
+    className: "text-white/75 font-medium mt-1",
+    style: {
+      fontSize: 11.5,
+      lineHeight: 1.35,
+      maxWidth: 180
+    }
+  }, "Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {
@@ -15200,18 +15215,35 @@ function App() {
     style: {
       background: BLUE
     }
-  }, SYS.id === 'gcsp' ? React.createElement("img", {
-    src: "gcsp-lockup-white.png",
+  }, SYS.id === 'gcsp' ? React.createElement("div", {
+    className: "flex items-center gap-4"
+  }, React.createElement("img", {
+    src: "gcsp-symbol-white.png",
     alt: "GCSP",
     style: {
-      height: 70,
-      width: 'auto',
-      maxWidth: 320,
+      height: 64,
+      width: 64,
       objectFit: 'contain',
+      flexShrink: 0,
       opacity: .95
     },
     onError: e => e.currentTarget.style.display = 'none'
-  }) : React.createElement("img", {
+  }), React.createElement("div", {
+    className: "text-left"
+  }, React.createElement("p", {
+    className: "text-white font-black tracking-tight",
+    style: {
+      fontSize: 36,
+      lineHeight: 1
+    }
+  }, "GCSP"), React.createElement("p", {
+    className: "text-white/70 font-medium mt-1",
+    style: {
+      fontSize: 12,
+      lineHeight: 1.35,
+      maxWidth: 200
+    }
+  }, "Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {

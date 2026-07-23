@@ -1524,9 +1524,17 @@
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="px-8 pt-8 pb-6 text-center" style={{background: BLUE}}>
               {SYS.id === 'gcsp' ? (
-                <img src="gcsp-lockup-white.png" alt="GCSP — Gerência de Contratos, Suprimentos e Patrimônio"
-                     style={{height:66, width:'auto', maxWidth:300, margin:'0 auto', display:'block', objectFit:'contain'}}
-                     onError={e => e.currentTarget.style.display='none'} />
+                <div className="flex items-center justify-center gap-3.5">
+                  <img src="gcsp-symbol-white.png" alt="GCSP"
+                       style={{height:62, width:62, objectFit:'contain', flexShrink:0}}
+                       onError={e => e.currentTarget.style.display='none'} />
+                  <div className="text-left">
+                    <p className="text-white font-black tracking-tight" style={{fontSize:34, lineHeight:1}}>GCSP</p>
+                    <p className="text-white/75 font-medium mt-1" style={{fontSize:11.5, lineHeight:1.35, maxWidth:180}}>
+                      Gerência de Contratos, Suprimentos e Patrimônio
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <img src="belemdigital-logo.png" alt="Belém Digital"
                      style={{height:70, width:'auto', maxWidth:300, margin:'0 auto 0', display:'block', objectFit:'contain'}}
@@ -11037,9 +11045,17 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       if (!dbReady) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{background: BLUE}}>
           {SYS.id === 'gcsp' ? (
-            <img src="gcsp-lockup-white.png" alt="GCSP"
-                 style={{height:70, width:'auto', maxWidth:320, objectFit:'contain', opacity:.95}}
-                 onError={e => e.currentTarget.style.display='none'} />
+            <div className="flex items-center gap-4">
+              <img src="gcsp-symbol-white.png" alt="GCSP"
+                   style={{height:64, width:64, objectFit:'contain', flexShrink:0, opacity:.95}}
+                   onError={e => e.currentTarget.style.display='none'} />
+              <div className="text-left">
+                <p className="text-white font-black tracking-tight" style={{fontSize:36, lineHeight:1}}>GCSP</p>
+                <p className="text-white/70 font-medium mt-1" style={{fontSize:12, lineHeight:1.35, maxWidth:200}}>
+                  Gerência de Contratos, Suprimentos e Patrimônio
+                </p>
+              </div>
+            </div>
           ) : (
             <img src="belemdigital-logo.png" alt="Belém Digital"
                  style={{height:64, width:'auto', objectFit:'contain', opacity:.9}}
