@@ -190,7 +190,51 @@ function saveToStorage(key, value) {
     console.warn('Falha ao salvar', key, e);
   }
 }
-const BLUE = '#0B2B5E';
+const SYSTEMS = {
+  main: {
+    id: 'main',
+    prefix: '',
+    blue: '#0B2B5E',
+    brand: 'Belém Digital',
+    sub: 'Gestão de Contratos',
+    title: 'Belém Digital – Gestão de Contratos',
+    sigla: 'SGC',
+    sessionKey: 'belem-session'
+  },
+  gcsp: {
+    id: 'gcsp',
+    prefix: 'gcsp_',
+    blue: '#0E7490',
+    brand: 'GCSP',
+    sub: 'Gerência de Contratos, Suprimentos e Patrimônio',
+    title: 'GCSP – Contratos, Suprimentos e Patrimônio',
+    sigla: 'GCSP',
+    sessionKey: 'gcsp-session'
+  }
+};
+const SYS_ID = typeof window !== 'undefined' && /^\/gcsp(\/|$)/i.test(window.location.pathname || '') ? 'gcsp' : 'main';
+const SYS = SYSTEMS[SYS_ID];
+const COL = name => SYS.prefix + name;
+const GCSP_MODULES = [{
+  key: 'contratos',
+  label: 'Contratos'
+}, {
+  key: 'parcelas',
+  label: 'Parcelas'
+}, {
+  key: 'propostas',
+  label: 'Propostas'
+}, {
+  key: 'bi',
+  label: 'BI Propostas'
+}, {
+  key: 'cronograma',
+  label: 'Cronograma Financeiro'
+}, {
+  key: 'gdoc',
+  label: 'GDoc'
+}];
+const BLUE = SYS.blue;
 const GREEN = '#3A8A35';
 function brDateToIso(ddmmyyyy) {
   if (!ddmmyyyy) return null;
@@ -3665,7 +3709,7 @@ function ContractSummaryCard({
 const PROPOSAL_COLS = [{
   id: 'demanda',
   label: 'Demanda',
-  color: '#0B2B5E',
+  color: BLUE,
   bg: '#eff6ff',
   border: '#bfdbfe'
 }, {
@@ -6788,7 +6832,7 @@ function ContractDetailView({
         className: "flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors",
         style: {
           borderColor: '#0B2B5E',
-          color: '#0B2B5E'
+          color: BLUE
         },
         title: "Editar dados da NF"
       }, React.createElement(Edit2, {
@@ -11232,7 +11276,9 @@ function AdminDashboard({
   apiKey,
   onAddInstallment,
   addToast,
-  initialTab
+  initialTab,
+  gcspModules,
+  onToggleGcspModule
 }) {
   const [filter, setFilter] = useState('');
   const [tab, setTab] = useState('dashboard');
@@ -12385,7 +12431,7 @@ function AdminDashboard({
       style: {
         fontSize: '34px',
         fontWeight: '800',
-        color: '#0B2B5E',
+        color: BLUE,
         letterSpacing: '-0.025em',
         lineHeight: '1',
         margin: 0
@@ -12564,7 +12610,7 @@ function AdminDashboard({
         style: {
           fontSize: '13px',
           fontWeight: '700',
-          color: '#0B2B5E'
+          color: BLUE
         }
       }, m.contractNumber), m.contractorName && React.createElement("span", {
         style: {
@@ -12596,7 +12642,7 @@ function AdminDashboard({
         style: {
           fontSize: '15px',
           fontWeight: '800',
-          color: '#0B2B5E',
+          color: BLUE,
           whiteSpace: 'nowrap',
           letterSpacing: '-0.02em'
         }
@@ -12811,7 +12857,7 @@ function AdminDashboard({
         style: {
           fontSize: '14px',
           fontWeight: '700',
-          color: '#0B2B5E'
+          color: BLUE
         }
       }, m.contractNumber), m.contractorName && React.createElement("span", {
         style: {
@@ -12843,7 +12889,7 @@ function AdminDashboard({
         style: {
           fontSize: '16px',
           fontWeight: '800',
-          color: '#0B2B5E',
+          color: BLUE,
           whiteSpace: 'nowrap',
           letterSpacing: '-0.02em'
         }
@@ -14282,7 +14328,54 @@ function AdminDashboard({
     className: "text-xs text-green-700 font-semibold"
   }, "API Claude configurada e ativa")), React.createElement("p", {
     className: "text-[11px] text-gray-400 mt-3 leading-relaxed"
-  }, "Na tela de ", React.createElement("strong", null, "Nova Parcela"), ", selecione o PDF da Nota Fiscal e clique em ", React.createElement("strong", null, "\"Analisar NF\""), " \u2014 os campos n\xFAmero, data de emiss\xE3o e valor ser\xE3o preenchidos automaticamente.")))));
+  }, "Na tela de ", React.createElement("strong", null, "Nova Parcela"), ", selecione o PDF da Nota Fiscal e clique em ", React.createElement("strong", null, "\"Analisar NF\""), " \u2014 os campos n\xFAmero, data de emiss\xE3o e valor ser\xE3o preenchidos automaticamente.")), SYS.id === 'main' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 mb-1"
+  }, React.createElement("div", {
+    className: "w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black",
+    style: {
+      background: '#0E7490'
+    }
+  }, "G"), React.createElement("div", null, React.createElement("h3", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Sistema GCSP \u2014 Contratos, Suprimentos e Patrim\xF4nio"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, "Sistema espelho em ", React.createElement("a", {
+    href: "/gcsp",
+    target: "_blank",
+    rel: "noopener",
+    className: "font-semibold underline",
+    style: {
+      color: '#0E7490'
+    }
+  }, "belem-contratos.vercel.app/gcsp"), " \u2014 dados independentes. Habilite ou desabilite os m\xF3dulos abaixo."))), React.createElement("div", {
+    className: "mt-4 divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden"
+  }, GCSP_MODULES.map(m => {
+    const enabled = gcspModules?.[m.key] !== false;
+    return React.createElement("div", {
+      key: m.key,
+      className: "flex items-center justify-between px-4 py-3"
+    }, React.createElement("div", null, React.createElement("p", {
+      className: "text-sm font-semibold text-gray-700"
+    }, m.label), React.createElement("p", {
+      className: "text-[10px] text-gray-400"
+    }, enabled ? 'Visível no GCSP' : 'Oculto no GCSP')), React.createElement("button", {
+      onClick: () => onToggleGcspModule(m.key, !enabled),
+      className: "w-11 h-6 rounded-full relative transition-all flex-shrink-0",
+      style: {
+        background: enabled ? '#0E7490' : '#cbd5e1'
+      },
+      title: enabled ? 'Desabilitar' : 'Habilitar'
+    }, React.createElement("span", {
+      className: "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all",
+      style: {
+        left: enabled ? 22 : 2
+      }
+    })));
+  })), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-3 leading-relaxed"
+  }, "As altera\xE7\xF5es refletem no sistema GCSP em tempo real. O sistema principal (este) n\xE3o \xE9 afetado \u2014 sempre exibe todos os m\xF3dulos.")))));
 }
 function NfListView({
   installments,
@@ -14481,7 +14574,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionId, setSessionId] = useState(() => {
-    const id = localStorage.getItem('belem-session');
+    const id = localStorage.getItem(SYS.sessionKey);
     return id ? parseInt(id) : null;
   });
   const [showProfile, setShowProfile] = useState(false);
@@ -14511,6 +14604,8 @@ function App() {
   const [showProposalBI, setShowProposalBI] = useState(false);
   const [showCronogramaPage, setShowCronogramaPage] = useState(false);
   const [cronogramas, setCronogramas] = useState([]);
+  const [gcspModules, setGcspModules] = useState({});
+  const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
@@ -14579,16 +14674,16 @@ function App() {
       if (['users', 'contracts', 'contractMeta', 'contractAdditives', 'contacts', 'pdfs', 'pendingUsers', 'proposals'].every(k => loaded.has(k))) setDbReady(true);
     }
     async function init() {
-      const usersSnap = await db.collection('users').get();
+      const usersSnap = await db.collection(COL('users')).get();
       if (usersSnap.empty) {
         const b = db.batch();
-        INITIAL_USERS.forEach(u => b.set(db.collection('users').doc(String(u.id)), u));
+        INITIAL_USERS.forEach(u => b.set(db.collection(COL('users')).doc(String(u.id)), u));
         await b.commit();
       }
       if (!localStorage.getItem('belem-cleanup-v1')) {
         const mockIds = ['1', '2', '3', '4', '5'];
         for (const mid of mockIds) {
-          const ref = db.collection('contacts').doc(mid);
+          const ref = db.collection(COL('contacts')).doc(mid);
           const snap = await ref.get();
           if (snap.exists) await ref.delete();
         }
@@ -14596,69 +14691,73 @@ function App() {
       }
     }
     init().catch(console.error);
-    const unsubs = [db.collection('users').onSnapshot(snap => {
+    const unsubs = [db.collection(COL('users')).onSnapshot(snap => {
       setUsers(snap.docs.map(d => d.data()));
       markLoaded('users');
-    }), db.collection('contracts').onSnapshot(snap => {
+    }), db.collection(COL('contracts')).onSnapshot(snap => {
       setContracts(snap.docs.map(d => d.data()));
       markLoaded('contracts');
-    }), db.collection('contractMeta').onSnapshot(snap => {
+    }), db.collection(COL('contractMeta')).onSnapshot(snap => {
       const m = {};
       snap.forEach(d => {
         m[d.id] = d.data();
       });
       setContractMeta(m);
       markLoaded('contractMeta');
-    }), db.collection('contractAdditives').onSnapshot(snap => {
+    }), db.collection(COL('contractAdditives')).onSnapshot(snap => {
       const a = {};
       snap.forEach(d => {
         a[d.id] = d.data().additives || [];
       });
       setContractAdditives(a);
       markLoaded('contractAdditives');
-    }), db.collection('contacts').onSnapshot(snap => {
+    }), db.collection(COL('contacts')).onSnapshot(snap => {
       setContacts(snap.docs.map(d => d.data()));
       markLoaded('contacts');
-    }), db.collection('pdfs').onSnapshot(snap => {
+    }), db.collection(COL('pdfs')).onSnapshot(snap => {
       const p = {};
       snap.forEach(d => {
         p[d.id] = d.data().data || d.data().url;
       });
       setPdfStorage(p);
       markLoaded('pdfs');
-    }), db.collection('pendingUsers').onSnapshot(snap => {
+    }), db.collection(COL('pendingUsers')).onSnapshot(snap => {
       setPendingUsers(snap.docs.map(d => d.data()));
       markLoaded('pendingUsers');
-    }), db.collection('proposals').onSnapshot(snap => {
+    }), db.collection(COL('proposals')).onSnapshot(snap => {
       setProposals(snap.docs.map(d => ({
         ...d.data(),
         id: d.id
       })));
       markLoaded('proposals');
     })];
-    const unsubGdocs = db.collection('gdocs').onSnapshot(snap => {
+    const unsubGdocs = db.collection(COL('gdocs')).onSnapshot(snap => {
       setGdocs(snap.docs.map(d => ({
         ...d.data(),
         id: d.id
       })));
     });
-    const unsubArcanjo = db.collection('arcanjo_social').orderBy('createdAt', 'desc').onSnapshot(snap => {
+    const unsubArcanjo = db.collection(COL('arcanjo_social')).orderBy('createdAt', 'desc').onSnapshot(snap => {
       setArcanjoRecords(snap.docs.map(d => ({
         ...d.data(),
         id: d.id
       })));
     });
-    const unsubCron = db.collection('cronogramas').orderBy('createdAt', 'desc').onSnapshot(snap => {
+    const unsubCron = db.collection(COL('cronogramas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
       setCronogramas(snap.docs.map(d => ({
         ...d.data(),
         id: d.id
       })));
+    });
+    const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
+      setGcspModules(doc.exists && doc.data().modules || {});
     });
     return () => {
       unsubs.forEach(u => u());
       unsubGdocs();
       unsubArcanjo();
       unsubCron();
+      unsubCfg();
     };
   }, []);
   const uniqueContractCount = useMemo(() => {
@@ -14831,19 +14930,19 @@ function App() {
     }));
   }, [contracts, statsYear]);
   function handleLogin(user) {
-    localStorage.setItem('belem-session', String(user.id));
+    localStorage.setItem(SYS.sessionKey, String(user.id));
     setCurrentUser(user);
     if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
   }
   function handleLogout() {
     const goArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
-    localStorage.removeItem('belem-session');
+    localStorage.removeItem(SYS.sessionKey);
     setCurrentUser(null);
     if (goArcanjo) window.location.replace('/moduloarcanjo');
   }
   useEffect(() => {
     const isArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
-    document.title = isArcanjo ? 'Sistema Arcanjo - Neotrix' : 'Belém Digital – Gestão de Contratos';
+    document.title = isArcanjo ? 'Sistema Arcanjo - Neotrix' : SYS.title;
   }, [showArcanjoPage, showArcanjoGerencial, currentUser]);
   useEffect(() => {
     if (!currentUser) return;
@@ -14855,7 +14954,7 @@ function App() {
       clearTimeout(warnTimer);
       warnTimer = setTimeout(() => addToast('⚠ Sua sessão expira em 1 minuto por inatividade.'), WARN_MS);
       logoutTimer = setTimeout(() => {
-        localStorage.removeItem('belem-session');
+        localStorage.removeItem(SYS.sessionKey);
         setCurrentUser(null);
         addToast('🔒 Sessão encerrada por inatividade. Faça login novamente.');
       }, TIMEOUT_MS);
@@ -14872,7 +14971,7 @@ function App() {
     };
   }, [currentUser]);
   async function handleUpdateUser(updated) {
-    await db.collection('users').doc(String(updated.id)).set(updated);
+    await db.collection(COL('users')).doc(String(updated.id)).set(updated);
     setCurrentUser(updated);
   }
   async function handleRegister(data) {
@@ -14882,7 +14981,7 @@ function App() {
     const dupPending = pendingUsers.find(u => u.username === username || u.email === data.email);
     if (dupPending) throw new Error('Já existe uma solicitação pendente com esse login ou e-mail.');
     const id = Date.now();
-    await db.collection('pendingUsers').doc(String(id)).set({
+    await db.collection(COL('pendingUsers')).doc(String(id)).set({
       id,
       ...data,
       createdAt: new Date().toISOString()
@@ -14890,7 +14989,7 @@ function App() {
   }
   async function handleApproveUser(pending) {
     const newId = Date.now();
-    await db.collection('users').doc(String(newId)).set({
+    await db.collection(COL('users')).doc(String(newId)).set({
       id: newId,
       username: pending.username,
       password: pending.password,
@@ -14900,11 +14999,11 @@ function App() {
       email: pending.email || '',
       role: 'user'
     });
-    await db.collection('pendingUsers').doc(String(pending.id)).delete();
+    await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
     addToast(`✅ Usuário ${pending.name} aprovado com sucesso.`);
   }
   async function handleRejectUser(pending) {
-    await db.collection('pendingUsers').doc(String(pending.id)).delete();
+    await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
     addToast(`🗑️ Solicitação de ${pending.name} recusada e removida.`);
   }
   async function handleToggleAdmin(user) {
@@ -14913,26 +15012,26 @@ function App() {
       ...user,
       role: newRole
     };
-    await db.collection('users').doc(String(user.id)).set(updated);
+    await db.collection(COL('users')).doc(String(user.id)).set(updated);
     if (currentUser.id === user.id) setCurrentUser(updated);
     addToast(`✅ ${user.name} agora é ${newRole === 'admin' ? 'Administrador' : 'Usuário comum'}.`);
   }
   async function handleDeleteUser(user) {
-    await db.collection('users').doc(String(user.id)).delete();
+    await db.collection(COL('users')).doc(String(user.id)).delete();
     addToast(`🗑️ Usuário ${user.name} excluído.`);
   }
   async function handleDeleteContract(contractNumber, afterDelete) {
     if (!confirm(`Excluir o contrato ${contractNumber} e todas as suas parcelas? Esta ação não pode ser desfeita.`)) return;
     const batch = db.batch();
-    contracts.filter(c => c.contractNumber === contractNumber).forEach(c => batch.delete(db.collection('contracts').doc(String(c.id))));
-    batch.delete(db.collection('contractMeta').doc(contractNumber));
-    batch.delete(db.collection('contractAdditives').doc(contractNumber));
+    contracts.filter(c => c.contractNumber === contractNumber).forEach(c => batch.delete(db.collection(COL('contracts')).doc(String(c.id))));
+    batch.delete(db.collection(COL('contractMeta')).doc(contractNumber));
+    batch.delete(db.collection(COL('contractAdditives')).doc(contractNumber));
     await batch.commit();
     const pdfKeys = contracts.filter(c => c.contractNumber === contractNumber).map(c => String(c.id));
     const taKeys = (contractAdditives[contractNumber] || []).map(a => 'ta_' + a.id);
     const pdfBatch = db.batch();
     [...pdfKeys, ...taKeys].forEach(k => {
-      pdfBatch.delete(db.collection('pdfs').doc(k));
+      pdfBatch.delete(db.collection(COL('pdfs')).doc(k));
     });
     await pdfBatch.commit();
     addToast(`🗑️ Contrato ${contractNumber} excluído.`);
@@ -14947,13 +15046,13 @@ function App() {
     setShowContractsList(false);
   }
   async function handleSaveContractEdit(contractNumber, meta, processNumber) {
-    await db.collection('contractMeta').doc(contractNumber).set({
+    await db.collection(COL('contractMeta')).doc(contractNumber).set({
       ...(contractMeta[contractNumber] || {}),
       ...meta
     });
     if (processNumber !== undefined) {
       const batch = db.batch();
-      contracts.filter(c => c.contractNumber === contractNumber).forEach(c => batch.update(db.collection('contracts').doc(String(c.id)), {
+      contracts.filter(c => c.contractNumber === contractNumber).forEach(c => batch.update(db.collection(COL('contracts')).doc(String(c.id)), {
         processNumber
       }));
       await batch.commit();
@@ -14996,7 +15095,7 @@ function App() {
   }
   async function handleSavePdf(installmentId, base64Data) {
     try {
-      await db.collection('pdfs').doc(String(installmentId)).set({
+      await db.collection(COL('pdfs')).doc(String(installmentId)).set({
         data: base64Data
       });
       addToast('📎 PDF da NF enviado com sucesso.');
@@ -15006,12 +15105,12 @@ function App() {
     }
   }
   async function handleDeletePdf(installmentId) {
-    await db.collection('pdfs').doc(String(installmentId)).delete();
+    await db.collection(COL('pdfs')).doc(String(installmentId)).delete();
     addToast('🗑️ PDF da NF removido.');
   }
   async function handleSaveContractPdf(contractNumber, base64Data) {
     try {
-      await db.collection('pdfs').doc('contract_' + contractNumber).set({
+      await db.collection(COL('pdfs')).doc('contract_' + contractNumber).set({
         data: base64Data
       });
       addToast('📄 PDF do contrato armazenado na nuvem.');
@@ -15021,7 +15120,7 @@ function App() {
     }
   }
   async function handleDeleteContractPdf(contractNumber) {
-    await db.collection('pdfs').doc('contract_' + contractNumber).delete();
+    await db.collection(COL('pdfs')).doc('contract_' + contractNumber).delete();
     addToast('🗑️ PDF do contrato removido.');
   }
   async function handleAddInstallment(contractNumber, data, pdfBase64) {
@@ -15047,8 +15146,8 @@ function App() {
       completedSteps: pdfBase64 ? [1] : []
     };
     const batch = db.batch();
-    batch.set(db.collection('contracts').doc(String(newId)), newRec);
-    existing.forEach(c => batch.update(db.collection('contracts').doc(String(c.id)), {
+    batch.set(db.collection(COL('contracts')).doc(String(newId)), newRec);
+    existing.forEach(c => batch.update(db.collection(COL('contracts')).doc(String(c.id)), {
       totalInstallments: newTotal
     }));
     await batch.commit();
@@ -15061,14 +15160,14 @@ function App() {
     const remaining = contracts.filter(c => c.contractNumber === contractNumber && !idSet.has(String(c.id))).sort((a, b) => a.installment - b.installment);
     const newTotal = remaining.length;
     const batch = db.batch();
-    idSet.forEach(k => batch.delete(db.collection('contracts').doc(k)));
-    remaining.forEach((c, i) => batch.update(db.collection('contracts').doc(String(c.id)), {
+    idSet.forEach(k => batch.delete(db.collection(COL('contracts')).doc(k)));
+    remaining.forEach((c, i) => batch.update(db.collection(COL('contracts')).doc(String(c.id)), {
       installment: i + 1,
       totalInstallments: newTotal
     }));
     await batch.commit();
     for (const k of idSet) {
-      await db.collection('pdfs').doc(k).delete().catch(() => {});
+      await db.collection(COL('pdfs')).doc(k).delete().catch(() => {});
     }
     const qty = ids.length;
     addToast(`🗑️ ${qty === 1 ? '1 parcela excluída.' : `${qty} parcelas excluídas.`}`);
@@ -15247,7 +15346,7 @@ function App() {
           return false;
         }
         const key = 'ta_' + additive.id;
-        await db.collection('pdfs').doc(key).set({
+        await db.collection(COL('pdfs')).doc(key).set({
           data: additive.pdfBase64
         });
         final = {
@@ -15256,17 +15355,17 @@ function App() {
           pdfStored: true
         };
       } else if (additive.pdfStored === false) {
-        await db.collection('pdfs').doc('ta_' + additive.id).delete().catch(() => {});
+        await db.collection(COL('pdfs')).doc('ta_' + additive.id).delete().catch(() => {});
       }
       const existing = contractAdditives[contractNumber] || [];
       const idx = existing.findIndex(a => a.id === final.id);
       const updated = idx >= 0 ? existing.map(a => a.id === final.id ? final : a) : [...existing, final];
-      await db.collection('contractAdditives').doc(contractNumber).set({
+      await db.collection(COL('contractAdditives')).doc(contractNumber).set({
         additives: updated
       });
       if (additive.newEndDate) {
         const existingMeta = contractMeta[contractNumber] || {};
-        await db.collection('contractMeta').doc(contractNumber).set({
+        await db.collection(COL('contractMeta')).doc(contractNumber).set({
           ...existingMeta,
           endDate: additive.newEndDate
         });
@@ -15284,17 +15383,17 @@ function App() {
     }
   }
   async function handleDeleteAdditive(contractNumber, additiveId) {
-    await db.collection('pdfs').doc('ta_' + additiveId).delete().catch(() => {});
+    await db.collection(COL('pdfs')).doc('ta_' + additiveId).delete().catch(() => {});
     const updated = (contractAdditives[contractNumber] || []).filter(a => a.id !== additiveId);
-    await db.collection('contractAdditives').doc(contractNumber).set({
+    await db.collection(COL('contractAdditives')).doc(contractNumber).set({
       additives: updated
     });
   }
   async function handleSaveContact(contact) {
-    await db.collection('contacts').doc(String(contact.id)).set(contact);
+    await db.collection(COL('contacts')).doc(String(contact.id)).set(contact);
   }
   async function handleDeleteContact(id) {
-    await db.collection('contacts').doc(String(id)).delete();
+    await db.collection(COL('contacts')).doc(String(id)).delete();
   }
   async function resetAllData() {
     if (!confirm('Tem certeza? Isso vai apagar TODOS os contratos e parcelas do banco de dados compartilhado.')) return;
@@ -15333,7 +15432,7 @@ function App() {
     const safeCn = cn.replace(/\//g, '-');
     setSavingContract(true);
     try {
-      await db.collection('contractMeta').doc(safeCn).set({
+      await db.collection(COL('contractMeta')).doc(safeCn).set({
         object: form.object,
         modality: form.modality,
         contractorName: form.contractorName,
@@ -15368,7 +15467,7 @@ function App() {
               reader.onerror = rej;
               reader.readAsDataURL(pdfFile);
             });
-            await db.collection('pdfs').doc('contract_' + safeCn).set({
+            await db.collection(COL('pdfs')).doc('contract_' + safeCn).set({
               data: base64
             });
             addToast(`📄 PDF do contrato armazenado na nuvem.`);
@@ -15387,7 +15486,7 @@ function App() {
               r.onerror = rej;
               r.readAsDataURL(partnerPdfFile);
             });
-            await db.collection('pdfs').doc('parceria_' + safeCn).set({
+            await db.collection(COL('pdfs')).doc('parceria_' + safeCn).set({
               data: b64p
             });
             addToast('📄 PDF do contrato de parceria armazenado.');
@@ -15407,7 +15506,7 @@ function App() {
               r.onerror = rej;
               r.readAsDataURL(anexoPdfFile);
             });
-            await db.collection('pdfs').doc('anexo1_' + safeCn).set({
+            await db.collection(COL('pdfs')).doc('anexo1_' + safeCn).set({
               data: b64a
             });
             addToast('📋 Anexo I armazenado na nuvem.');
@@ -15465,61 +15564,70 @@ function App() {
       currentStep: c.currentStep + 1
     };
     if (paymentDate) update.paymentDate = paymentDate;
-    await db.collection('contracts').doc(String(id)).update(update);
+    await db.collection(COL('contracts')).doc(String(id)).update(update);
     if (paymentDate) addToast(`✅ Pagamento de ${c.contractNumber} consolidado em ${new Date(paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')}`);
   }
   async function handleUpdateNfNumber(id, value) {
-    await db.collection('contracts').doc(String(id)).update({
+    await db.collection(COL('contracts')).doc(String(id)).update({
       nfNumber: (value || '').trim()
     });
   }
   async function handleUpdateNfData(id, data) {
-    await db.collection('contracts').doc(String(id)).update(data);
+    await db.collection(COL('contracts')).doc(String(id)).update(data);
     addToast('✅ Dados da NF atualizados com sucesso.');
   }
   async function handleAddProposal(data) {
-    const docRef = db.collection('proposals').doc();
+    const docRef = db.collection(COL('proposals')).doc();
     await docRef.set({
       ...data,
       id: docRef.id
     });
   }
   async function handleUpdateProposal(id, data) {
-    await db.collection('proposals').doc(id).update(data);
+    await db.collection(COL('proposals')).doc(id).update(data);
   }
   async function handleDeleteProposal(id) {
-    await db.collection('proposals').doc(id).delete();
+    await db.collection(COL('proposals')).doc(id).delete();
   }
   async function handleAddGdoc(data) {
-    await db.collection('gdocs').add(data);
+    await db.collection(COL('gdocs')).add(data);
   }
   async function handleDeleteGdoc(id) {
-    await db.collection('gdocs').doc(id).delete();
+    await db.collection(COL('gdocs')).doc(id).delete();
+  }
+  async function handleToggleGcspModule(key, enabled) {
+    await db.collection('system_config').doc('gcsp').set({
+      modules: {
+        [key]: enabled
+      }
+    }, {
+      merge: true
+    });
   }
   async function handleAddCronograma(data) {
-    const ref = await db.collection('cronogramas').add({
+    const ref = await db.collection(COL('cronogramas')).add({
       ...data,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     return ref.id;
   }
   async function handleUpdateCronograma(id, data) {
-    await db.collection('cronogramas').doc(id).update(data);
+    await db.collection(COL('cronogramas')).doc(id).update(data);
   }
   async function handleDeleteCronograma(id) {
-    await db.collection('cronogramas').doc(id).delete();
+    await db.collection(COL('cronogramas')).doc(id).delete();
   }
   async function handleAddArcanjoRecord(data) {
-    await db.collection('arcanjo_social').add({
+    await db.collection(COL('arcanjo_social')).add({
       ...data,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }
   async function handleUpdateArcanjoRecord(id, data) {
-    await db.collection('arcanjo_social').doc(id).update(data);
+    await db.collection(COL('arcanjo_social')).doc(id).update(data);
   }
   async function handleDeleteArcanjoRecord(id) {
-    await db.collection('arcanjo_social').doc(id).delete();
+    await db.collection(COL('arcanjo_social')).doc(id).delete();
   }
   async function handleExportArcanjo() {
     addToast('Gerando planilha…');
@@ -15736,7 +15844,7 @@ function App() {
     if (!c || c.completedSteps.length <= 1) return;
     const newCompleted = [...c.completedSteps];
     const last = newCompleted.pop();
-    await db.collection('contracts').doc(String(id)).update({
+    await db.collection(COL('contracts')).doc(String(id)).update({
       completedSteps: newCompleted,
       currentStep: last
     });
@@ -15863,6 +15971,8 @@ function App() {
     apiKey: apiKey,
     onAddInstallment: handleAddInstallment,
     initialTab: adminInitialTab,
+    gcspModules: gcspModules,
+    onToggleGcspModule: handleToggleGcspModule,
     addToast: addToast
   }), React.createElement("aside", {
     className: "fixed top-0 left-0 h-screen w-16 flex flex-col items-center py-3 z-50 overflow-visible",
@@ -15893,7 +16003,9 @@ function App() {
       background: '#fff',
       padding: 1
     }
-  }) : React.createElement(React.Fragment, null, React.createElement("img", {
+  }) : React.createElement(React.Fragment, null, SYS.id === 'gcsp' ? React.createElement("span", {
+    className: "text-white font-black text-sm"
+  }, "GCSP") : React.createElement(React.Fragment, null, React.createElement("img", {
     src: "simbologo2.PNG",
     alt: "SGC",
     style: {
@@ -15911,12 +16023,12 @@ function App() {
       display: 'none'
     },
     className: "text-white font-black text-xs"
-  }, "SGC"))), React.createElement("span", {
+  }, "SGC")))), React.createElement("span", {
     className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap\r opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
     style: {
       background: '#1e293b'
     }
-  }, ARCANJO_ONLY.has(currentUser.username) ? 'Instituto Arcanjo\'s' : 'Belém Digital — SGC')), React.createElement("div", {
+  }, ARCANJO_ONLY.has(currentUser.username) ? 'Instituto Arcanjo\'s' : `${SYS.brand} — ${SYS.sub}`)), React.createElement("div", {
     className: "w-8 h-px mb-3",
     style: {
       background: 'rgba(255,255,255,0.15)'
@@ -15990,7 +16102,7 @@ function App() {
     className: "text-xs font-bold text-gray-800"
   }, "Nova Parcela"), React.createElement("p", {
     className: "text-[10px] text-gray-400"
-  }, "Lan\xE7ar nota fiscal"))))), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }, "Lan\xE7ar nota fiscal"))))), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('contratos') && React.createElement(SidebarBtn, {
     icon: Clipboard,
     label: `Contratos (${uniqueContractCount})`,
     onClick: () => {
@@ -16008,7 +16120,7 @@ function App() {
     },
     badge: hasAlert_sb ? totalHomeAlerts_sb : 0,
     active: showContractsPage && !activeContractNumber
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('parcelas') && React.createElement(SidebarBtn, {
     icon: ParcelasIcon,
     label: "Parcelas",
     active: showInstallmentsPage,
@@ -16025,7 +16137,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && React.createElement(SidebarBtn, {
     icon: Briefcase,
     label: "Propostas",
     active: showProposalsPage,
@@ -16042,7 +16154,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('bi') && React.createElement(SidebarBtn, {
     icon: PieChart,
     label: "BI Propostas",
     active: showProposalBI,
@@ -16059,7 +16171,7 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('cronograma') && React.createElement(SidebarBtn, {
     icon: Calculator,
     label: "Cronograma Financeiro",
     active: showCronogramaPage,
@@ -16076,7 +16188,7 @@ function App() {
       setShowAdmin(false);
       setShowCronogramaPage(true);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && React.createElement(SidebarBtn, {
     icon: Layers,
     label: "GDoc",
     active: showGdocPage,
@@ -16178,7 +16290,13 @@ function App() {
     }
   }, "Ol\xE1, ", firstName, "!"), React.createElement("p", {
     className: "text-[10px] text-gray-400 leading-tight capitalize"
-  }, today))), React.createElement("div", {
+  }, today)), SYS.id === 'gcsp' && React.createElement("span", {
+    className: "text-[10px] font-black px-2.5 py-1 rounded-lg text-white whitespace-nowrap",
+    style: {
+      background: BLUE
+    },
+    title: SYS.sub
+  }, "GCSP")), React.createElement("div", {
     className: "flex items-center gap-4"
   }, !showArcanjoPage && !showArcanjoGerencial && React.createElement(React.Fragment, null, hasAlert_sb && React.createElement("span", {
     className: "flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg",
