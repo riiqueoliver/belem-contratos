@@ -13221,18 +13221,6 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             ) : (
               <div className="text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2">
                 <p>{SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)'}</p>
-                {SYS.id !== 'gcsp' && (
-                  <p className="flex items-center gap-2 text-[10px]">
-                    <span className="text-green-700">
-                      Dados sincronizados em tempo real — Firebase Cloud
-                    </span>
-                    <span className="text-gray-300">·</span>
-                    <button onClick={resetAllData}
-                            className="text-gray-400 hover:text-red-600 underline transition-colors">
-                      Resetar dados
-                    </button>
-                  </p>
-                )}
               </div>
             )}
           </main>
