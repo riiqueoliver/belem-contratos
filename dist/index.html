@@ -18122,7 +18122,7 @@ function App() {
     className: "font-semibold text-gray-500"
   }, "Neotrix"), " \xB7 2026")) : React.createElement("div", {
     className: "text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2"
-  }, React.createElement("p", null, "Bel\xE9m Digital \xB7 Prefeitura Municipal de Bel\xE9m \xB7 SLA em dias \xFAteis (seg\u2013sex)"), React.createElement("p", {
+  }, React.createElement("p", null, SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)'), SYS.id !== 'gcsp' && React.createElement("p", {
     className: "flex items-center gap-2 text-[10px]"
   }, React.createElement("span", {
     className: "text-green-700"
