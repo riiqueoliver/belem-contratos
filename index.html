@@ -6606,10 +6606,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [analyzing, setAnalyzing] = React.useState(false);
       const [saving,    setSaving]    = React.useState(false);
       const [exporting, setExporting] = React.useState(false);
+      const [showAlertas, setShowAlertas] = React.useState(false);
       const fileRef = React.useRef(null);
 
       // Carrega o rascunho editável ao selecionar um cronograma
       React.useEffect(() => {
+        setShowAlertas(false);
         if (!selId) { setDraft(null); return; }
         const c = cronogramas.find(x => x.id === selId);
         if (!c) { setDraft(null); return; }
@@ -7215,28 +7217,59 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               <CronogramaResumo calc={calc} pctBD={draft.params.pctBD} nomeBD={nomeBD} nomeParc={nomeParc} aliquotaTotal={aliquotaTotal} />
             </div>
 
-            {/* Alertas */}
-            {(alertas.length > 0 || draft.alertasIA.length > 0) && (
-              <div className="space-y-2">
-                {alertas.map((a,i) => {
-                  const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
-                  return (
-                    <div key={i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
-                         style={{background:st.bg, borderColor:st.border, color:st.color}}>
-                      <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">{st.label}</span>
-                      <span className="font-medium">{a.txt}</span>
+            {/* Alertas — recolhidos por padrão */}
+            {(alertas.length > 0 || draft.alertasIA.length > 0) && (() => {
+              const nCrit = alertas.filter(a => a.nivel === 'CRITICO').length;
+              const nAlert = alertas.filter(a => a.nivel === 'ALERTA').length;
+              const nTotal = alertas.length + draft.alertasIA.length;
+              const pior = nCrit > 0 ? CRON_ALERT_STYLE.CRITICO
+                         : nAlert > 0 ? CRON_ALERT_STYLE.ALERTA
+                         : CRON_ALERT_STYLE.INFO;
+              return (
+                <div className="rounded-2xl border overflow-hidden" style={{borderColor: pior.border, background: pior.bg}}>
+                  <button onClick={() => setShowAlertas(v => !v)}
+                    className="w-full px-4 py-3 flex items-center gap-3 text-left transition-all hover:opacity-80">
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-black text-[13px]"
+                          style={{background: pior.color, color:'#fff'}}>!</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold" style={{color: pior.color}}>
+                        {nTotal} {nTotal === 1 ? 'observação' : 'observações'} sobre este cronograma
+                      </p>
+                      <p className="text-[11px] font-medium" style={{color: pior.color, opacity:.75}}>
+                        {nCrit > 0 && `${nCrit} crítica${nCrit>1?'s':''} · `}
+                        {nAlert > 0 && `${nAlert} alerta${nAlert>1?'s':''} · `}
+                        {draft.alertasIA.length > 0 && `${draft.alertasIA.length} da IA · `}
+                        clique para {showAlertas ? 'ocultar' : 'ver'}
+                      </p>
                     </div>
-                  );
-                })}
-                {draft.alertasIA.map((a,i) => (
-                  <div key={'ia'+i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
-                       style={{background:'#faf5ff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
-                    <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">IA</span>
-                    <span className="font-medium">{a}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+                    <ChevronRight className="w-4 h-4 flex-shrink-0 transition-transform"
+                                  style={{color: pior.color, transform: showAlertas ? 'rotate(90deg)' : 'none'}} />
+                  </button>
+
+                  {showAlertas && (
+                    <div className="px-3 pb-3 space-y-2 fade-in">
+                      {alertas.map((a,i) => {
+                        const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
+                        return (
+                          <div key={i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
+                               style={{background:'#fff', borderColor:st.border, color:st.color}}>
+                            <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">{st.label}</span>
+                            <span className="font-medium">{a.txt}</span>
+                          </div>
+                        );
+                      })}
+                      {draft.alertasIA.map((a,i) => (
+                        <div key={'ia'+i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
+                             style={{background:'#fff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
+                          <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">IA</span>
+                          <span className="font-medium">{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Cronograma mensal */}
             <CronogramaTabelaMensal calc={calc} prazo={prazo} nomeBD={nomeBD} nomeParc={nomeParc} />
