@@ -14676,8 +14676,9 @@ function App() {
     async function init() {
       const usersSnap = await db.collection(COL('users')).get();
       if (usersSnap.empty) {
+        const seedList = SYS.id === 'gcsp' ? INITIAL_USERS.filter(u => ADMIN_USERNAMES.has(u.username)) : INITIAL_USERS;
         const b = db.batch();
-        INITIAL_USERS.forEach(u => b.set(db.collection(COL('users')).doc(String(u.id)), u));
+        seedList.forEach(u => b.set(db.collection(COL('users')).doc(String(u.id)), u));
         await b.commit();
       }
       if (!localStorage.getItem('belem-cleanup-v1')) {
