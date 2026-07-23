@@ -1523,9 +1523,16 @@
         <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="px-8 pt-8 pb-6 text-center" style={{background: BLUE}}>
-              <img src="belemdigital-logo.png" alt="Belém Digital"
-                   style={{height:70, width:'auto', maxWidth:300, margin:'0 auto 0', display:'block', objectFit:'contain'}}
-                   onError={e => e.currentTarget.style.display='none'} />
+              {SYS.id === 'gcsp' ? (
+                <div>
+                  <p className="text-white font-black tracking-tight" style={{fontSize:34, lineHeight:1}}>GCSP</p>
+                  <p className="text-white/70 font-medium mt-1.5" style={{fontSize:11}}>Gerência de Contratos, Suprimentos e Patrimônio</p>
+                </div>
+              ) : (
+                <img src="belemdigital-logo.png" alt="Belém Digital"
+                     style={{height:70, width:'auto', maxWidth:300, margin:'0 auto 0', display:'block', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
+              )}
             </div>
             <form onSubmit={handleSubmit} className="px-8 py-6 space-y-4">
               <div>
@@ -11023,9 +11030,16 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       // Aguarda Firebase carregar
       if (!dbReady) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{background: BLUE}}>
-          <img src="belemdigital-logo.png" alt="Belém Digital"
-               style={{height:64, width:'auto', objectFit:'contain', opacity:.9}}
-               onError={e => e.currentTarget.style.display='none'} />
+          {SYS.id === 'gcsp' ? (
+            <div className="text-center">
+              <p className="text-white font-black tracking-tight" style={{fontSize:40, lineHeight:1}}>GCSP</p>
+              <p className="text-white/60 mt-1.5" style={{fontSize:12}}>Contratos, Suprimentos e Patrimônio</p>
+            </div>
+          ) : (
+            <img src="belemdigital-logo.png" alt="Belém Digital"
+                 style={{height:64, width:'auto', objectFit:'contain', opacity:.9}}
+                 onError={e => e.currentTarget.style.display='none'} />
+          )}
           <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
           <p className="text-white/70 text-sm font-medium">Conectando ao banco de dados…</p>
         </div>

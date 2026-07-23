@@ -2654,7 +2654,18 @@ function LoginScreen({
     style: {
       background: BLUE
     }
-  }, React.createElement("img", {
+  }, SYS.id === 'gcsp' ? React.createElement("div", null, React.createElement("p", {
+    className: "text-white font-black tracking-tight",
+    style: {
+      fontSize: 34,
+      lineHeight: 1
+    }
+  }, "GCSP"), React.createElement("p", {
+    className: "text-white/70 font-medium mt-1.5",
+    style: {
+      fontSize: 11
+    }
+  }, "Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio")) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {
@@ -15178,7 +15189,20 @@ function App() {
     style: {
       background: BLUE
     }
-  }, React.createElement("img", {
+  }, SYS.id === 'gcsp' ? React.createElement("div", {
+    className: "text-center"
+  }, React.createElement("p", {
+    className: "text-white font-black tracking-tight",
+    style: {
+      fontSize: 40,
+      lineHeight: 1
+    }
+  }, "GCSP"), React.createElement("p", {
+    className: "text-white/60 mt-1.5",
+    style: {
+      fontSize: 12
+    }
+  }, "Contratos, Suprimentos e Patrim\xF4nio")) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {
