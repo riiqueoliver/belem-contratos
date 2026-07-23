@@ -2654,18 +2654,19 @@ function LoginScreen({
     style: {
       background: BLUE
     }
-  }, SYS.id === 'gcsp' ? React.createElement("div", null, React.createElement("p", {
-    className: "text-white font-black tracking-tight",
+  }, SYS.id === 'gcsp' ? React.createElement("img", {
+    src: "gcsp-lockup-white.png",
+    alt: "GCSP \u2014 Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio",
     style: {
-      fontSize: 34,
-      lineHeight: 1
-    }
-  }, "GCSP"), React.createElement("p", {
-    className: "text-white/70 font-medium mt-1.5",
-    style: {
-      fontSize: 11
-    }
-  }, "Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio")) : React.createElement("img", {
+      height: 66,
+      width: 'auto',
+      maxWidth: 300,
+      margin: '0 auto',
+      display: 'block',
+      objectFit: 'contain'
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  }) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {
@@ -14955,6 +14956,16 @@ function App() {
   useEffect(() => {
     const isArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
     document.title = isArcanjo ? 'Sistema Arcanjo - Neotrix' : SYS.title;
+    if (SYS.id === 'gcsp' && !isArcanjo) {
+      let link = document.querySelector("link[rel='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.type = 'image/png';
+      link.href = 'gcsp-symbol.png';
+    }
   }, [showArcanjoPage, showArcanjoGerencial, currentUser]);
   useEffect(() => {
     if (!currentUser) return;
@@ -15189,20 +15200,18 @@ function App() {
     style: {
       background: BLUE
     }
-  }, SYS.id === 'gcsp' ? React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("p", {
-    className: "text-white font-black tracking-tight",
+  }, SYS.id === 'gcsp' ? React.createElement("img", {
+    src: "gcsp-lockup-white.png",
+    alt: "GCSP",
     style: {
-      fontSize: 40,
-      lineHeight: 1
-    }
-  }, "GCSP"), React.createElement("p", {
-    className: "text-white/60 mt-1.5",
-    style: {
-      fontSize: 12
-    }
-  }, "Contratos, Suprimentos e Patrim\xF4nio")) : React.createElement("img", {
+      height: 70,
+      width: 'auto',
+      maxWidth: 320,
+      objectFit: 'contain',
+      opacity: .95
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  }) : React.createElement("img", {
     src: "belemdigital-logo.png",
     alt: "Bel\xE9m Digital",
     style: {
@@ -16028,9 +16037,19 @@ function App() {
       background: '#fff',
       padding: 1
     }
-  }) : React.createElement(React.Fragment, null, SYS.id === 'gcsp' ? React.createElement("span", {
-    className: "text-white font-black text-sm"
-  }, "GCSP") : React.createElement(React.Fragment, null, React.createElement("img", {
+  }) : React.createElement(React.Fragment, null, SYS.id === 'gcsp' ? React.createElement("img", {
+    src: "gcsp-symbol-white.png",
+    alt: "GCSP",
+    style: {
+      height: 30,
+      width: 30,
+      objectFit: 'contain'
+    },
+    onError: e => {
+      e.currentTarget.style.display = 'none';
+      e.currentTarget.nextSibling.style.display = 'block';
+    }
+  }) : React.createElement(React.Fragment, null, React.createElement("img", {
     src: "simbologo2.PNG",
     alt: "SGC",
     style: {
@@ -16048,7 +16067,12 @@ function App() {
       display: 'none'
     },
     className: "text-white font-black text-xs"
-  }, "SGC")))), React.createElement("span", {
+  }, "SGC")), SYS.id === 'gcsp' && React.createElement("span", {
+    style: {
+      display: 'none'
+    },
+    className: "text-white font-black text-xs"
+  }, "GCSP"))), React.createElement("span", {
     className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap\r opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
     style: {
       background: '#1e293b'

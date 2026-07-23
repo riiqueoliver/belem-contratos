@@ -1524,10 +1524,9 @@
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="px-8 pt-8 pb-6 text-center" style={{background: BLUE}}>
               {SYS.id === 'gcsp' ? (
-                <div>
-                  <p className="text-white font-black tracking-tight" style={{fontSize:34, lineHeight:1}}>GCSP</p>
-                  <p className="text-white/70 font-medium mt-1.5" style={{fontSize:11}}>Gerência de Contratos, Suprimentos e Patrimônio</p>
-                </div>
+                <img src="gcsp-lockup-white.png" alt="GCSP — Gerência de Contratos, Suprimentos e Patrimônio"
+                     style={{height:66, width:'auto', maxWidth:300, margin:'0 auto', display:'block', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
               ) : (
                 <img src="belemdigital-logo.png" alt="Belém Digital"
                      style={{height:70, width:'auto', maxWidth:300, margin:'0 auto 0', display:'block', objectFit:'contain'}}
@@ -10810,6 +10809,13 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         document.title = isArcanjo
           ? 'Sistema Arcanjo - Neotrix'
           : SYS.title;
+        // Favicon próprio do GCSP
+        if (SYS.id === 'gcsp' && !isArcanjo) {
+          let link = document.querySelector("link[rel='icon']");
+          if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+          link.type = 'image/png';
+          link.href = 'gcsp-symbol.png';
+        }
       }, [showArcanjoPage, showArcanjoGerencial, currentUser]);
 
       // ── Auto-logout por inatividade (5 minutos) ──────────────
@@ -11031,10 +11037,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       if (!dbReady) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{background: BLUE}}>
           {SYS.id === 'gcsp' ? (
-            <div className="text-center">
-              <p className="text-white font-black tracking-tight" style={{fontSize:40, lineHeight:1}}>GCSP</p>
-              <p className="text-white/60 mt-1.5" style={{fontSize:12}}>Contratos, Suprimentos e Patrimônio</p>
-            </div>
+            <img src="gcsp-lockup-white.png" alt="GCSP"
+                 style={{height:70, width:'auto', maxWidth:320, objectFit:'contain', opacity:.95}}
+                 onError={e => e.currentTarget.style.display='none'} />
           ) : (
             <img src="belemdigital-logo.png" alt="Belém Digital"
                  style={{height:64, width:'auto', objectFit:'contain', opacity:.9}}
@@ -11662,13 +11667,16 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 ) : (
                   <>
                     {SYS.id === 'gcsp'
-                      ? <span className="text-white font-black text-sm">GCSP</span>
+                      ? <img src="gcsp-symbol-white.png" alt="GCSP"
+                             style={{height:30, width:30, objectFit:'contain'}}
+                             onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='block'; }} />
                       : <>
                           <img src="simbologo2.PNG" alt="SGC"
                                style={{height:30, width:30, objectFit:'contain', imageRendering:'auto'}}
                                onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex'; }} />
                           <span style={{display:'none'}} className="text-white font-black text-xs">SGC</span>
                         </>}
+                    {SYS.id === 'gcsp' && <span style={{display:'none'}} className="text-white font-black text-xs">GCSP</span>}
                   </>
                 )}
               </div>
