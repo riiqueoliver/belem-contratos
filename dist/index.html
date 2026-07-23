@@ -16454,7 +16454,7 @@ function App() {
   }, React.createElement("p", {
     className: "text-sm text-gray-500 text-center font-medium"
   }, "Qual \xE9 a modalidade deste contrato?"), React.createElement("div", {
-    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+    className: `grid grid-cols-1 ${SYS.id === 'gcsp' ? 'max-w-sm mx-auto' : 'sm:grid-cols-2'} gap-4`
   }, React.createElement("button", {
     type: "button",
     onClick: () => {
@@ -16479,7 +16479,7 @@ function App() {
     className: "font-bold text-gray-800 group-hover:text-blue-800"
   }, "Contrato Direto"), React.createElement("p", {
     className: "text-xs text-gray-400 mt-1.5 leading-relaxed"
-  }, "Bel\xE9m Digital \xE9 a \xFAnica contratada pelo \xF3rg\xE3o p\xFAblico, sem divis\xE3o de responsabilidades"))), React.createElement("button", {
+  }, SYS.id === 'gcsp' ? 'Contrato firmado diretamente com o fornecedor, sem divisão de responsabilidades' : 'Belém Digital é a única contratada pelo órgão público, sem divisão de responsabilidades'))), SYS.id !== 'gcsp' && React.createElement("button", {
     type: "button",
     onClick: () => {
       setFormType('parceria');

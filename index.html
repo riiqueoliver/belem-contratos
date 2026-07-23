@@ -11927,7 +11927,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 {!formType && (
                   <div className="p-8 space-y-5">
                     <p className="text-sm text-gray-500 text-center font-medium">Qual é a modalidade deste contrato?</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className={`grid grid-cols-1 ${SYS.id === 'gcsp' ? 'max-w-sm mx-auto' : 'sm:grid-cols-2'} gap-4`}>
                       <button type="button" onClick={() => { setFormType('direto'); setForm(f => ({...f, contractType:'direto'})); }}
                               className="group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center cursor-pointer">
                         <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#eff6ff'}}>
@@ -11935,20 +11935,26 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                         </div>
                         <div>
                           <p className="font-bold text-gray-800 group-hover:text-blue-800">Contrato Direto</p>
-                          <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">Belém Digital é a única contratada pelo órgão público, sem divisão de responsabilidades</p>
+                          <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                            {SYS.id === 'gcsp'
+                              ? 'Contrato firmado diretamente com o fornecedor, sem divisão de responsabilidades'
+                              : 'Belém Digital é a única contratada pelo órgão público, sem divisão de responsabilidades'}
+                          </p>
                         </div>
                       </button>
-                      <button type="button"
-                              onClick={() => { setFormType('parceria'); setForm(f => ({...f, contractType:'parceria'})); }}
-                              className="group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center cursor-pointer">
-                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#f0fdf4'}}>
-                          <LinkIcon className="w-8 h-8" style={{color:GREEN}} />
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-800 group-hover:text-green-800">Contrato em Parceria</p>
-                          <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">BD + empresa parceira dividem responsabilidades e valores com repasses distintos por empresa</p>
-                        </div>
-                      </button>
+                      {SYS.id !== 'gcsp' && (
+                        <button type="button"
+                                onClick={() => { setFormType('parceria'); setForm(f => ({...f, contractType:'parceria'})); }}
+                                className="group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center cursor-pointer">
+                          <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#f0fdf4'}}>
+                            <LinkIcon className="w-8 h-8" style={{color:GREEN}} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-800 group-hover:text-green-800">Contrato em Parceria</p>
+                            <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">BD + empresa parceira dividem responsabilidades e valores com repasses distintos por empresa</p>
+                          </div>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
