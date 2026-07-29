@@ -17,6 +17,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- Firebase Storage não utilizado: PDFs salvos diretamente no Firestore -->
+  <!-- PDF.js — leitura do texto das certidões (validade, tipo, CNPJ) no lado do cliente -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    }
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     *, *::before, *::after { font-family: 'Inter', sans-serif; box-sizing: border-box; }
@@ -1607,6 +1614,190 @@ function maskBRL(input) {
   const dec = parts.length > 1 ? parts[1].replace(/\D/g, '').slice(0, 2) : null;
   const intFmt = intRaw ? parseInt(intRaw, 10).toLocaleString('pt-BR') : '';
   return dec !== null ? `${intFmt},${dec}` : intFmt;
+}
+const CERT_CNPJ = '04.850.095/0001-93';
+const CERT_ALERT_DAYS = 15;
+const CERT_MAX_BYTES = 900 * 1024;
+const CERT_SEED = [{
+  id: 'FGTS',
+  type: 'FGTS',
+  label: 'CRF — Certificado de Regularidade do FGTS',
+  issuer: 'Caixa Econômica Federal',
+  portalUrl: 'https://consulta-crf.caixa.gov.br/consultacrf/pages/consultaEmpregador.jsf',
+  notes: 'Validade curta (30 dias). Renovação mensal obrigatória.'
+}, {
+  id: 'Federal',
+  type: 'Federal',
+  label: 'Certidão de Regularidade — Tributos Federais e Dívida Ativa da União',
+  issuer: 'Receita Federal do Brasil / PGFN',
+  portalUrl: 'https://www.gov.br/pt-br/servicos/emitir-certidao-de-regularidade-fiscal',
+  notes: 'Validade: 180 dias.'
+}, {
+  id: 'Estadual',
+  type: 'Estadual',
+  label: 'Certidão Negativa Estadual (Tributária + Não Tributária)',
+  issuer: 'SEFA — Secretaria de Estado da Fazenda do Pará',
+  portalUrl: 'https://app.sefa.pa.gov.br/pservicos#',
+  notes: 'Emitida em duas vias (tributária + não tributária).'
+}, {
+  id: 'Municipal',
+  type: 'Municipal',
+  label: 'Certidão Conjunta Negativa — SEFIN Belém',
+  issuer: 'Secretaria Municipal de Finanças de Belém',
+  portalUrl: 'https://sistemas.belem.pa.gov.br/certifica',
+  notes: 'Validade: 180 dias.'
+}, {
+  id: 'Trabalhista',
+  type: 'Trabalhista',
+  label: 'CNDT — Certidão de Débitos Trabalhistas',
+  issuer: 'Justiça do Trabalho / TST',
+  portalUrl: 'https://www.tst.jus.br/certidao',
+  notes: 'Validade: 180 dias.'
+}];
+const CERT_STATUS_CFG = {
+  valid: {
+    label: 'Válida',
+    dot: '#16a34a',
+    bg: '#dcfce7',
+    color: '#166534',
+    bar: '#16a34a'
+  },
+  expiring: {
+    label: 'Vence em ≤15 dias',
+    dot: '#ef4444',
+    bg: '#fee2e2',
+    color: '#991b1b',
+    bar: '#ef4444'
+  },
+  expired: {
+    label: 'Vencida',
+    dot: '#dc2626',
+    bg: '#fecaca',
+    color: '#7f1d1d',
+    bar: '#dc2626'
+  },
+  none: {
+    label: 'Sem certidão',
+    dot: '#94a3b8',
+    bg: '#f1f5f9',
+    color: '#475569',
+    bar: '#94a3b8'
+  }
+};
+const CERT_TYPE_KEYWORDS = {
+  FGTS: ['CRF', 'Certificado de Regularidade do FGTS', 'Regularidade do FGTS', 'Fundo de Garantia', 'Caixa Econômica'],
+  Federal: ['Tributos Federais', 'Dívida Ativa da União', 'PGFN', 'Procuradoria-Geral da Fazenda', 'Receita Federal do Brasil'],
+  Estadual: ['SEFA', 'Secretaria de Estado da Fazenda', 'Governo do Estado', 'ICMS', 'Tributária e Não Tributária'],
+  Municipal: ['SEFIN', 'Município de Belém', 'Prefeitura Municipal de Belém', 'Conjunta Negativa', 'Procuradoria Fiscal do Município', 'IPTU'],
+  Trabalhista: ['CNDT', 'Justiça do Trabalho', 'Tribunal Superior do Trabalho', 'Débitos Trabalhistas', 'TST']
+};
+function certBrToDate(br) {
+  const m = String(br || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null;
+}
+function certBrToIso(br) {
+  const d = certBrToDate(br);
+  return d ? d.toISOString().slice(0, 10) : null;
+}
+function certParseExpiry(raw) {
+  const text = String(raw || '').replace(/\s+/g, ' ');
+  const range = text.match(/(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})/);
+  if (range) return certBrToIso(range[2]);
+  const explicit = text.match(/(?:Data\s+de\s+)?Validade(?:\s+at[ée])?\s*[:\-–]?\s*(\d{2}\/\d{2}\/\d{4})/i) || text.match(/V[áa]lid[ao]\s+at[ée]\s+(\d{2}\/\d{2}\/\d{4})/i);
+  if (explicit) return certBrToIso(explicit[1]);
+  const computed = text.match(/por\s+(\d{1,3})\s+\([^)]+\)\s*dias?[,\s]+(?:contados|a\s+partir)\s+de\s+(\d{2}\/\d{2}\/\d{4})/i) || text.match(/por\s+(\d{1,3})\s+dias?[,\s]+(?:contados|a\s+partir)\s+de\s+(\d{2}\/\d{2}\/\d{4})/i);
+  if (computed) {
+    const dias = parseInt(computed[1], 10),
+      ini = certBrToDate(computed[2]);
+    if (ini && dias > 0 && dias < 400) {
+      ini.setDate(ini.getDate() + dias);
+      return ini.toISOString().slice(0, 10);
+    }
+  }
+  const emissao = text.match(/(?:Emiss[ãa]o|Data\s+da\s+Emiss[ãa]o)\s*[:\-–]?\s*(\d{2}\/\d{2}\/\d{4})/i);
+  if (emissao) {
+    const ini = certBrToDate(emissao[1]);
+    if (ini) {
+      ini.setDate(ini.getDate() + 180);
+      return ini.toISOString().slice(0, 10);
+    }
+  }
+  return null;
+}
+function certDetectType(text) {
+  const t = String(text || '').toLowerCase();
+  const scores = {};
+  for (const [tipo, palavras] of Object.entries(CERT_TYPE_KEYWORDS)) {
+    scores[tipo] = palavras.filter(p => t.includes(p.toLowerCase())).length;
+  }
+  const ord = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [melhor, nota] = ord[0];
+  const segunda = ord[1]?.[1] || 0;
+  if (nota === 0) return {
+    type: null,
+    confidence: 'none'
+  };
+  if (nota >= 2 && nota > segunda) return {
+    type: melhor,
+    confidence: 'high'
+  };
+  return {
+    type: melhor,
+    confidence: 'low'
+  };
+}
+function certExtractCnpjs(text) {
+  const m = String(text || '').match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}\/?\d{4}-?\d{2}/g) || [];
+  return [...new Set(m.map(x => x.replace(/\D/g, '')).filter(d => d.length === 14))];
+}
+async function certReadPdf(arrayBuffer) {
+  if (!window.pdfjsLib) return {
+    expiry: null,
+    type: null,
+    confidence: 'none',
+    cnpjs: []
+  };
+  try {
+    const pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer
+    }).promise;
+    let texto = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const c = await page.getTextContent();
+      texto += c.items.map(it => it.str).join(' ') + '\n';
+    }
+    const det = certDetectType(texto);
+    return {
+      expiry: certParseExpiry(texto),
+      type: det.type,
+      confidence: det.confidence,
+      cnpjs: certExtractCnpjs(texto)
+    };
+  } catch (e) {
+    console.warn('PDF.js falhou:', e.message);
+    return {
+      expiry: null,
+      type: null,
+      confidence: 'none',
+      cnpjs: []
+    };
+  }
+}
+function certDiasAte(dataIso) {
+  if (!dataIso) return null;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const d = new Date(dataIso + 'T12:00:00');
+  d.setHours(0, 0, 0, 0);
+  return Math.round((d - hoje) / 86400000);
+}
+function certStatus(c) {
+  const d = certDiasAte(c.expiryDate);
+  if (d === null) return 'none';
+  if (d < 0) return 'expired';
+  if (d <= CERT_ALERT_DAYS) return 'expiring';
+  return 'valid';
 }
 const GDOC_URL = 'https://gdoc.belem.pa.gov.br/gdocprocessos/';
 const GDOC_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -5354,6 +5545,341 @@ function ContractsPage({
       className: "w-3 h-3"
     })))));
   })));
+}
+function CertidaoCard({
+  cert,
+  onAttach,
+  onDetach,
+  onDownload,
+  onExpiry,
+  dragOver
+}) {
+  const inputRef = React.useRef(null);
+  const st = certStatus(cert);
+  const cfg = CERT_STATUS_CFG[st];
+  const dias = certDiasAte(cert.expiryDate);
+  const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  return React.createElement("div", {
+    className: "bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col lg:flex-row lg:items-center gap-4 px-4 py-4",
+    style: {
+      borderLeft: `4px solid ${cfg.bar}`
+    }
+  }, React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("div", {
+    className: "flex items-center gap-1.5 flex-wrap mb-1"
+  }, React.createElement("span", {
+    className: "text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider",
+    style: {
+      background: '#e0e7ff',
+      color: BLUE
+    }
+  }, cert.type), React.createElement("span", {
+    className: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold",
+    style: {
+      background: cfg.bg,
+      color: cfg.color
+    }
+  }, React.createElement("span", {
+    className: "w-1.5 h-1.5 rounded-full",
+    style: {
+      background: cfg.dot
+    }
+  }), cfg.label)), React.createElement("p", {
+    className: "text-sm font-bold leading-tight truncate",
+    style: {
+      color: BLUE
+    },
+    title: cert.label
+  }, cert.label), React.createElement("p", {
+    className: "text-[11px] text-gray-500 truncate",
+    title: cert.issuer
+  }, cert.issuer)), React.createElement("div", {
+    className: "lg:w-36 flex-shrink-0 lg:text-center lg:border-l lg:border-r border-gray-100 lg:px-3"
+  }, React.createElement("p", {
+    className: "text-[9px] uppercase tracking-wider text-gray-400 font-bold"
+  }, "Validade"), React.createElement("input", {
+    type: "date",
+    value: cert.expiryDate || '',
+    onChange: e => onExpiry(cert, e.target.value),
+    className: "text-sm font-bold bg-transparent border border-transparent hover:border-gray-200 rounded px-1 py-0.5 cursor-pointer w-full lg:text-center",
+    style: {
+      color: cfg.color
+    }
+  }), React.createElement("p", {
+    className: "text-[10px] font-bold",
+    style: {
+      color: cfg.color
+    }
+  }, dias === null ? 'sem data' : dias < 0 ? `Vencida há ${Math.abs(dias)}d` : dias === 0 ? 'Vence HOJE' : `Faltam ${dias}d`)), React.createElement("div", {
+    className: "lg:w-72 flex-shrink-0 flex flex-col gap-1.5"
+  }, cert.pdfFileName ? React.createElement("div", {
+    className: "px-2.5 py-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex items-center justify-between gap-2"
+  }, React.createElement("div", {
+    className: "flex items-center gap-1.5 min-w-0"
+  }, React.createElement(FileText, {
+    className: "w-3 h-3 text-gray-500 flex-shrink-0"
+  }), React.createElement("span", {
+    className: "text-[11px] font-semibold text-gray-700 truncate",
+    title: cert.pdfFileName
+  }, cert.pdfFileName)), React.createElement("div", {
+    className: "flex items-center gap-1 flex-shrink-0"
+  }, React.createElement("button", {
+    onClick: () => onDownload(cert),
+    title: "Baixar",
+    className: "p-1 rounded text-white",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Download, {
+    className: "w-3 h-3"
+  })), React.createElement("button", {
+    onClick: () => inputRef.current?.click(),
+    title: "Substituir",
+    className: "p-1 rounded border border-gray-200 text-gray-500 hover:bg-white"
+  }, React.createElement(Upload, {
+    className: "w-3 h-3"
+  })), React.createElement("button", {
+    onClick: () => onDetach(cert),
+    title: "Remover",
+    className: "p-1 rounded border border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50"
+  }, React.createElement(X, {
+    className: "w-3 h-3"
+  })))) : React.createElement("div", {
+    "data-cert-drop": "1",
+    "data-cert-id": cert.id,
+    role: "button",
+    tabIndex: 0,
+    onClick: () => inputRef.current?.click(),
+    className: "px-3 py-3.5 rounded-lg border-2 border-dashed cursor-pointer flex flex-col items-center gap-1 transition-colors",
+    style: dragOver ? {
+      borderColor: '#3b82f6',
+      background: '#eff6ff'
+    } : {
+      borderColor: '#d1d5db',
+      background: '#f9fafb'
+    }
+  }, React.createElement(Upload, {
+    className: "w-4 h-4 pointer-events-none",
+    style: {
+      color: dragOver ? '#2563eb' : '#9ca3af'
+    }
+  }), React.createElement("span", {
+    className: "text-[11px] font-semibold pointer-events-none",
+    style: {
+      color: dragOver ? '#1d4ed8' : '#4b5563'
+    }
+  }, dragOver ? 'Solte o PDF aqui' : 'Arraste o PDF ou clique'), React.createElement("span", {
+    className: "text-[9px] text-gray-400 pointer-events-none"
+  }, ".pdf \xB7 m\xE1x. 900 KB")), React.createElement("input", {
+    ref: inputRef,
+    type: "file",
+    accept: "application/pdf",
+    className: "hidden",
+    onChange: e => {
+      const f = e.target.files?.[0];
+      if (f) onAttach(cert, f);
+      e.target.value = '';
+    }
+  }), React.createElement("a", {
+    href: cert.portalUrl,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    onClick: () => {
+      navigator.clipboard?.writeText(CERT_CNPJ.replace(/\D/g, '')).catch(() => {});
+    },
+    className: "flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90",
+    style: {
+      background: BLUE
+    },
+    title: "Abre o portal oficial e copia o CNPJ (s\xF3 d\xEDgitos)"
+  }, React.createElement(ExternalLink, {
+    className: "w-3 h-3"
+  }), " Emitir certid\xE3o")));
+}
+function CertidoesPage({
+  certidoes,
+  pdfs,
+  onAttach,
+  onDetach,
+  onExpiry,
+  addToast
+}) {
+  const [dragId, setDragId] = React.useState(null);
+  const certsRef = React.useRef(certidoes);
+  const attachRef = React.useRef(onAttach);
+  React.useEffect(() => {
+    certsRef.current = certidoes;
+    attachRef.current = onAttach;
+  });
+  React.useEffect(() => {
+    const zona = t => t?.closest?.('[data-cert-drop]');
+    const over = e => {
+      e.preventDefault();
+      const z = zona(e.target);
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setDragId(cur => {
+        const n = z ? z.dataset.certId : null;
+        return cur === n ? cur : n;
+      });
+    };
+    const leave = e => {
+      if (!e.relatedTarget) setDragId(null);
+    };
+    const drop = e => {
+      e.preventDefault();
+      setDragId(null);
+      const z = zona(e.target);
+      if (!z) return;
+      const f = e.dataTransfer?.files?.[0];
+      if (!f) return;
+      const c = certsRef.current.find(x => x.id === z.dataset.certId);
+      if (c) attachRef.current?.(c, f);
+    };
+    document.addEventListener('dragover', over);
+    document.addEventListener('dragleave', leave);
+    document.addEventListener('drop', drop);
+    return () => {
+      document.removeEventListener('dragover', over);
+      document.removeEventListener('dragleave', leave);
+      document.removeEventListener('drop', drop);
+    };
+  }, []);
+  const ordenadas = React.useMemo(() => [...certidoes].sort((a, b) => {
+    const da = certDiasAte(a.expiryDate),
+      db_ = certDiasAte(b.expiryDate);
+    return (da === null ? 99999 : da) - (db_ === null ? 99999 : db_);
+  }), [certidoes]);
+  const cont = React.useMemo(() => {
+    const o = {
+      valid: 0,
+      expiring: 0,
+      expired: 0,
+      none: 0,
+      anexadas: 0
+    };
+    certidoes.forEach(c => {
+      o[certStatus(c)]++;
+      if (c.pdfFileName) o.anexadas++;
+    });
+    return o;
+  }, [certidoes]);
+  function baixar(cert) {
+    const b64 = pdfs[`cert_${cert.id}`];
+    if (!b64) {
+      addToast('Nenhum PDF anexado a esta certidão.');
+      return;
+    }
+    const bin = atob(b64.includes(',') ? b64.split(',')[1] : b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], {
+      type: 'application/pdf'
+    }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = cert.pdfFileName || `certidao-${cert.type}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 20000);
+  }
+  async function baixarTodas() {
+    const comPdf = certidoes.filter(c => c.pdfFileName);
+    if (!comPdf.length) {
+      addToast('Nenhuma certidão tem PDF anexado.');
+      return;
+    }
+    addToast(`Baixando ${comPdf.length} certidão(ões)…`);
+    for (const c of comPdf) {
+      baixar(c);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+  const criticas = cont.expired + cont.expiring;
+  return React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, React.createElement("div", {
+    className: "max-w-6xl mx-auto px-6 py-6 space-y-4"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between gap-3 flex-wrap"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Shield, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-xl font-black text-gray-800"
+  }, "Certid\xF5es Corporativas"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, "CNPJ ", CERT_CNPJ, " \xB7 monitoramento de validade"))), React.createElement("div", {
+    className: "flex items-center gap-2 flex-wrap"
+  }, React.createElement("span", {
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg",
+    style: {
+      background: '#dcfce7',
+      color: '#166534'
+    }
+  }, cont.valid, " v\xE1lida", cont.valid !== 1 ? 's' : ''), cont.expiring > 0 && React.createElement("span", {
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg",
+    style: {
+      background: '#fee2e2',
+      color: '#991b1b'
+    }
+  }, cont.expiring, " vencendo"), cont.expired > 0 && React.createElement("span", {
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg",
+    style: {
+      background: '#fecaca',
+      color: '#7f1d1d'
+    }
+  }, cont.expired, " vencida", cont.expired !== 1 ? 's' : ''), React.createElement("button", {
+    onClick: baixarTodas,
+    disabled: !cont.anexadas,
+    className: "flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-40",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Download, {
+    className: "w-3.5 h-3.5"
+  }), " Baixar todas ", cont.anexadas > 0 && `(${cont.anexadas})`))), criticas > 0 && React.createElement("div", {
+    className: "flex items-start gap-2 px-4 py-2.5 rounded-xl border",
+    style: {
+      background: '#fef2f2',
+      borderColor: '#fecaca'
+    }
+  }, React.createElement(AlertTriangle, {
+    className: "w-4 h-4 flex-shrink-0 mt-0.5",
+    style: {
+      color: '#dc2626'
+    }
+  }), React.createElement("p", {
+    className: "text-[12px] leading-snug",
+    style: {
+      color: '#7f1d1d'
+    }
+  }, React.createElement("b", null, criticas, " certid\xE3o(\xF5es) exigem a\xE7\xE3o."), " Emita a renova\xE7\xE3o antes de usar em processos de cobran\xE7a.")), ordenadas.length === 0 ? React.createElement("div", {
+    className: "text-center py-16 text-gray-300"
+  }, React.createElement(Shield, {
+    className: "w-10 h-10 mx-auto mb-3 opacity-30"
+  }), React.createElement("p", {
+    className: "text-sm font-medium"
+  }, "Carregando certid\xF5es\u2026")) : React.createElement("div", {
+    className: "flex flex-col gap-2.5"
+  }, ordenadas.map(c => React.createElement(CertidaoCard, {
+    key: c.id,
+    cert: c,
+    dragOver: dragId === c.id,
+    onAttach: onAttach,
+    onDetach: onDetach,
+    onDownload: baixar,
+    onExpiry: onExpiry
+  }))), React.createElement("p", {
+    className: "text-[10.5px] text-gray-400 text-center pb-2"
+  }, "\"Emitir certid\xE3o\" abre o portal oficial e copia o CNPJ (14 d\xEDgitos) \u2014 o captcha continua com voc\xEA. A validade \xE9 lida automaticamente do PDF anexado e pode ser corrigida clicando na data.")));
 }
 function GdocEmitModal({
   inst,
@@ -14956,6 +15482,8 @@ function App() {
   const [showProposalBI, setShowProposalBI] = useState(false);
   const [showCronogramaPage, setShowCronogramaPage] = useState(false);
   const [cronogramas, setCronogramas] = useState([]);
+  const [showCertidoesPage, setShowCertidoesPage] = useState(false);
+  const [certidoes, setCertidoes] = useState([]);
   const [gcspModules, setGcspModules] = useState({});
   const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
@@ -15102,6 +15630,23 @@ function App() {
         id: d.id
       })));
     });
+    db.collection(COL('certidoes')).get().then(snap => {
+      if (!snap.empty) return;
+      const b = db.batch();
+      CERT_SEED.forEach(c => b.set(db.collection(COL('certidoes')).doc(c.id), {
+        ...c,
+        expiryDate: null,
+        pdfFileName: null,
+        pdfSizeKB: null
+      }));
+      return b.commit();
+    }).catch(console.error);
+    const unsubCert = db.collection(COL('certidoes')).onSnapshot(snap => {
+      setCertidoes(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
       setGcspModules(doc.exists && doc.data().modules || {});
     });
@@ -15110,6 +15655,7 @@ function App() {
       unsubGdocs();
       unsubArcanjo();
       unsubCron();
+      unsubCert();
       unsubCfg();
     };
   }, []);
@@ -15449,6 +15995,7 @@ function App() {
     setShowGdocPage(false);
     setShowArcanjoGerencial(false);
     setShowCronogramaPage(false);
+    setShowCertidoesPage(false);
     setShowProposalBI(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
@@ -15986,6 +16533,73 @@ function App() {
   async function handleDeleteGdoc(id) {
     await db.collection(COL('gdocs')).doc(id).delete();
   }
+  async function handleAttachCertidao(cert, file) {
+    if (file.type !== 'application/pdf') {
+      addToast('⚠️ Apenas PDF é aceito.');
+      return;
+    }
+    if (file.size > CERT_MAX_BYTES) {
+      addToast(`⚠️ Arquivo muito grande (${Math.round(file.size / 1024)} KB). Máximo: 900 KB.`);
+      return;
+    }
+    let buffer;
+    try {
+      buffer = await file.arrayBuffer();
+    } catch {
+      addToast('❌ Falha ao ler o arquivo.');
+      return;
+    }
+    const dados = await certReadPdf(buffer.slice(0));
+    if (dados.confidence === 'high' && dados.type && dados.type !== cert.type) {
+      addToast(`🚫 Recusado: este PDF parece ser a certidão "${dados.type}", mas o card é "${cert.type}".`);
+      return;
+    }
+    const meuCnpj = CERT_CNPJ.replace(/\D/g, '');
+    if (dados.cnpjs.length && !dados.cnpjs.includes(meuCnpj)) {
+      const o = dados.cnpjs[0];
+      addToast(`🚫 Recusado: o PDF refere-se ao CNPJ ${o.slice(0, 2)}.${o.slice(2, 5)}.${o.slice(5, 8)}/${o.slice(8, 12)}-${o.slice(12)}, diferente da Belém Digital.`);
+      return;
+    }
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    await db.collection(COL('pdfs')).doc(`cert_${cert.id}`).set({
+      data: b64
+    });
+    const patch = {
+      pdfFileName: file.name,
+      pdfSizeKB: Math.round(file.size / 1024)
+    };
+    if (dados.expiry) patch.expiryDate = dados.expiry;
+    await db.collection(COL('certidoes')).doc(cert.id).set(patch, {
+      merge: true
+    });
+    const msgs = [`📎 PDF anexado em "${cert.type}".`];
+    if (dados.expiry) msgs.push(`Validade detectada: ${new Date(dados.expiry + 'T12:00:00').toLocaleDateString('pt-BR')}.`);else msgs.push('⚠️ Validade não detectada — informe manualmente clicando na data.');
+    if (dados.confidence === 'low' && dados.type && dados.type !== cert.type) msgs.push(`⚠️ Sinais fracos de ser "${dados.type}" — confira.`);
+    addToast(msgs.join(' '));
+  }
+  async function handleDetachCertidao(cert) {
+    if (!window.confirm(`Remover o PDF da certidão "${cert.type}"?`)) return;
+    await db.collection(COL('pdfs')).doc(`cert_${cert.id}`).delete().catch(() => {});
+    await db.collection(COL('certidoes')).doc(cert.id).set({
+      pdfFileName: null,
+      pdfSizeKB: null
+    }, {
+      merge: true
+    });
+    addToast(`🗑️ PDF removido de "${cert.type}".`);
+  }
+  async function handleExpiryCertidao(cert, data) {
+    await db.collection(COL('certidoes')).doc(cert.id).set({
+      expiryDate: data || null
+    }, {
+      merge: true
+    });
+  }
   async function handleToggleGcspModule(key, enabled) {
     await db.collection('system_config').doc('gcsp').set({
       modules: {
@@ -16519,6 +17133,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -16538,6 +17153,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -16555,6 +17171,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -16573,6 +17190,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -16594,6 +17212,26 @@ function App() {
       setShowAdmin(false);
       setShowCronogramaPage(true);
     }
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Shield,
+    label: "Certid\xF5es",
+    active: showCertidoesPage,
+    badge: certidoes.filter(c => ['expired', 'expiring'].includes(certStatus(c))).length,
+    onClick: () => {
+      setShowProposalBI(false);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowGdocPage(false);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+      setShowCertidoesPage(true);
+    }
   }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && React.createElement(SidebarBtn, {
     icon: Layers,
     label: "GDoc",
@@ -16607,6 +17245,7 @@ function App() {
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -16620,6 +17259,7 @@ function App() {
       setShowArcanjoPage(true);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
       setShowGdocPage(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -16728,7 +17368,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -17433,6 +18073,13 @@ function App() {
     records: arcanjoRecords
   }) : showProposalBI ? React.createElement(ProposalBIPage, {
     proposals: proposals
+  }) : showCertidoesPage ? React.createElement(CertidoesPage, {
+    certidoes: certidoes,
+    pdfs: pdfStorage,
+    onAttach: handleAttachCertidao,
+    onDetach: handleDetachCertidao,
+    onExpiry: handleExpiryCertidao,
+    addToast: addToast
   }) : showCronogramaPage ? React.createElement(CronogramaPage, {
     cronogramas: cronogramas,
     contractMeta: contractMeta,
