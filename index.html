@@ -842,6 +842,70 @@
       }
     }
 
+    /* Fallback para PDF digitalizado (imagem): o PDF.js não acha texto, então
+       enviamos o arquivo para a IA, que faz a leitura visual do documento. */
+    async function certAnalisarIA(b64, tipo, apiKey) {
+      if (!apiKey) return null;
+      const prompt = `Analise esta certidão negativa (tipo esperado: ${tipo}) e retorne SOMENTE um JSON válido, sem markdown:
+{
+  "validade": "AAAA-MM-DD ou null",
+  "emissao": "AAAA-MM-DD ou null",
+  "prazoDias": número ou null,
+  "cnpj": "somente dígitos ou null",
+  "tipoDetectado": "FGTS | Federal | Estadual | Municipal | Trabalhista | null"
+}
+Regras:
+- "validade": a data até quando a certidão é válida. Procure por "Válida até", "Validade", ou o fim de uma faixa "de X a Y".
+- Se não houver validade explícita, informe "emissao" (data de emissão/expedição) e "prazoDias" (ex.: "válida por 180 dias").
+- Datas sempre no formato AAAA-MM-DD. Use null quando não encontrar. NÃO invente valores.`;
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-5',
+            max_tokens: 1024,
+            messages: [{ role:'user', content: [
+              { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
+              { type:'text', text: prompt },
+            ]}],
+          }),
+        });
+        const raw = await resp.text();
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (data.error) { console.warn('[Certidões] IA:', data.error.message); return null; }
+        let t = (data.content?.find(b => b.type==='text')?.text || '').trim();
+        if (t.startsWith('```')) t = t.replace(/```json?\n?/g,'').replace(/```/g,'').trim();
+        const ini = t.indexOf('{'), fim = t.lastIndexOf('}');
+        if (ini === -1) return null;
+        const ex = JSON.parse(t.slice(ini, fim+1));
+
+        let validade = ex.validade || null;
+        if (!validade && ex.emissao) {
+          const d = new Date(ex.emissao + 'T12:00:00');
+          if (!isNaN(d)) {
+            d.setDate(d.getDate() + (ex.prazoDias || CERT_VALIDADE_PADRAO[tipo] || 180));
+            validade = certIso(d);
+          }
+        }
+        if (validade && !certPlausivel(new Date(validade + 'T12:00:00'))) validade = null;
+        return {
+          expiry: validade,
+          type: ex.tipoDetectado || null,
+          cnpjs: ex.cnpj ? [String(ex.cnpj).replace(/\D/g,'')] : [],
+        };
+      } catch (e) {
+        console.warn('[Certidões] falha na leitura por IA:', e.message);
+        return null;
+      }
+    }
+
     function certDiasAte(dataIso) {
       if (!dataIso) return null;
       const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -12129,6 +12193,28 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         try { buffer = await file.arrayBuffer(); } catch { addToast('❌ Falha ao ler o arquivo.'); return; }
         const dados = await certReadPdf(buffer.slice(0), cert.type);
 
+        // Base64 (usado no armazenamento e, se preciso, na leitura por IA)
+        const b64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = e => res(e.target.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+
+        // PDF digitalizado ou validade não encontrada → leitura visual por IA
+        let viaIA = false;
+        if (!dados.expiry && apiKey) {
+          addToast(dados.semTexto
+            ? '🔍 PDF digitalizado — lendo o documento com IA…'
+            : '🔍 Validade não localizada no texto — conferindo com IA…');
+          const ia = await certAnalisarIA(b64, cert.type, apiKey);
+          if (ia) {
+            if (ia.expiry) { dados.expiry = ia.expiry; viaIA = true; }
+            if (!dados.type && ia.type) dados.type = ia.type;
+            if (!dados.cnpjs.length && ia.cnpjs.length) dados.cnpjs = ia.cnpjs;
+          }
+        }
+
         // Crítica: tipo divergente com alta confiança
         if (dados.confidence === 'high' && dados.type && dados.type !== cert.type) {
           addToast(`🚫 Recusado: este PDF parece ser a certidão "${dados.type}", mas o card é "${cert.type}".`);
@@ -12142,20 +12228,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           return;
         }
 
-        const b64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = e => res(e.target.result.split(',')[1]);
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        });
         await db.collection(COL('pdfs')).doc(`cert_${cert.id}`).set({ data: b64 });
         const patch = { pdfFileName: file.name, pdfSizeKB: Math.round(file.size/1024) };
         if (dados.expiry) patch.expiryDate = dados.expiry;
         await db.collection(COL('certidoes')).doc(cert.id).set(patch, { merge:true });
 
         const msgs = [`📎 PDF anexado em "${cert.type}".`];
-        if (dados.expiry) msgs.push(`Validade detectada: ${new Date(dados.expiry+'T12:00:00').toLocaleDateString('pt-BR')}.`);
-        else if (dados.semTexto) msgs.push('⚠️ PDF digitalizado (sem texto) — informe a validade clicando na data.');
+        if (dados.expiry) msgs.push(`Validade detectada${viaIA ? ' por IA' : ''}: ${new Date(dados.expiry+'T12:00:00').toLocaleDateString('pt-BR')}.`);
+        else if (dados.semTexto) msgs.push('⚠️ PDF digitalizado e a IA não localizou a validade — informe clicando na data.');
         else msgs.push('⚠️ Validade não detectada — informe manualmente clicando na data.');
         if (dados.confidence === 'low' && dados.type && dados.type !== cert.type)
           msgs.push(`⚠️ Sinais fracos de ser "${dados.type}" — confira.`);
