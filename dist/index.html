@@ -1691,36 +1691,106 @@ const CERT_TYPE_KEYWORDS = {
   Municipal: ['SEFIN', 'Município de Belém', 'Prefeitura Municipal de Belém', 'Conjunta Negativa', 'Procuradoria Fiscal do Município', 'IPTU'],
   Trabalhista: ['CNDT', 'Justiça do Trabalho', 'Tribunal Superior do Trabalho', 'Débitos Trabalhistas', 'TST']
 };
+const CERT_VALIDADE_PADRAO = {
+  FGTS: 30,
+  Federal: 180,
+  Estadual: 180,
+  Municipal: 180,
+  Trabalhista: 180
+};
+const CERT_MESES = {
+  janeiro: 1,
+  fevereiro: 2,
+  marco: 3,
+  março: 3,
+  abril: 4,
+  maio: 5,
+  junho: 6,
+  julho: 7,
+  agosto: 8,
+  setembro: 9,
+  outubro: 10,
+  novembro: 11,
+  dezembro: 12
+};
+const CERT_DATA_RE = String.raw`(\d{1,2})\s*(?:[\/\-.]|\s+de\s+)\s*([a-zç]{3,9}|\d{1,2})\s*(?:[\/\-.]|\s+de\s+)\s*(\d{4})`;
+function certToDate(dia, mes, ano) {
+  let m;
+  if (/^\d+$/.test(String(mes))) m = parseInt(mes, 10);else {
+    const chave = String(mes).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    m = CERT_MESES[chave] ?? CERT_MESES[String(mes).toLowerCase()];
+  }
+  const d = parseInt(dia, 10),
+    a = parseInt(ano, 10);
+  if (!m || m < 1 || m > 12 || d < 1 || d > 31 || a < 2000 || a > 2100) return null;
+  const dt = new Date(a, m - 1, d, 12, 0, 0);
+  return isNaN(dt) ? null : dt;
+}
 function certBrToDate(br) {
-  const m = String(br || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null;
+  const m = String(br || '').trim().match(new RegExp('^' + CERT_DATA_RE + '$', 'i'));
+  return m ? certToDate(m[1], m[2], m[3]) : null;
+}
+function certIso(d) {
+  if (!d) return null;
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function certBrToIso(br) {
-  const d = certBrToDate(br);
-  return d ? d.toISOString().slice(0, 10) : null;
+  return certIso(certBrToDate(br));
 }
-function certParseExpiry(raw) {
-  const text = String(raw || '').replace(/\s+/g, ' ');
-  const range = text.match(/(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})/);
-  if (range) return certBrToIso(range[2]);
-  const explicit = text.match(/(?:Data\s+de\s+)?Validade(?:\s+at[ée])?\s*[:\-–]?\s*(\d{2}\/\d{2}\/\d{4})/i) || text.match(/V[áa]lid[ao]\s+at[ée]\s+(\d{2}\/\d{2}\/\d{4})/i);
-  if (explicit) return certBrToIso(explicit[1]);
-  const computed = text.match(/por\s+(\d{1,3})\s+\([^)]+\)\s*dias?[,\s]+(?:contados|a\s+partir)\s+de\s+(\d{2}\/\d{2}\/\d{4})/i) || text.match(/por\s+(\d{1,3})\s+dias?[,\s]+(?:contados|a\s+partir)\s+de\s+(\d{2}\/\d{2}\/\d{4})/i);
-  if (computed) {
-    const dias = parseInt(computed[1], 10),
-      ini = certBrToDate(computed[2]);
-    if (ini && dias > 0 && dias < 400) {
-      ini.setDate(ini.getDate() + dias);
-      return ini.toISOString().slice(0, 10);
+function certPlausivel(d) {
+  if (!d) return false;
+  const hoje = new Date();
+  const min = new Date(hoje.getFullYear() - 3, 0, 1);
+  const max = new Date(hoje.getFullYear() + 3, 11, 31);
+  return d >= min && d <= max;
+}
+function certAchaEmissao(text) {
+  const D = CERT_DATA_RE;
+  const padroes = [new RegExp(String.raw`emitid[ao][^.]{0,60}?do\s+dia\s+${D}`, 'i'), new RegExp(String.raw`(?:emitid[ao]|expedid[ao]|emiss[ãa]o|expedi[çc][ãa]o)[^.]{0,40}?\bem\s+${D}`, 'i'), new RegExp(String.raw`data\s+d[ae]\s+(?:emiss[ãa]o|expedi[çc][ãa]o)\s*[:\-–]?\s*${D}`, 'i'), new RegExp(String.raw`(?:emiss[ãa]o|expedi[çc][ãa]o)\s*[:\-–]?\s*${D}`, 'i'), new RegExp(String.raw`,\s*${D}\s*\.?\s*$`, 'im')];
+  for (const re of padroes) {
+    const m = text.match(re);
+    if (m) {
+      const d = certToDate(m[1], m[2], m[3]);
+      if (certPlausivel(d)) return d;
     }
   }
-  const emissao = text.match(/(?:Emiss[ãa]o|Data\s+da\s+Emiss[ãa]o)\s*[:\-–]?\s*(\d{2}\/\d{2}\/\d{4})/i);
-  if (emissao) {
-    const ini = certBrToDate(emissao[1]);
-    if (ini) {
-      ini.setDate(ini.getDate() + 180);
-      return ini.toISOString().slice(0, 10);
+  return null;
+}
+function certAchaDias(text) {
+  const padroes = [/v[áa]lid[ao]\s+por\s+(\d{1,3})\s*(?:\([^)]*\))?\s*dias/i, /por\s+(\d{1,3})\s*\([^)]*\)\s*dias/i, /prazo\s+de\s+validade\s*[:\-–]?\s*(?:de\s+)?(\d{1,3})\s*dias/i, /validade\s*[:\-–]?\s*(?:de\s+)?(\d{1,3})\s*\(?[^)]*\)?\s*dias/i, /(\d{1,3})\s*\([^)]*\)\s*dias\s*,?\s*(?:contados|a\s+partir)/i];
+  for (const re of padroes) {
+    const m = text.match(re);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > 0 && n <= 400) return n;
     }
+  }
+  return null;
+}
+function certSoma(base, dias) {
+  const d = new Date(base.getTime());
+  d.setDate(d.getDate() + dias);
+  return d;
+}
+function certParseExpiry(raw, tipo) {
+  const text = String(raw || '').replace(/\s+/g, ' ');
+  const D = CERT_DATA_RE;
+  const faixa = text.match(new RegExp(D + String.raw`\s+a\s+` + D, 'i'));
+  if (faixa) {
+    const fim = certToDate(faixa[4], faixa[5], faixa[6]);
+    if (certPlausivel(fim)) return certIso(fim);
+  }
+  const ate = text.match(new RegExp(String.raw`v[áa]lid[ao]\s+at[ée]\s+(?:o\s+dia\s+)?` + D, 'i')) || text.match(new RegExp(String.raw`(?:data\s+d[ae]\s+)?validade\s*[:\-–]?\s*` + D, 'i')) || text.match(new RegExp(String.raw`v[áa]lid[ao]\s+at[ée]\s+` + D, 'i'));
+  if (ate) {
+    const d = certToDate(ate[1], ate[2], ate[3]);
+    if (certPlausivel(d)) return certIso(d);
+  }
+  const emissao = certAchaEmissao(text);
+  if (emissao) {
+    const dias = certAchaDias(text) || CERT_VALIDADE_PADRAO[tipo] || 180;
+    const venc = certSoma(emissao, dias);
+    if (certPlausivel(venc)) return certIso(venc);
   }
   return null;
 }
@@ -1750,12 +1820,13 @@ function certExtractCnpjs(text) {
   const m = String(text || '').match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}\/?\d{4}-?\d{2}/g) || [];
   return [...new Set(m.map(x => x.replace(/\D/g, '')).filter(d => d.length === 14))];
 }
-async function certReadPdf(arrayBuffer) {
+async function certReadPdf(arrayBuffer, tipo) {
   if (!window.pdfjsLib) return {
     expiry: null,
     type: null,
     confidence: 'none',
-    cnpjs: []
+    cnpjs: [],
+    semTexto: false
   };
   try {
     const pdf = await pdfjsLib.getDocument({
@@ -1767,12 +1838,16 @@ async function certReadPdf(arrayBuffer) {
       const c = await page.getTextContent();
       texto += c.items.map(it => it.str).join(' ') + '\n';
     }
+    const semTexto = texto.replace(/\s/g, '').length < 40;
     const det = certDetectType(texto);
+    const expiry = certParseExpiry(texto, tipo);
+    console.log('[Certidões] texto:', texto.length, 'chars · validade:', expiry, '· tipo:', det.type);
     return {
-      expiry: certParseExpiry(texto),
+      expiry,
       type: det.type,
       confidence: det.confidence,
-      cnpjs: certExtractCnpjs(texto)
+      cnpjs: certExtractCnpjs(texto),
+      semTexto
     };
   } catch (e) {
     console.warn('PDF.js falhou:', e.message);
@@ -16549,7 +16624,7 @@ function App() {
       addToast('❌ Falha ao ler o arquivo.');
       return;
     }
-    const dados = await certReadPdf(buffer.slice(0));
+    const dados = await certReadPdf(buffer.slice(0), cert.type);
     if (dados.confidence === 'high' && dados.type && dados.type !== cert.type) {
       addToast(`🚫 Recusado: este PDF parece ser a certidão "${dados.type}", mas o card é "${cert.type}".`);
       return;
@@ -16578,7 +16653,7 @@ function App() {
       merge: true
     });
     const msgs = [`📎 PDF anexado em "${cert.type}".`];
-    if (dados.expiry) msgs.push(`Validade detectada: ${new Date(dados.expiry + 'T12:00:00').toLocaleDateString('pt-BR')}.`);else msgs.push('⚠️ Validade não detectada — informe manualmente clicando na data.');
+    if (dados.expiry) msgs.push(`Validade detectada: ${new Date(dados.expiry + 'T12:00:00').toLocaleDateString('pt-BR')}.`);else if (dados.semTexto) msgs.push('⚠️ PDF digitalizado (sem texto) — informe a validade clicando na data.');else msgs.push('⚠️ Validade não detectada — informe manualmente clicando na data.');
     if (dados.confidence === 'low' && dados.type && dados.type !== cert.type) msgs.push(`⚠️ Sinais fracos de ser "${dados.type}" — confira.`);
     addToast(msgs.join(' '));
   }
