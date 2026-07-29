@@ -4768,7 +4768,8 @@ function ProposalsPage({
   onUpdate,
   onDelete,
   addToast,
-  apiKey
+  apiKey,
+  onOpenBI
 }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -4846,7 +4847,35 @@ function ProposalsPage({
     className: "ml-2 text-orange-500 font-bold"
   }, "\xB7 ", kpi.aguardando, " aguardando"))), React.createElement("div", {
     className: "flex items-center gap-2"
+  }, React.createElement("button", {
+    onClick: onOpenBI,
+    className: "flex items-center gap-2.5 border rounded-xl pl-3 pr-3.5 py-1.5 bg-white shadow-sm hover:shadow-md transition-all group",
+    style: {
+      borderColor: '#bfdbfe'
+    },
+    title: "Abrir o painel de BI das propostas"
   }, React.createElement("div", {
+    className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#eff6ff'
+    }
+  }, React.createElement(PieChart, {
+    className: "w-3.5 h-3.5",
+    style: {
+      color: BLUE
+    }
+  })), React.createElement("div", {
+    className: "text-left leading-tight"
+  }, React.createElement("p", {
+    className: "text-[9px] font-bold uppercase tracking-wider text-gray-400"
+  }, "Valor contratado"), React.createElement("p", {
+    className: "text-sm font-black",
+    style: {
+      color: BLUE
+    }
+  }, fmtCurrencyShort(kpi.valor))), React.createElement(ChevronRight, {
+    className: "w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors"
+  })), React.createElement("div", {
     className: "flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm"
   }, React.createElement("span", {
     className: "text-[10px] text-gray-400 font-medium"
@@ -11764,7 +11793,8 @@ function BIValCard({
   }, sub));
 }
 function ProposalBIPage({
-  proposals
+  proposals,
+  onBack
 }) {
   const [filterModelo, setFilterModelo] = React.useState('');
   const filtered = React.useMemo(() => (proposals || []).filter(p => !filterModelo || p.modelo === filterModelo), [proposals, filterModelo]);
@@ -11823,7 +11853,13 @@ function ProposalBIPage({
     className: "flex items-center justify-between flex-wrap gap-3"
   }, React.createElement("div", {
     className: "flex items-center gap-3"
-  }, React.createElement("div", {
+  }, onBack && React.createElement("button", {
+    onClick: onBack,
+    title: "Voltar para Propostas",
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+  }, React.createElement(ChevronRight, {
+    className: "w-4 h-4 rotate-180"
+  })), React.createElement("div", {
     className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm",
     style: {
       background: BLUE
@@ -17396,24 +17432,6 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('bi') && React.createElement(SidebarBtn, {
-    icon: PieChart,
-    label: "BI Propostas",
-    active: showProposalBI,
-    onClick: () => {
-      setShowProposalBI(true);
-      setShowProposalsPage(false);
-      setShowInstallmentsPage(false);
-      setShowContractsPage(false);
-      setShowGdocPage(false);
-      setShowArcanjoPage(false);
-      setShowArcanjoGerencial(false);
-      setShowCronogramaPage(false);
-      setShowCertidoesPage(false);
-      setActiveContractNumber(null);
-      setShowForm(false);
-      setShowAdmin(false);
-    }
   }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('cronograma') && React.createElement(SidebarBtn, {
     icon: Calculator,
     label: "Cronograma Financeiro",
@@ -18280,7 +18298,11 @@ function App() {
     onUpdate: handleUpdateProposal,
     onDelete: handleDeleteProposal,
     addToast: addToast,
-    apiKey: apiKey
+    apiKey: apiKey,
+    onOpenBI: () => {
+      setShowProposalsPage(false);
+      setShowProposalBI(true);
+    }
   }) : showArcanjoPage ? React.createElement(ArcanjoPage, {
     records: arcanjoRecords,
     onAdd: handleAddArcanjoRecord,
@@ -18291,7 +18313,11 @@ function App() {
   }) : showArcanjoGerencial ? React.createElement(ArcanjoGerencial, {
     records: arcanjoRecords
   }) : showProposalBI ? React.createElement(ProposalBIPage, {
-    proposals: proposals
+    proposals: proposals,
+    onBack: () => {
+      setShowProposalBI(false);
+      setShowProposalsPage(true);
+    }
   }) : showCertidoesPage ? React.createElement(CertidoesPage, {
     certidoes: certidoes,
     pdfs: pdfStorage,

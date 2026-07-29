@@ -3161,7 +3161,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     // ── Página principal do Kanban ───────────────────────────
-    function ProposalsPage({ proposals, currentUser, onAdd, onUpdate, onDelete, addToast, apiKey }) {
+    function ProposalsPage({ proposals, currentUser, onAdd, onUpdate, onDelete, addToast, apiKey, onOpenBI }) {
       const [showModal,   setShowModal]   = useState(false);
       const [editing,     setEditing]     = useState(null);
       const [dragOver,    setDragOver]    = useState(null);
@@ -3239,6 +3239,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {/* Indicador que abre o BI de Propostas */}
+              <button onClick={onOpenBI}
+                      className="flex items-center gap-2.5 border rounded-xl pl-3 pr-3.5 py-1.5 bg-white shadow-sm hover:shadow-md transition-all group"
+                      style={{borderColor:'#bfdbfe'}}
+                      title="Abrir o painel de BI das propostas">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#eff6ff'}}>
+                  <PieChart className="w-3.5 h-3.5" style={{color: BLUE}} />
+                </div>
+                <div className="text-left leading-tight">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Valor contratado</p>
+                  <p className="text-sm font-black" style={{color: BLUE}}>{fmtCurrencyShort(kpi.valor)}</p>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+              </button>
+
               <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm">
                 <span className="text-[10px] text-gray-400 font-medium">ano:</span>
                 <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
@@ -8201,7 +8216,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       );
     }
 
-    function ProposalBIPage({ proposals }) {
+    function ProposalBIPage({ proposals, onBack }) {
       const [filterModelo, setFilterModelo] = React.useState('');
 
       const filtered = React.useMemo(() => (proposals || []).filter(p =>
@@ -8245,6 +8260,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           <div className="px-8 pt-7 pb-5 flex-shrink-0" style={{borderBottom:'1px solid #e2e8f0'}}>
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
+                {onBack && (
+                  <button onClick={onBack} title="Voltar para Propostas"
+                          className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+                    <ChevronRight className="w-4 h-4 rotate-180" />
+                  </button>
+                )}
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background:BLUE}}>
                   <PieChart className="w-5 h-5 text-white" />
                 </div>
@@ -12671,11 +12692,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                   onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('bi') && (
-                <SidebarBtn icon={PieChart} label="BI Propostas"
-                  active={showProposalBI}
-                  onClick={() => { setShowProposalBI(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
-              )}
+              {/* BI de Propostas: acessado pelo indicador dentro do módulo de Propostas */}
 
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('cronograma') && (
                 <SidebarBtn icon={Calculator} label="Cronograma Financeiro"
@@ -13266,6 +13283,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 onDelete={handleDeleteProposal}
                 addToast={addToast}
                 apiKey={apiKey}
+                onOpenBI={() => { setShowProposalsPage(false); setShowProposalBI(true); }}
               />
             ) : showArcanjoPage ? (
               /* ── MÓDULO ASSISTÊNCIA SOCIAL ARCANJO'S ── */
@@ -13282,7 +13300,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               <ArcanjoGerencial records={arcanjoRecords} />
             ) : showProposalBI ? (
               /* ── BI PROPOSTAS ── */
-              <ProposalBIPage proposals={proposals} />
+              <ProposalBIPage proposals={proposals}
+                onBack={() => { setShowProposalBI(false); setShowProposalsPage(true); }} />
             ) : showCertidoesPage ? (
               /* ── CERTIDÕES CORPORATIVAS ── */
               <CertidoesPage
