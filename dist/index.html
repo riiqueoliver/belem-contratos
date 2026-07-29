@@ -1608,6 +1608,69 @@ function maskBRL(input) {
   const intFmt = intRaw ? parseInt(intRaw, 10).toLocaleString('pt-BR') : '';
   return dec !== null ? `${intFmt},${dec}` : intFmt;
 }
+const GDOC_URL = 'https://gdoc.belem.pa.gov.br/gdocprocessos/';
+const GDOC_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const GDOC_CFG = {
+  tipoProcesso: 'PAGAMENTO DE FATURAS',
+  interessadoDoc: '04.850.095/0001-93',
+  interessadoNome: 'COMPANHIA DE TRANSFORMAÇÃO DIGITAL DO MUNICÍPIO DE BELÉM - BELÉM DIGITAL',
+  orgaoDestino: 'BELÉM DIGITAL',
+  setorDestino: 'GFIN - GERENCIA FINANCEIRA',
+  siglaDestino: 'GFIN',
+  siglaSeguinte: 'GABP',
+  confidencial: false
+};
+function gdocCompetencia(refMonth) {
+  const [y, m] = String(refMonth || '').split('-');
+  const idx = (parseInt(m, 10) || 1) - 1;
+  const nome = GDOC_MESES[idx] || '';
+  return {
+    extenso: `${nome} de ${y}`,
+    caixaAlta: `${nome.toUpperCase()}/${y}`
+  };
+}
+function buildGdocPayload(inst, meta) {
+  const comp = gdocCompetencia(inst.refMonth);
+  const orgao = (meta.unit || meta.contractorName || '').trim() || '—';
+  const valor = parseBRL(inst.billingValue);
+  const valorF = fmtCurrency(valor);
+  const valorC = valorF.replace(/\s/g, '');
+  const contrato = inst.contractNumber || '';
+  const instrucaoInicial = `PAGAMENTO DE NOTA FISCAL - COMPETÊNCIA ${comp.caixaAlta} - ` + `CONTRATO N°${contrato} COM A ${orgao} NO VALOR DE ${valorC}.`;
+  const despacho = `Ao ${GDOC_CFG.siglaDestino},\n\n` + `Trata-se de processo referente à cobrança da Nota Fiscal relativa aos serviços ` + `prestados no mês de ${comp.extenso}, no âmbito do Contrato n° ${contrato}, ` + `celebrado com a ${orgao}, no valor de ${valorF}.\n\n` + `Dessa forma, solicito a emissão da referida nota fiscal e, em seguida, o ` + `encaminhamento do presente processo ao ${GDOC_CFG.siglaSeguinte}, onde deverá ` + `aguardar a juntada dos relatórios das diretorias.\n\n` + `At.te,`;
+  const anexos = [{
+    chave: 'nf',
+    descricao: `Nota Fiscal ${inst.nfNumber || ''} - ${comp.caixaAlta}`.trim(),
+    tipo: 'NOTA FISCAL',
+    obrigatorio: true
+  }, {
+    chave: 'relatorio',
+    descricao: `Relatório de Gestão - ${comp.caixaAlta}`,
+    tipo: 'RELATORIO',
+    obrigatorio: false
+  }, {
+    chave: 'certidoes',
+    descricao: 'Certidões Negativas',
+    tipo: 'CERTIDÃO NEGATIVA',
+    obrigatorio: false
+  }];
+  return {
+    tipoProcesso: GDOC_CFG.tipoProcesso,
+    interessadoDoc: GDOC_CFG.interessadoDoc,
+    interessadoNome: GDOC_CFG.interessadoNome,
+    confidencial: GDOC_CFG.confidencial,
+    orgaoDestino: GDOC_CFG.orgaoDestino,
+    setorDestino: GDOC_CFG.setorDestino,
+    instrucaoInicial,
+    despacho,
+    anexos,
+    competencia: comp,
+    contrato,
+    orgao,
+    valor,
+    valorFormatado: valorF
+  };
+}
 async function generateRelatorio(installment, meta) {
   if (typeof window._loadExportLibs === 'function') await window._loadExportLibs();
   if (typeof JSZip === 'undefined') {
@@ -5292,6 +5355,215 @@ function ContractsPage({
     })))));
   })));
 }
+function GdocEmitModal({
+  inst,
+  meta,
+  pdfBase64,
+  onClose,
+  onSaveNumero,
+  addToast
+}) {
+  const p = React.useMemo(() => buildGdocPayload(inst, meta), [inst, meta]);
+  const [numero, setNumero] = React.useState((inst.gdoc || '').split('/')[0] || '');
+  const [copiado, setCopiado] = React.useState('');
+  function copiar(texto, chave) {
+    navigator.clipboard.writeText(texto).then(() => {
+      setCopiado(chave);
+      setTimeout(() => setCopiado(c => c === chave ? '' : c), 1800);
+    }).catch(() => addToast('Não foi possível copiar. Selecione o texto manualmente.'));
+  }
+  function abrirGdoc() {
+    try {
+      localStorage.setItem('gdoc-payload', JSON.stringify({
+        ...p,
+        salvoEm: Date.now()
+      }));
+    } catch (e) {}
+    window.open(GDOC_URL, '_blank', 'noopener');
+  }
+  function baixarNf() {
+    if (!pdfBase64) {
+      addToast('Esta parcela não tem PDF da NF anexado.');
+      return;
+    }
+    const bytes = atob(pdfBase64.includes(',') ? pdfBase64.split(',')[1] : pdfBase64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], {
+      type: 'application/pdf'
+    }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NF ${inst.nfNumber || ''} - ${p.competencia.caixaAlta}.pdf`.replace(/\s+/g, ' ').trim();
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+  const Campo = ({
+    label,
+    valor,
+    chave,
+    mono
+  }) => React.createElement("div", {
+    className: "rounded-xl border border-gray-200 overflow-hidden"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-3.5 py-2",
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("span", {
+    className: "text-[10px] font-black uppercase tracking-widest text-gray-500"
+  }, label), React.createElement("button", {
+    onClick: () => copiar(valor, chave),
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all",
+    style: copiado === chave ? {
+      background: '#dcfce7',
+      color: '#15803d'
+    } : {
+      background: '#eff6ff',
+      color: '#1d4ed8'
+    }
+  }, copiado === chave ? '✓ copiado' : 'copiar')), React.createElement("p", {
+    className: `px-3.5 py-3 text-[12.5px] text-gray-700 whitespace-pre-line leading-relaxed ${mono ? 'font-mono text-[11.5px]' : ''}`
+  }, valor));
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    },
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: '#7c3aed'
+    }
+  }, React.createElement(FileText, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("div", null, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Emitir GDoc"), React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, "Contrato ", p.contrato, " \xB7 ", p.competencia.caixaAlta, " \xB7 ", p.valorFormatado))), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 gap-3 text-[12px]"
+  }, [['Tipo de Processo', p.tipoProcesso], ['Interessado (CNPJ)', p.interessadoDoc], ['Órgão de destino', p.orgaoDestino], ['Setor de destino', p.setorDestino]].map(([l, v]) => React.createElement("div", {
+    key: l,
+    className: "rounded-lg px-3 py-2",
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("p", {
+    className: "text-[9px] font-bold uppercase tracking-wider text-gray-400"
+  }, l), React.createElement("p", {
+    className: "font-semibold text-gray-700 mt-0.5"
+  }, v)))), React.createElement(Campo, {
+    label: "Instru\xE7\xE3o Inicial",
+    valor: p.instrucaoInicial,
+    chave: "ii",
+    mono: true
+  }), React.createElement(Campo, {
+    label: "Despacho",
+    valor: p.despacho,
+    chave: "desp"
+  }), React.createElement("div", {
+    className: "rounded-xl border border-gray-200 overflow-hidden"
+  }, React.createElement("div", {
+    className: "px-3.5 py-2",
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("span", {
+    className: "text-[10px] font-black uppercase tracking-widest text-gray-500"
+  }, "Anexos a incluir")), React.createElement("div", {
+    className: "divide-y divide-gray-50"
+  }, p.anexos.map(a => React.createElement("div", {
+    key: a.chave,
+    className: "px-3.5 py-2.5 flex items-center justify-between gap-3"
+  }, React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("p", {
+    className: "text-[12.5px] font-semibold text-gray-700 truncate"
+  }, a.descricao), React.createElement("p", {
+    className: "text-[10.5px] text-gray-400"
+  }, "Tipo no GDoc: ", React.createElement("span", {
+    className: "font-bold text-gray-500"
+  }, a.tipo), a.obrigatorio && React.createElement("span", {
+    className: "ml-1.5 text-red-500 font-bold"
+  }, "obrigat\xF3rio"))), a.chave === 'nf' && React.createElement("button", {
+    onClick: baixarNf,
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap",
+    style: pdfBase64 ? {
+      background: '#eff6ff',
+      color: '#1d4ed8'
+    } : {
+      background: '#f3f4f6',
+      color: '#9ca3af'
+    }
+  }, pdfBase64 ? 'baixar PDF' : 'sem PDF'))))), React.createElement("div", {
+    className: "rounded-xl border p-3.5",
+    style: {
+      background: '#faf5ff',
+      borderColor: '#ddd6fe'
+    }
+  }, React.createElement("label", {
+    className: "block text-[10px] font-black uppercase tracking-widest mb-1.5",
+    style: {
+      color: '#6d28d9'
+    }
+  }, "N\xBA do processo gerado"), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("input", {
+    value: numero,
+    onChange: e => setNumero(e.target.value.replace(/[^\d/]/g, '')),
+    placeholder: "ex.: 866/2026",
+    className: "flex-1 border rounded-lg px-3 py-2 text-sm font-bold",
+    style: {
+      borderColor: '#ddd6fe',
+      background: '#fff'
+    }
+  }), React.createElement("button", {
+    onClick: () => {
+      onSaveNumero(numero.trim());
+    },
+    disabled: !numero.trim(),
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-40",
+    style: {
+      background: '#7c3aed'
+    }
+  }, "Vincular \xE0 NF")), React.createElement("p", {
+    className: "text-[10.5px] mt-2",
+    style: {
+      color: '#7c5cbf'
+    }
+  }, "Ap\xF3s criar o processo no GDoc, registre o n\xFAmero aqui para vincular ao hist\xF3rico da parcela."))), React.createElement("div", {
+    className: "flex justify-between items-center gap-3 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("p", {
+    className: "text-[10.5px] text-gray-400"
+  }, "Confira os dados antes de tramitar no GDoc."), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: onClose,
+    className: "px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+  }, "Fechar"), React.createElement("button", {
+    onClick: abrirGdoc,
+    className: "px-5 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90",
+    style: {
+      background: '#7c3aed'
+    }
+  }, "Abrir GDoc \u2197")))));
+}
 function ContractDetailView({
   contractNumber,
   contracts,
@@ -5320,6 +5592,7 @@ function ContractDetailView({
   addToast
 }) {
   const cronoVinculado = (cronogramas || []).find(c => c.contratoVinculado === contractNumber) || null;
+  const [gdocInst, setGdocInst] = useState(null);
   function buildForm() {
     const m = contractMeta[contractNumber] || {};
     const fc = contracts.find(c => c.contractNumber === contractNumber) || {};
@@ -7182,7 +7455,44 @@ function ContractDetailView({
       accept: "application/pdf",
       className: "hidden",
       onChange: e => e.target.files[0] && handleAttachPdf(pdfKey, e.target.files[0])
-    })))), c.currentStep === 2 && React.createElement("div", {
+    })))), c.currentStep === 1 && React.createElement("div", {
+      className: "mx-5 mb-4 rounded-xl border-2 overflow-hidden",
+      style: {
+        borderColor: '#a78bfa'
+      }
+    }, React.createElement("div", {
+      className: "flex items-center gap-2 px-4 py-2.5 border-b",
+      style: {
+        background: '#faf5ff',
+        borderColor: '#ddd6fe'
+      }
+    }, React.createElement(FileText, {
+      className: "w-3.5 h-3.5 flex-shrink-0",
+      style: {
+        color: '#7c3aed'
+      }
+    }), React.createElement("p", {
+      className: "text-xs font-bold flex-1",
+      style: {
+        color: '#5b21b6'
+      }
+    }, "Processo no GDoc"), c.gdoc ? React.createElement("span", {
+      className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300"
+    }, c.gdoc.split('/').slice(0, 2).join('/')) : React.createElement("span", {
+      className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300"
+    }, "Etapa 1 \u2014 Pendente")), React.createElement("div", {
+      className: "px-4 py-3"
+    }, React.createElement("p", {
+      className: "text-xs text-gray-500 mb-3 leading-snug"
+    }, "Gera a ", React.createElement("strong", null, "instru\xE7\xE3o inicial"), " e o ", React.createElement("strong", null, "despacho"), " j\xE1 preenchidos com os dados desta parcela, prontos para abrir o processo de cobran\xE7a no GDoc e encaminhar ao ", GDOC_CFG.siglaDestino, "."), React.createElement("button", {
+      onClick: () => setGdocInst(c),
+      className: "flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl text-white shadow-sm hover:opacity-90 transition-opacity",
+      style: {
+        background: '#7c3aed'
+      }
+    }, React.createElement(FileText, {
+      className: "w-4 h-4"
+    }), c.gdoc ? 'Ver dados do GDoc' : 'Emitir GDoc'))), c.currentStep === 2 && React.createElement("div", {
       className: "mx-5 mb-4 rounded-xl border-2 overflow-hidden",
       style: {
         borderColor: '#6366f1'
@@ -7276,7 +7586,22 @@ function ContractDetailView({
     }, React.createElement(Trash2, {
       className: "w-3.5 h-3.5"
     }), " Excluir esta parcela"))));
-  }))), cronoVinculado && (() => {
+  }))), gdocInst && React.createElement(GdocEmitModal, {
+    inst: gdocInst,
+    meta: contractMeta[contractNumber] || {},
+    pdfBase64: pdfStorage[String(gdocInst.id)] || null,
+    onClose: () => setGdocInst(null),
+    onSaveNumero: num => {
+      const ano = (gdocInst.refMonth || '').split('-')[0] || new Date().getFullYear();
+      const full = num.includes('/') ? `${num}/BÉLEMDIGITAL` : `${num}/${ano}/BÉLEMDIGITAL`;
+      onUpdateNfData(gdocInst.id, {
+        gdoc: full
+      });
+      addToast('✅ Processo vinculado à parcela.');
+      setGdocInst(null);
+    },
+    addToast: addToast
+  }), cronoVinculado && (() => {
     const aliq = cronSomaAliq(cronoVinculado.params?.tributos || CRON_TRIBUTOS_PADRAO);
     const pctBD = cronoVinculado.params?.pctBD ?? 15;
     const base = cronoVinculado.params?.base || 'LIQUIDO';
