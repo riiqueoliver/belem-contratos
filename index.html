@@ -877,9 +877,9 @@ Regras:
           }),
         });
         const raw = await resp.text();
-        if (!raw) return null;
+        if (!raw) return { erro:`resposta vazia (HTTP ${resp.status})` };
         const data = JSON.parse(raw);
-        if (data.error) { console.warn('[Certidões] IA:', data.error.message); return null; }
+        if (data.error) { console.warn('[Certidões] IA:', data.error.message); return { erro: data.error.message }; }
         let t = (data.content?.find(b => b.type==='text')?.text || '').trim();
         if (t.startsWith('```')) t = t.replace(/```json?\n?/g,'').replace(/```/g,'').trim();
         const ini = t.indexOf('{'), fim = t.lastIndexOf('}');
@@ -3957,7 +3957,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     /* ═══════════════════════════════════════════════════════
        PÁGINA DE CERTIDÕES CORPORATIVAS
     ═══════════════════════════════════════════════════════ */
-    function CertidaoCard({ cert, onAttach, onDetach, onDownload, onExpiry, dragOver }) {
+    function CertidaoCard({ cert, onAttach, onDetach, onDownload, onExpiry, onReanalisar, lendo, dragOver }) {
       const inputRef = React.useRef(null);
       const st  = certStatus(cert);
       const cfg = CERT_STATUS_CFG[st];
@@ -4028,6 +4028,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             )}
             <input ref={inputRef} type="file" accept="application/pdf" className="hidden"
                    onChange={e => { const f = e.target.files?.[0]; if (f) onAttach(cert, f); e.target.value=''; }} />
+            {cert.pdfFileName && !cert.expiryDate && (
+              <button onClick={() => onReanalisar(cert)} disabled={lendo}
+                className="flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-60"
+                style={{borderColor:'#7c3aed', color:'#6d28d9', background:'#faf5ff'}}
+                title="Lê a validade do PDF já anexado usando IA">
+                {lendo ? '⏳ Lendo documento…' : '🔍 Ler validade com IA'}
+              </button>
+            )}
             <a href={cert.portalUrl} target="_blank" rel="noopener noreferrer"
                onClick={() => { navigator.clipboard?.writeText(CERT_CNPJ.replace(/\D/g,'')).catch(()=>{}); }}
                className="flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white hover:opacity-90"
@@ -4039,8 +4047,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    function CertidoesPage({ certidoes, pdfs, onAttach, onDetach, onExpiry, addToast }) {
+    function CertidoesPage({ certidoes, pdfs, onAttach, onDetach, onExpiry, onReanalisar, addToast }) {
       const [dragId, setDragId] = React.useState(null);
+      const [lendoId, setLendoId] = React.useState(null);
+      async function reanalisar(cert) {
+        setLendoId(cert.id);
+        try { await onReanalisar(cert); } finally { setLendoId(null); }
+      }
       const certsRef = React.useRef(certidoes);
       const attachRef = React.useRef(onAttach);
       React.useEffect(() => { certsRef.current = certidoes; attachRef.current = onAttach; });
@@ -4148,6 +4161,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div className="flex flex-col gap-2.5">
                 {ordenadas.map(c => (
                   <CertidaoCard key={c.id} cert={c} dragOver={dragId === c.id}
+                    lendo={lendoId === c.id} onReanalisar={reanalisar}
                     onAttach={onAttach} onDetach={onDetach} onDownload={baixar} onExpiry={onExpiry} />
                 ))}
               </div>
@@ -12208,10 +12222,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             ? '🔍 PDF digitalizado — lendo o documento com IA…'
             : '🔍 Validade não localizada no texto — conferindo com IA…');
           const ia = await certAnalisarIA(b64, cert.type, apiKey);
-          if (ia) {
+          if (ia?.erro) {
+            addToast(`⚠️ Leitura por IA falhou: ${ia.erro}. Use o botão "Ler com IA" no card ou informe a data manualmente.`);
+          } else if (ia) {
             if (ia.expiry) { dados.expiry = ia.expiry; viaIA = true; }
             if (!dados.type && ia.type) dados.type = ia.type;
-            if (!dados.cnpjs.length && ia.cnpjs.length) dados.cnpjs = ia.cnpjs;
+            if (!dados.cnpjs?.length && ia.cnpjs?.length) dados.cnpjs = ia.cnpjs;
           }
         }
 
@@ -12240,6 +12256,22 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         if (dados.confidence === 'low' && dados.type && dados.type !== cert.type)
           msgs.push(`⚠️ Sinais fracos de ser "${dados.type}" — confira.`);
         addToast(msgs.join(' '));
+      }
+
+      // Relê a validade do PDF já anexado (sem precisar reenviar o arquivo)
+      async function handleReanalisarCertidao(cert) {
+        const b64 = pdfStorage[`cert_${cert.id}`];
+        if (!b64) { addToast('Nenhum PDF anexado a esta certidão.'); return; }
+        if (!apiKey) { addToast('❌ Chave de API não configurada.'); return; }
+        addToast('🔍 Lendo o documento com IA…');
+        const ia = await certAnalisarIA(b64.includes(',') ? b64.split(',')[1] : b64, cert.type, apiKey);
+        if (!ia || ia.erro) {
+          addToast(`❌ Não foi possível ler: ${ia?.erro || 'falha na análise'}. Informe a data clicando nela.`);
+          return;
+        }
+        if (!ia.expiry) { addToast('⚠️ A IA não localizou a validade neste documento. Informe a data clicando nela.'); return; }
+        await db.collection(COL('certidoes')).doc(cert.id).set({ expiryDate: ia.expiry }, { merge:true });
+        addToast(`✅ Validade lida por IA: ${new Date(ia.expiry+'T12:00:00').toLocaleDateString('pt-BR')}.`);
       }
 
       async function handleDetachCertidao(cert) {
@@ -13259,6 +13291,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 onAttach={handleAttachCertidao}
                 onDetach={handleDetachCertidao}
                 onExpiry={handleExpiryCertidao}
+                onReanalisar={handleReanalisarCertidao}
                 addToast={addToast}
               />
             ) : showCronogramaPage ? (
