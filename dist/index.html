@@ -7455,7 +7455,7 @@ function ContractDetailView({
       accept: "application/pdf",
       className: "hidden",
       onChange: e => e.target.files[0] && handleAttachPdf(pdfKey, e.target.files[0])
-    })))), c.currentStep === 1 && React.createElement("div", {
+    })))), React.createElement("div", {
       className: "mx-5 mb-4 rounded-xl border-2 overflow-hidden",
       style: {
         borderColor: '#a78bfa'
@@ -7479,8 +7479,8 @@ function ContractDetailView({
     }, "Processo no GDoc"), c.gdoc ? React.createElement("span", {
       className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300"
     }, c.gdoc.split('/').slice(0, 2).join('/')) : React.createElement("span", {
-      className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300"
-    }, "Etapa 1 \u2014 Pendente")), React.createElement("div", {
+      className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300"
+    }, "sem processo")), React.createElement("div", {
       className: "px-4 py-3"
     }, React.createElement("p", {
       className: "text-xs text-gray-500 mb-3 leading-snug"

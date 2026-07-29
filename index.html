@@ -5432,36 +5432,34 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             </div>
                           </div>
 
-                          {/* ── Emitir GDoc (step 1 — solicitação de emissão da NF) ── */}
-                          {c.currentStep === 1 && (
-                            <div className="mx-5 mb-4 rounded-xl border-2 overflow-hidden" style={{borderColor:'#a78bfa'}}>
-                              <div className="flex items-center gap-2 px-4 py-2.5 border-b"
-                                   style={{background:'#faf5ff', borderColor:'#ddd6fe'}}>
-                                <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{color:'#7c3aed'}} />
-                                <p className="text-xs font-bold flex-1" style={{color:'#5b21b6'}}>Processo no GDoc</p>
-                                {c.gdoc
-                                  ? <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300">
-                                      {c.gdoc.split('/').slice(0,2).join('/')}
-                                    </span>
-                                  : <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300">
-                                      Etapa 1 — Pendente
-                                    </span>}
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-xs text-gray-500 mb-3 leading-snug">
-                                  Gera a <strong>instrução inicial</strong> e o <strong>despacho</strong> já preenchidos com os dados desta
-                                  parcela, prontos para abrir o processo de cobrança no GDoc e encaminhar ao {GDOC_CFG.siglaDestino}.
-                                </p>
-                                <button
-                                  onClick={() => setGdocInst(c)}
-                                  className="flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl text-white shadow-sm hover:opacity-90 transition-opacity"
-                                  style={{background:'#7c3aed'}}>
-                                  <FileText className="w-4 h-4" />
-                                  {c.gdoc ? 'Ver dados do GDoc' : 'Emitir GDoc'}
-                                </button>
-                              </div>
+                          {/* ── Emitir GDoc — disponível em qualquer etapa ── */}
+                          <div className="mx-5 mb-4 rounded-xl border-2 overflow-hidden" style={{borderColor:'#a78bfa'}}>
+                            <div className="flex items-center gap-2 px-4 py-2.5 border-b"
+                                 style={{background:'#faf5ff', borderColor:'#ddd6fe'}}>
+                              <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{color:'#7c3aed'}} />
+                              <p className="text-xs font-bold flex-1" style={{color:'#5b21b6'}}>Processo no GDoc</p>
+                              {c.gdoc
+                                ? <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300">
+                                    {c.gdoc.split('/').slice(0,2).join('/')}
+                                  </span>
+                                : <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300">
+                                    sem processo
+                                  </span>}
                             </div>
-                          )}
+                            <div className="px-4 py-3">
+                              <p className="text-xs text-gray-500 mb-3 leading-snug">
+                                Gera a <strong>instrução inicial</strong> e o <strong>despacho</strong> já preenchidos com os dados desta
+                                parcela, prontos para abrir o processo de cobrança no GDoc e encaminhar ao {GDOC_CFG.siglaDestino}.
+                              </p>
+                              <button
+                                onClick={() => setGdocInst(c)}
+                                className="flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl text-white shadow-sm hover:opacity-90 transition-opacity"
+                                style={{background:'#7c3aed'}}>
+                                <FileText className="w-4 h-4" />
+                                {c.gdoc ? 'Ver dados do GDoc' : 'Emitir GDoc'}
+                              </button>
+                            </div>
+                          </div>
 
                           {/* ── Gerar Relatório de Gestão (step 2) ── */}
                           {c.currentStep === 2 && (
