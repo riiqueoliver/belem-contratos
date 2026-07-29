@@ -1,0 +1,57 @@
+.sgc-gdoc-panel {
+  position: fixed; top: 16px; right: 16px; z-index: 2147483647;
+  width: 320px; background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.18);
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  overflow: hidden;
+}
+.sgc-gdoc-panel .sgc-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 12px; background: #0B2B5E; color: #fff;
+}
+.sgc-gdoc-panel .sgc-badge {
+  background: rgba(255,255,255,.18); font-size: 10px; font-weight: 800;
+  padding: 2px 7px; border-radius: 6px; letter-spacing: .5px;
+}
+.sgc-gdoc-panel .sgc-tit { font-size: 13px; font-weight: 700; flex: 1; }
+.sgc-gdoc-panel .sgc-x {
+  background: none; border: 0; color: #fff; opacity: .7;
+  font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.sgc-gdoc-panel .sgc-x:hover { opacity: 1; }
+
+.sgc-gdoc-panel .sgc-info {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
+  background: #eef2f6; border-bottom: 1px solid #e2e8f0;
+}
+.sgc-gdoc-panel .sgc-info > div { background: #f8fafc; padding: 7px 8px; }
+.sgc-gdoc-panel .sgc-info b {
+  display: block; font-size: 8.5px; text-transform: uppercase;
+  letter-spacing: .6px; color: #94a3b8; font-weight: 800;
+}
+.sgc-gdoc-panel .sgc-info span {
+  font-size: 11px; font-weight: 700; color: #334155;
+  display: block; margin-top: 2px; word-break: break-word;
+}
+
+.sgc-gdoc-panel .sgc-run {
+  display: block; width: calc(100% - 24px); margin: 12px;
+  padding: 10px; border: 0; border-radius: 10px;
+  background: #7c3aed; color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: opacity .15s;
+}
+.sgc-gdoc-panel .sgc-run:hover:not(:disabled) { opacity: .9; }
+.sgc-gdoc-panel .sgc-run:disabled { opacity: .55; cursor: default; }
+
+.sgc-gdoc-panel .sgc-log {
+  max-height: 190px; overflow-y: auto; margin: 0 12px;
+  font-size: 11.5px; line-height: 1.5;
+}
+.sgc-gdoc-panel .sgc-l { padding: 3px 0; color: #64748b; }
+.sgc-gdoc-panel .sgc-l.ok    { color: #15803d; font-weight: 600; }
+.sgc-gdoc-panel .sgc-l.erro  { color: #dc2626; font-weight: 600; }
+.sgc-gdoc-panel .sgc-l.aviso { color: #b45309; font-weight: 600; }
+
+.sgc-gdoc-panel .sgc-hint {
+  margin: 10px 12px 12px; font-size: 10.5px; color: #94a3b8; line-height: 1.45;
+}
