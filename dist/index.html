@@ -1615,6 +1615,548 @@ function maskBRL(input) {
   const intFmt = intRaw ? parseInt(intRaw, 10).toLocaleString('pt-BR') : '';
   return dec !== null ? `${intFmt},${dec}` : intFmt;
 }
+const ORGAOS_SEED = [{
+  id: 'GABPREF',
+  sigla: 'GAB. PREF.',
+  nome: 'Gabinete do Prefeito de Belém — PA',
+  titular: 'ARIELA NAOMI MOTIZUKI',
+  cargo: 'Chefe de Gabinete',
+  grupo: 'Administração Direta'
+}, {
+  id: 'PGM',
+  sigla: 'PGM',
+  nome: 'Procuradoria Geral do Município de Belém — PA',
+  titular: 'ALEX LOBATO POTIGUAR',
+  cargo: 'Procurador Geral do Município',
+  grupo: 'Administração Direta'
+}, {
+  id: 'CGM',
+  sigla: 'CGM',
+  nome: 'Controladoria Geral do Município de Belém — PA',
+  titular: 'TALITA REIS MAGALHÃES',
+  cargo: 'Controladora Geral do Município',
+  grupo: 'Administração Direta'
+}, {
+  id: 'OGM',
+  sigla: 'OGM',
+  nome: 'Ouvidoria Geral do Município de Belém — PA',
+  titular: 'RAFAEL FERREIRA PORTO',
+  cargo: 'Ouvidor Geral do Município',
+  grupo: 'Administração Direta'
+}, {
+  id: 'GMB',
+  sigla: 'GMB',
+  nome: 'Guarda Municipal de Belém — PA',
+  titular: 'ESAÚ DA CUNHA ARAÚJO',
+  cargo: 'Inspetor Geral da Guarda Municipal',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEGOV',
+  sigla: 'SEGOV',
+  nome: 'Secretaria Municipal de Governo de Belém — PA',
+  titular: 'CLEIDSON FERREIRA CHAVES',
+  cargo: 'Secretário Municipal de Governo',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEFIN',
+  sigla: 'SEFIN',
+  nome: 'Secretaria Municipal de Finanças de Belém — PA',
+  titular: 'MARCOS RODRIGUES DE MATOS',
+  cargo: 'Secretário Municipal de Finanças',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMEC',
+  sigla: 'SEMEC',
+  nome: 'Secretaria Municipal de Educação de Belém — PA',
+  titular: 'JORGE LEONIDAS VAZ DA COSTA',
+  cargo: 'Secretário Municipal de Educação',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SECT',
+  sigla: 'SECT',
+  nome: 'Secretaria Municipal de Ciência e Tecnologia de Belém — PA',
+  titular: 'CLEIDSON FERREIRA CHAVES',
+  cargo: 'Secretário Municipal de Ciência e Tecnologia, em exercício',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEINFRA',
+  sigla: 'SEINFRA',
+  nome: 'Secretaria Municipal de Obras e Infraestrutura de Belém — PA',
+  titular: 'FÁBIO LUÍS DE ARAÚJO RODRIGUES',
+  cargo: 'Secretário Municipal de Obras e Infraestrutura',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SESMA',
+  sigla: 'SESMA',
+  nome: 'Secretaria Municipal de Saúde de Belém — PA',
+  titular: 'DYJANE CHAVES DOS SANTOS AMARAL',
+  cargo: 'Secretária Municipal de Saúde',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEZEL',
+  sigla: 'SEZEL',
+  nome: 'Secretaria Municipal de Zeladoria e Conservação Urbana de Belém — PA',
+  titular: 'FERNANDO ASSUNÇÃO CAMARINHA',
+  cargo: 'Secretário Municipal de Zeladoria e Conservação Urbana',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEDCON',
+  sigla: 'SEDCON',
+  nome: 'Secretaria Municipal de Desenvolvimento Econômico de Belém — PA',
+  titular: 'ANDRÉ LUIZ BARBOSA DA CUNHA',
+  cargo: 'Secretário Municipal de Desenvolvimento Econômico',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEGEP',
+  sigla: 'SEGEP',
+  nome: 'Secretaria Municipal de Coordenação Geral do Planejamento e Gestão de Belém — PA',
+  titular: 'MARCOS RODRIGUES DE MATOS',
+  cargo: 'Secretário Municipal de Coordenação Geral do Planejamento e Gestão, em exercício',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEHAB',
+  sigla: 'SEHAB',
+  nome: 'Secretaria Municipal de Habitação de Belém — PA',
+  titular: 'LUCAS LAZERA GUIMARÃES MESCOUTO',
+  cargo: 'Secretário Municipal de Habitação',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMMA',
+  sigla: 'SEMMA',
+  nome: 'Secretaria Municipal de Meio Ambiente de Belém — PA',
+  titular: 'JULIANA NOBRE PINHEIRO',
+  cargo: 'Secretária Municipal de Meio Ambiente',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SECOM',
+  sigla: 'SECOM',
+  nome: 'Secretaria Municipal de Comunicação de Belém — PA',
+  titular: 'ANDRÉ SILVA LOUREIRO GODINHO',
+  cargo: 'Secretário Municipal de Comunicação',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMEL',
+  sigla: 'SEMEL',
+  nome: 'Secretaria Municipal de Esporte e Lazer de Belém — PA',
+  titular: 'ANDRÉ MARTHA TAVARES FILHO',
+  cargo: 'Secretário Municipal de Esporte e Lazer',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SETUR',
+  sigla: 'SETUR',
+  nome: 'Secretaria Municipal de Turismo de Belém — PA',
+  titular: 'CILENE MOREIRA SABINO DE OLIVEIRA',
+  cargo: 'Secretária Municipal de Turismo',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SECULT',
+  sigla: 'SECULT',
+  nome: 'Secretaria Municipal de Cultura de Belém — PA',
+  titular: 'MICHELL MENDES DURANS DA SILVA',
+  cargo: 'Secretário Municipal de Cultura',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMCAD',
+  sigla: 'SEMCAD',
+  nome: 'Secretaria Municipal de Cidadania, Assistência Social e Direitos Humanos de Belém — PA',
+  titular: 'ALTAIR DE LIMA BRANDÃO',
+  cargo: 'Secretário Municipal de Cidadania, Assistência Social e Direitos Humanos',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEPDA',
+  sigla: 'SEPDA',
+  nome: 'Secretaria Municipal de Proteção e Defesa dos Animais de Belém — PA',
+  titular: 'ELIANA DE NAZARÉ CHAVES UCHÔA',
+  cargo: 'Secretária Municipal de Proteção e Defesa dos Animais',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMIAC',
+  sigla: 'SEMIAC',
+  nome: 'Secretaria Municipal de Inclusão e Acessibilidade de Belém — PA',
+  titular: 'ARIELA NAOMI MOTIZUKI',
+  cargo: 'Secretária Municipal de Inclusão e Acessibilidade, em exercício',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEAPE',
+  sigla: 'SEAPE',
+  nome: 'Secretaria Municipal de Agricultura e Pesca de Belém — PA',
+  titular: 'EUCLIDES DA CRUZ SIZO FILHO',
+  cargo: 'Secretário Municipal de Agricultura e Pesca',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMU',
+  sigla: 'SEMU',
+  nome: 'Secretaria Municipal da Mulher de Belém — PA',
+  titular: 'CARLA FERNANDES FIGUEIREDO MELLO',
+  cargo: 'Secretária Municipal da Mulher',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEMTE',
+  sigla: 'SEMTE',
+  nome: 'Secretaria Municipal de Trabalho e Emprego de Belém — PA',
+  titular: 'MAYCON VALENTE PANTOJA',
+  cargo: 'Secretário Municipal de Trabalho e Emprego',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SEGBEL',
+  sigla: 'SEGBEL',
+  nome: 'Secretaria Municipal de Segurança, Ordem Pública e Mobilidade de Belém — PA',
+  titular: 'CLÁUDIO LUCIANO MONTEIRO DE OLIVEIRA',
+  cargo: 'Secretário Municipal de Segurança, Ordem Pública e Mobilidade de Belém',
+  grupo: 'Administração Direta'
+}, {
+  id: 'SUBOUT',
+  sigla: 'Outeiro',
+  nome: 'Subprefeitura de Outeiro — Belém/PA',
+  titular: 'SEBASTIÃO OLIVEIRA COSTA',
+  cargo: 'Subprefeito de Outeiro',
+  grupo: 'Subprefeituras'
+}, {
+  id: 'SUBICO',
+  sigla: 'Icoaraci',
+  nome: 'Subprefeitura de Icoaraci — Belém/PA',
+  titular: 'JOÃO JERÔNIMO GLEDSON COSTA DA SILVA',
+  cargo: 'Subprefeito de Icoaraci',
+  grupo: 'Subprefeituras'
+}, {
+  id: 'SUBMOS',
+  sigla: 'Mosqueiro',
+  nome: 'Subprefeitura de Mosqueiro — Belém/PA',
+  titular: 'RENATO BRANDÃO DE MORAES FILHO',
+  cargo: 'Subprefeito de Mosqueiro',
+  grupo: 'Subprefeituras'
+}, {
+  id: 'BELEMPREV',
+  sigla: 'BELÉMPREV',
+  nome: 'BELÉMPREV — Instituto de Previdência do Município de Belém',
+  titular: 'ORLANDO REIS PANTOJA',
+  cargo: 'Presidente do BELÉMPREV',
+  grupo: 'Administração Indireta'
+}, {
+  id: 'IASB',
+  sigla: 'IASB',
+  nome: 'IASB — Instituto de Assistência Santa Casa de Belém',
+  titular: 'HUMBERTO BOZI SPINDOLA',
+  cargo: 'Presidente do IASB',
+  grupo: 'Administração Indireta'
+}, {
+  id: 'FUNPAPA',
+  sigla: 'FUNPAPA',
+  nome: 'FUNPAPA — Fundação Papa João XXIII',
+  titular: 'EDNA GOMES DA SILVA',
+  cargo: 'Presidente da FUNPAPA',
+  grupo: 'Administração Indireta'
+}, {
+  id: 'BD',
+  sigla: 'BELÉM DIGITAL',
+  nome: 'Belém Digital — Companhia de Transformação Digital de Belém',
+  titular: 'GUSTAVO BEZERRA DA COSTA',
+  cargo: 'Presidente da Belém Digital',
+  grupo: 'Administração Indireta'
+}, {
+  id: 'CODEM',
+  sigla: 'CODEM',
+  nome: 'CODEM — Companhia de Desenvolvimento e Administração da Área Metropolitana de Belém',
+  titular: 'MARIEL DACIER LOBATO MARTIN DE MELLO',
+  cargo: 'Presidente da CODEM',
+  grupo: 'Administração Indireta'
+}, {
+  id: 'ARBEL',
+  sigla: 'ARBEL',
+  nome: 'ARBEL — Agência Reguladora Municipal de Belém',
+  titular: 'RICARDO BRANDÃO COELHO',
+  cargo: 'Diretor Presidente da ARBEL',
+  grupo: 'Administração Indireta'
+}];
+const PROP_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function propDataExtenso(iso) {
+  if (!iso) return '';
+  const [a, m, d] = iso.split('-').map(Number);
+  return `Belém, ${String(d).padStart(2, '0')} de ${PROP_MESES[(m || 1) - 1]} de ${a}`;
+}
+function propBRL(v) {
+  const n = typeof v === 'number' ? v : parseBRL(v);
+  return n.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function propEsc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function propParas(txt, cls = 'prose') {
+  return String(txt || '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean).map(p => `<p class="${cls}">${propEsc(p)}</p>`).join('\n');
+}
+function propostaCss() {
+  return `
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+:root{--navy:#0F265C;--blue:#4472DE;--green-mid:#6FE066;--cream:#FFF3E4;--paper:#fff;
+--ink:#1A2042;--ink-soft:#4A5780;--line:#E1E4EC;--line-strong:#BFC4D3;--muted:#6F7795;
+--pg-w:860px;--pg-h:1180px;--f:"Space Grotesk",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#E8EAEF;color:var(--ink);font-family:var(--f);
+-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:none}
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:24px;padding:12px 24px;
+background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);font-size:13px}
+.topbar strong{color:var(--navy);font-weight:600}
+.topbar__cta{margin-left:auto;padding:8px 16px;border-radius:4px;background:var(--navy);
+color:var(--cream)!important;font-weight:600;font-size:12.5px;cursor:pointer;border:0;font-family:var(--f)}
+.doc{display:flex;flex-direction:column;align-items:center;gap:32px;padding:36px 16px 96px}
+.page{position:relative;width:var(--pg-w);min-height:var(--pg-h);padding:76px 88px;background:var(--paper);
+box-shadow:0 18px 40px -20px rgba(15,38,92,.15),0 60px 100px -50px rgba(15,38,92,.18);
+border-radius:2px;display:flex;flex-direction:column}
+.page__header{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;
+margin-bottom:36px;border-bottom:1px solid var(--line)}
+.page__brand{display:flex;align-items:center;gap:14px}
+.bd-logo--page{height:18px;width:auto;display:block}
+.page__eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--ink-soft);line-height:1}
+.page__num{font-weight:600;font-size:12px;letter-spacing:.08em;color:var(--muted);font-variant-numeric:tabular-nums}
+.page__footer{margin-top:auto;padding-top:24px;display:flex;justify-content:space-between;
+font-size:11px;letter-spacing:.04em;color:var(--muted);border-top:1px solid var(--line)}
+.page--cover{padding:0;background:#fff;color:var(--navy);overflow:hidden}
+.cover{display:flex;flex-direction:column;width:100%;height:var(--pg-h);padding:72px 88px 64px}
+.cover__top{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.bd-logo--cover{height:42px;width:auto;display:block}
+.cover__id{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:500;
+color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.cover__center{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0}
+.cover__eyebrow{display:inline-flex;align-items:center;gap:12px;font-size:12px;letter-spacing:.18em;
+text-transform:uppercase;font-weight:600;color:var(--blue);margin-bottom:32px}
+.cover__dot{width:8px;height:8px;background:var(--green-mid);border-radius:50%;flex-shrink:0}
+.cover__title{font-weight:500;font-size:58px;line-height:1.08;letter-spacing:-.03em;color:var(--navy);
+margin:0 0 32px;text-wrap:balance}
+.cover__client{font-size:16px;line-height:1.45;color:var(--ink-soft);font-weight:400;max-width:480px}
+.cover__bottom{flex-shrink:0;padding-top:32px;border-top:1px solid var(--line)}
+.cover__meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;width:100%}
+.cover__meta>div{display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.4;
+color:var(--navy);font-weight:500}
+.cover__meta span{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--ink-soft)}
+.letter{flex:1}
+.letter__addr{margin-bottom:32px}
+.letter__addr-label{font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+color:var(--ink-soft);margin-bottom:8px}
+.letter__addr-name{font-weight:600;font-size:20px;letter-spacing:-.01em;color:var(--navy);margin-bottom:6px}
+.letter__addr-to{font-size:14px;color:var(--ink);margin-bottom:12px}
+.letter__addr-to b{color:var(--navy);font-weight:600}
+.letter__addr-ref{font-size:13.5px;line-height:1.6;color:var(--ink);max-width:620px}
+.letter__greeting{font-weight:500;font-size:15px;color:var(--navy);margin-bottom:16px}
+.letter__body p{font-size:14.5px;line-height:1.7;color:var(--ink);margin:0 0 12px;max-width:620px;
+text-align:justify;hyphens:auto}
+.letter__signoff{margin-top:24px!important}
+.letter__sign{margin-top:56px}
+.letter__sign-line{width:240px;height:1px;background:var(--navy);margin-bottom:10px}
+.letter__sign-name{font-weight:600;font-size:15px;color:var(--navy)}
+.letter__sign-role{font-size:13px;color:var(--ink-soft);margin-bottom:4px}
+.letter__sign-contact{font-size:12.5px;color:var(--ink-soft)}
+.section__title{font-weight:600;font-size:30px;line-height:1.15;letter-spacing:-.02em;color:var(--navy);margin:0 0 6px}
+.section__title--sub{font-size:22px;margin-top:24px}
+.section__sub{font-size:13.5px;letter-spacing:.03em;color:var(--ink-soft);margin:0 0 24px;font-weight:500}
+.rule{height:1px;background:var(--line);margin:36px 0}
+.prose{font-size:14.5px;line-height:1.7;color:var(--ink);margin:0 0 14px;max-width:660px;
+text-align:justify;hyphens:auto}
+.prose b{color:var(--navy);font-weight:600}
+.footnote{font-size:12px;color:var(--muted);margin-top:16px;font-style:italic}
+.num-list{list-style:none;padding:0;margin:6px 0 0}
+.num-list li{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.num-list li:last-child{border-bottom:none}
+.num-list__n{font-weight:600;color:var(--navy);font-variant-numeric:tabular-nums;font-size:14.5px}
+.num-list__t{font-size:14.5px;line-height:1.65;color:var(--ink);text-align:justify;hyphens:auto}
+.bullets{list-style:none;padding:0;margin:4px 0 0}
+.bullets li{position:relative;padding:6px 0 6px 18px;font-size:14px;line-height:1.65;color:var(--ink);
+max-width:700px;text-align:justify;hyphens:auto}
+.bullets li::before{content:"";position:absolute;left:0;top:14px;width:6px;height:6px;
+background:var(--navy);border-radius:50%}
+.mod-title{font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--navy);margin:8px 0 14px;
+padding-bottom:8px;border-bottom:1px solid var(--navy)}
+.defs{margin:0 0 18px}
+.defs dt{font-weight:600;font-size:14px;color:var(--navy);margin:14px 0 4px}
+.defs dt:first-child{margin-top:0}
+.defs dd{margin:0;font-size:13.5px;line-height:1.65;color:var(--ink);text-align:justify;hyphens:auto}
+.step-list{list-style:none;padding:0;margin:18px 0 0}
+.step-list li{display:grid;grid-template-columns:28px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.step-list li:last-child{border-bottom:none}
+.step-list__n{font-weight:600;color:var(--navy);font-size:14.5px;font-variant-numeric:tabular-nums}
+.step-list__body{font-size:14px;line-height:1.65;color:var(--ink);text-align:justify;hyphens:auto}
+.step-list__body b{color:var(--navy);font-weight:600}
+.tbl-caption{font-weight:600;font-size:13px;color:var(--navy);margin:4px 0 8px}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;color:var(--ink);border:1px solid var(--navy);margin-bottom:18px}
+.tbl thead th{background:var(--navy);color:var(--cream);font-weight:600;text-align:left;padding:10px 12px;
+font-size:12.5px;border-right:1px solid rgba(255,243,228,.18)}
+.tbl thead th:last-child{border-right:none}
+.tbl tbody td{padding:12px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+font-variant-numeric:tabular-nums;line-height:1.55}
+.tbl tbody td:last-child{border-right:none}
+.tbl tbody tr:last-child td{border-bottom:1px solid var(--navy)}
+.tbl tfoot td{padding:12px;font-weight:700;background:#F4F6FA;color:var(--navy);
+font-variant-numeric:tabular-nums;border-right:1px solid var(--line)}
+.tbl tfoot td:last-child{border-right:none}
+.tbl--cron tbody td:nth-child(1){font-weight:600;color:var(--navy);width:80px}
+.ta-c{text-align:center}.ta-r{text-align:right}
+.resp-h{font-weight:600;font-size:15px;color:var(--navy);margin:22px 0 6px}
+@page{size:A4 portrait;margin:0}
+@media print{
+html,body{background:#fff!important;margin:0!important;padding:0!important}
+.topbar{display:none!important}
+.doc{padding:0!important;gap:0!important;display:block!important}
+.page{width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;
+margin:0!important;padding:52px 84px!important;box-shadow:none!important;border-radius:0!important;
+overflow:hidden!important;display:flex!important;flex-direction:column!important;
+page-break-after:always!important;break-after:page!important;page-break-inside:avoid!important}
+.page:last-of-type{page-break-after:auto!important;break-after:auto!important}
+.page__footer{margin-top:auto!important;flex-shrink:0!important}
+.page--cover{padding:0!important}
+.cover{height:297mm!important;min-height:297mm!important;padding:64px 84px 56px!important}
+*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}`;
+}
+function propostaHtml(d) {
+  const logo = window.location.origin + '/belem-digital-azul.png';
+  const rodape = `Proposta Comercial · Belém Digital × ${propEsc(d.orgaoSigla || d.orgaoNome)}`;
+  const pgs = [];
+  const P = (conteudo, eyebrow) => {
+    const n = pgs.length + 2;
+    pgs.push(`<section class="page">
+  <header class="page__header">
+    <div class="page__brand"><img src="${logo}" alt="Belém Digital" class="bd-logo--page"/>
+    <div class="page__eyebrow">${propEsc(eyebrow)}</div></div>
+    <div class="page__num">@@N${pgs.length}@@</div>
+  </header>
+  ${conteudo}
+  <footer class="page__footer"><span>${rodape}</span><span>@@N${pgs.length}@@ / @@T@@</span></footer>
+</section>`);
+  };
+  P(`<div class="letter">
+  <div class="letter__addr">
+    <div class="letter__addr-label">À</div>
+    <div class="letter__addr-name">${propEsc(d.orgaoNome)}</div>
+    ${d.titular ? `<div class="letter__addr-to">A/C <b>${propEsc(d.titular)}</b>${d.cargo ? ` — ${propEsc(d.cargo)}` : ''}</div>` : ''}
+    <div class="letter__addr-ref">Referência: ${propEsc(d.referencia)}</div>
+  </div>
+  <div class="letter__greeting">Prezado(a) Senhor(a),</div>
+  <div class="letter__body">
+    ${propParas(d.carta, '')}
+    <p class="letter__signoff">Atenciosamente,</p>
+  </div>
+  <div class="letter__sign">
+    <div class="letter__sign-line"></div>
+    <div class="letter__sign-name">${propEsc(d.assNome)}</div>
+    <div class="letter__sign-role">${propEsc(d.assCargo)}</div>
+    <div class="letter__sign-contact">${propEsc(d.assEmail)} &nbsp;·&nbsp; ${propEsc(d.assFone)}</div>
+  </div>
+</div>`, 'Carta de apresentação');
+  P(`<h2 class="section__title">Apresentação</h2>
+${propParas(d.apresentacao)}`, '1 — Apresentação');
+  const bens = (d.beneficios || []).filter(Boolean);
+  if (bens.length) P(`<h2 class="section__title">Benefícios</h2>
+<p class="section__sub">Principais resultados que podem ser alcançados com o uso do sistema.</p>
+<ol class="num-list">${bens.map((b, i) => `<li><span class="num-list__n">${i + 1}.</span><span class="num-list__t">${propEsc(b)}</span></li>`).join('')}</ol>`, '2 — Benefícios');
+  const servs = (d.servicos || []).filter(Boolean);
+  P(`<h2 class="section__title">Objeto da proposta</h2>
+<p class="section__sub">Descrição do objeto desta proposta.</p>
+${propParas(d.objeto)}
+${servs.length ? `<div class="rule"></div>
+<h2 class="section__title section__title--sub">Serviços a serem contratados</h2>
+<ul class="bullets">${servs.map(s => `<li>${propEsc(s)}</li>`).join('')}</ul>` : ''}`, '3 a 4 — Objeto e Serviços');
+  (d.modulos || []).forEach((m, i) => {
+    const itens = (m.itens || []).filter(x => x.nome || x.desc);
+    if (!itens.length) return;
+    P(`${i === 0 ? `<h2 class="section__title">Funcionalidades do sistema</h2>
+<p class="section__sub">Descrição das funcionalidades do ${propEsc(d.solucao)}${d.sigla ? ` (${propEsc(d.sigla)})` : ''}.</p>` : ''}
+<h3 class="mod-title">${propEsc(m.titulo)}</h3>
+<dl class="defs">${itens.map(x => `<dt>${propEsc(x.nome)}</dt><dd>${propEsc(x.desc)}</dd>`).join('')}</dl>`, `5 — Funcionalidades do sistema`);
+  });
+  const etapas = (d.etapas || []).filter(e => e.texto);
+  if (etapas.length || d.implantacao) P(`<h2 class="section__title">Implantação</h2>
+<p class="section__sub">Como será realizada a implantação definitiva do sistema.</p>
+${propParas(d.implantacao)}
+${etapas.length ? `<ol class="step-list">${etapas.map((e, i) => `<li><span class="step-list__n">${i + 1}.</span><div class="step-list__body">${propEsc(e.texto)}</div></li>`).join('')}</ol>` : ''}`, '9 — Implantação');
+  const cron = (d.cronograma || []).filter(c => c.fase);
+  if (cron.length) P(`<h2 class="section__title">Cronograma de implantação</h2>
+<p class="section__sub">A implantação irá ocorrer de acordo com o cronograma abaixo.</p>
+<table class="tbl tbl--cron">
+<thead><tr><th class="ta-c">Mês</th><th>Fase de implantação</th></tr></thead>
+<tbody>${cron.map(c => `<tr><td class="ta-c">${propEsc(c.mes)}</td><td>${String(c.fase).split('\n').map(l => propEsc(l.trim())).filter(Boolean).map(l => `• ${l}`).join('<br/>')}</td></tr>`).join('')}</tbody>
+</table>
+${d.prazoImplantacao ? `<p class="prose">O prazo previsto para a implantação do projeto é de até <b>${propEsc(d.prazoImplantacao)}</b>, conforme tabela acima. Este prazo poderá variar a depender da prioridade e da agenda das áreas envolvidas.</p>` : ''}`, '9 — Cronograma de implantação');
+  const itens = (d.itens || []).filter(i => i.descricao);
+  const total = itens.reduce((s, i) => s + parseBRL(i.valorUnit) * (parseFloat(i.qtde) || 0), 0);
+  P(`<h2 class="section__title">Investimento</h2>
+<p class="section__sub">Descrição dos valores para execução do projeto.</p>
+${propParas(d.investimentoTexto)}
+${itens.length ? `<div class="tbl-caption">Cronograma Financeiro</div>
+<table class="tbl">
+<thead><tr><th class="ta-c">Item</th><th>Descrição</th><th class="ta-c">Qtde</th>
+<th class="ta-r">Valor Unitário (R$)</th><th class="ta-r">Valor Total (R$)</th></tr></thead>
+<tbody>${itens.map((i, ix) => `<tr><td class="ta-c">${ix + 1}</td><td>${propEsc(i.descricao)}</td>
+<td class="ta-c">${propEsc(i.qtde)}</td><td class="ta-r">${propBRL(i.valorUnit)}</td>
+<td class="ta-r">${propBRL(parseBRL(i.valorUnit) * (parseFloat(i.qtde) || 0))}</td></tr>`).join('')}</tbody>
+<tfoot><tr><td colspan="4" class="ta-r">Valor global</td><td class="ta-r">${propBRL(total)}</td></tr></tfoot>
+</table>` : ''}`, '10 — Investimento');
+  P(`<h2 class="section__title">Reajuste de preços</h2>
+<p class="section__sub">Descrição da política de reajuste de preços.</p>
+${propParas(d.reajuste)}
+<div class="rule"></div>
+<h2 class="section__title">Suspensão</h2>
+<p class="section__sub">Prazo para suspensão dos serviços em caso de não pagamento.</p>
+${propParas(d.suspensao)}
+<div class="rule"></div>
+<h2 class="section__title">Vigência</h2>
+<p class="section__sub">Descrição da vigência do contrato caso estabelecido.</p>
+<p class="prose">A vigência da contratação é de <b>${propEsc(d.vigencia)}</b>, inicialmente, renovando-se em caso de interesse das partes, mediante assinatura de aditivos.</p>`, '11 — Condições comerciais');
+  const respBD = (d.respContratada || []).filter(Boolean);
+  const respCl = (d.respContratante || []).filter(Boolean);
+  P(`<h2 class="section__title">Responsabilidades</h2>
+<p class="section__sub">Descrição das responsabilidades da contratada e da contratante.</p>
+${respBD.length ? `<h3 class="resp-h">Belém Digital</h3>
+<ul class="bullets">${respBD.map(r => `<li>${propEsc(r)}</li>`).join('')}</ul>` : ''}
+${respCl.length ? `<h3 class="resp-h">${propEsc(d.orgaoSigla || 'Contratante')}</h3>
+<ul class="bullets">${respCl.map(r => `<li>${propEsc(r)}</li>`).join('')}</ul>` : ''}
+<div class="rule"></div>
+<h2 class="section__title">Validade da proposta</h2>
+<p class="prose">Estão inclusos nesta proposta, de acordo com os preços ofertados, todos os valores pertinentes à execução dos serviços, incluindo-se gastos com locomoção e tributos. Esta proposta tem validade de <b>${propEsc(d.validade)}</b>.</p>`, '12 a 13 — Responsabilidades e Validade');
+  const totalPg = pgs.length + 1;
+  let corpo = pgs.join('\n');
+  for (let i = 0; i < pgs.length; i++) {
+    corpo = corpo.split(`@@N${i}@@`).join(String(i + 2).padStart(2, '0'));
+  }
+  corpo = corpo.split('@@T@@').join(String(totalPg).padStart(2, '0'));
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${propEsc(d.tipo)} — Belém Digital · ${propEsc(d.orgaoSigla || d.orgaoNome)}</title>
+<style>${propostaCss()}</style></head><body>
+<nav class="topbar"><strong>${propEsc(d.tipo)} · Nº ${propEsc(d.numero)}</strong>
+<button class="topbar__cta" onclick="window.print()">Imprimir / Salvar em PDF</button></nav>
+<main class="doc">
+<section class="page page--cover"><div class="cover">
+  <header class="cover__top">
+    <img src="${logo}" alt="Belém Digital" class="bd-logo--cover"/>
+    <div class="cover__id">Nº ${propEsc(d.numero)}</div>
+  </header>
+  <div class="cover__center">
+    <div class="cover__eyebrow"><span class="cover__dot"></span>${propEsc(d.tipo)}</div>
+    <h1 class="cover__title">${propEsc(d.solucao)}</h1>
+    <div class="cover__client">${propEsc(d.orgaoNome)}</div>
+  </div>
+  <footer class="cover__bottom"><div class="cover__meta">
+    <div><span>Data</span>${propEsc(propDataExtenso(d.data))}</div>
+    <div><span>${d.modelo ? 'Modelo' : 'Validade'}</span>${propEsc(d.modelo || d.validade)}</div>
+    <div><span>Sigilo</span>Uso exclusivo do destinatário</div>
+  </div></footer>
+</div></section>
+${corpo}
+</main></body></html>`;
+}
+function abrirProposta(d) {
+  const w = window.open('', '_blank');
+  if (!w) {
+    alert('Permita pop-ups para visualizar a proposta.');
+    return;
+  }
+  w.document.open();
+  w.document.write(propostaHtml(d));
+  w.document.close();
+}
 const CERT_CNPJ = '04.850.095/0001-93';
 const CERT_ALERT_DAYS = 15;
 const CERT_MAX_BYTES = 900 * 1024;
@@ -5727,6 +6269,1084 @@ function ContractsPage({
       className: "w-3 h-3"
     })))));
   })));
+}
+function propostaNova(user) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  return {
+    numero: '001/' + new Date().getFullYear(),
+    tipo: 'Proposta Comercial',
+    solucao: '',
+    sigla: '',
+    orgaoId: '',
+    orgaoNome: '',
+    orgaoSigla: '',
+    titular: '',
+    cargo: '',
+    data: hoje,
+    validade: '90 (noventa) dias',
+    modelo: '',
+    referencia: '',
+    carta: 'Encaminhamos para apreciação a presente proposta para fornecimento da solução descrita neste documento.\nNos colocamos à disposição para maiores esclarecimentos.',
+    apresentacao: '',
+    beneficios: ['', '', '', ''],
+    objeto: '',
+    servicos: ['Fornecimento de licença de uso do sistema;', 'Definição dos processos junto às áreas contempladas;', 'Mapeamento e desenvolvimento das integrações necessárias;', 'Capacitação dos usuários e colaboradores envolvidos;', 'Implantação definitiva junto às áreas determinadas pela contratante;', 'Manutenção e sustentação do sistema.'],
+    modulos: [{
+      titulo: 'Módulo principal',
+      itens: [{
+        nome: '',
+        desc: ''
+      }]
+    }],
+    implantacao: 'Nesta etapa será proposto pela Belém Digital e validado pela Contratante um cronograma de implantação definitiva do sistema, com acompanhamento junto ao uso inicial.',
+    etapas: [{
+      texto: 'Levantamento de dados junto às áreas técnicas, mapeando fluxos atuais, bases de dados, estruturas documentais, permissões de usuários e indicadores estratégicos.'
+    }, {
+      texto: 'Migração de dados. Avaliação das bases legadas, com foco na migração segura, íntegra e estruturada das informações para a nova plataforma.'
+    }, {
+      texto: 'Customizações. Adaptação da solução às regras de negócio e práticas específicas da contratante.'
+    }, {
+      texto: 'Treinamento técnico e acompanhamento de uso, com apoio técnico contínuo após o Go Live.'
+    }, {
+      texto: 'Licenciamento de uso, suporte técnico, sustentação e manutenção da plataforma.'
+    }],
+    cronograma: [{
+      mes: '1º',
+      fase: 'Levantamento de dados com as áreas técnicas\nInício das customizações institucionais\nInício da análise de viabilidade das integrações'
+    }, {
+      mes: '2º',
+      fase: 'Desenvolvimento das integrações prioritárias\nExecução da migração de dados para ambiente de testes'
+    }, {
+      mes: '3º',
+      fase: 'Testes funcionais e validação de customizações'
+    }, {
+      mes: '4º',
+      fase: 'Treinamento e acompanhamento assistido'
+    }],
+    prazoImplantacao: '4 (quatro) meses',
+    investimentoTexto: 'Os valores e formas de pagamento estão abaixo descritos, de acordo com os serviços a serem prestados pela Belém Digital durante a vigência do contrato.',
+    itens: [{
+      descricao: 'Implantação',
+      qtde: '1',
+      valorUnit: ''
+    }],
+    reajuste: 'Os preços desta proposta serão reajustados a cada 12 (doze) meses, contados a partir da data da sua apresentação, com base no Índice Geral de Preços — Mercado (IGP-M) da Fundação Getúlio Vargas (FGV).',
+    suspensao: 'Os serviços descritos nesta proposta poderão ser suspensos/suprimidos em caso de atraso de pagamento superior a 90 (noventa) dias.',
+    vigencia: '36 (trinta e seis) meses',
+    respContratada: ['É responsável pela execução dos serviços previstos nesta proposta.', 'Manter a confidencialidade de quaisquer dados que o Cliente fornecer e que sejam classificados como confidenciais.', 'Não estão cobertos nos serviços propostos o desenvolvimento de atividades que por sua natureza não se enquadrem no escopo do projeto.'],
+    respContratante: ['Definir antecipadamente o grupo de trabalho e as partes interessadas a serem treinadas no sistema.', 'Efetuar as mudanças de rotinas e procedimentos necessários à implementação do sistema.', 'Definir e/ou validar e alimentar todos os dados de apoio (cadastros básicos) do sistema.', 'Operar e gerenciar o sistema após a implantação.'],
+    assNome: user?.name || 'Henrique Correia',
+    assCargo: 'Gestor Comercial · Belém Digital',
+    assEmail: 'comercial@cinbesa.com.br',
+    assFone: '+55 (91) 98150-6320'
+  };
+}
+function OrgaoPicker({
+  orgaos,
+  valorId,
+  onPick,
+  onEditar
+}) {
+  const [aberto, setAberto] = React.useState(false);
+  const [busca, setBusca] = React.useState('');
+  const boxRef = React.useRef(null);
+  const sel = orgaos.find(o => o.id === valorId);
+  React.useEffect(() => {
+    const fora = e => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setAberto(false);
+    };
+    document.addEventListener('mousedown', fora);
+    return () => document.removeEventListener('mousedown', fora);
+  }, []);
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filtrados = React.useMemo(() => {
+    const q = norm(busca);
+    if (!q) return orgaos;
+    return orgaos.filter(o => norm(o.sigla).includes(q) || norm(o.nome).includes(q) || norm(o.titular).includes(q));
+  }, [orgaos, busca]);
+  const grupos = React.useMemo(() => {
+    const g = {};
+    filtrados.forEach(o => {
+      (g[o.grupo || 'Outros'] ||= []).push(o);
+    });
+    return g;
+  }, [filtrados]);
+  return React.createElement("div", {
+    className: "relative",
+    ref: boxRef
+  }, React.createElement("div", {
+    onClick: () => {
+      setAberto(a => !a);
+      setBusca('');
+    },
+    className: "w-full border rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between gap-2 hover:border-blue-300 transition-colors",
+    style: {
+      borderColor: sel ? BLUE + '55' : '#e5e7eb'
+    }
+  }, sel ? React.createElement("span", {
+    className: "flex items-center gap-2 min-w-0"
+  }, React.createElement("span", {
+    className: "text-[10px] font-black px-2 py-0.5 rounded flex-shrink-0",
+    style: {
+      background: '#eff6ff',
+      color: BLUE
+    }
+  }, sel.sigla), React.createElement("span", {
+    className: "truncate text-gray-700"
+  }, sel.nome)) : React.createElement("span", {
+    className: "text-gray-400"
+  }, "Selecione ou digite o \xF3rg\xE3o\u2026"), React.createElement(ChevronDown, {
+    className: "w-4 h-4 text-gray-400 flex-shrink-0"
+  })), aberto && React.createElement("div", {
+    className: "absolute z-40 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden"
+  }, React.createElement("div", {
+    className: "p-2 border-b border-gray-100"
+  }, React.createElement("input", {
+    autoFocus: true,
+    value: busca,
+    onChange: e => setBusca(e.target.value),
+    placeholder: "Digite a sigla, o nome do \xF3rg\xE3o ou do titular\u2026",
+    className: "w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+  })), React.createElement("div", {
+    className: "max-h-72 overflow-y-auto"
+  }, Object.entries(grupos).map(([g, lista]) => React.createElement("div", {
+    key: g
+  }, React.createElement("p", {
+    className: "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400 sticky top-0",
+    style: {
+      background: '#f8fafc'
+    }
+  }, g), lista.map(o => React.createElement("button", {
+    key: o.id,
+    type: "button",
+    onClick: () => {
+      onPick(o);
+      setAberto(false);
+    },
+    className: "w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors flex items-start gap-2.5"
+  }, React.createElement("span", {
+    className: "text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5",
+    style: {
+      background: '#eff6ff',
+      color: BLUE
+    }
+  }, o.sigla), React.createElement("span", {
+    className: "min-w-0"
+  }, React.createElement("span", {
+    className: "block text-[12.5px] font-semibold text-gray-700 truncate"
+  }, o.nome), React.createElement("span", {
+    className: "block text-[10.5px] text-gray-400 truncate"
+  }, o.titular, " \xB7 ", o.cargo)))))), filtrados.length === 0 && React.createElement("p", {
+    className: "px-3 py-6 text-center text-xs text-gray-400"
+  }, "Nenhum \xF3rg\xE3o encontrado.")), React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setAberto(false);
+      onEditar();
+    },
+    className: "w-full px-3 py-2.5 text-[11px] font-bold border-t border-gray-100 hover:bg-gray-50 transition-colors",
+    style: {
+      color: BLUE
+    }
+  }, "\u2699 Gerenciar \xF3rg\xE3os e titulares")));
+}
+function OrgaosModal({
+  orgaos,
+  onSalvar,
+  onExcluir,
+  onClose,
+  addToast
+}) {
+  const [edit, setEdit] = React.useState(null);
+  const vazio = {
+    id: '',
+    sigla: '',
+    nome: '',
+    titular: '',
+    cargo: '',
+    grupo: 'Administração Direta'
+  };
+  const ic = "w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200";
+  const lc = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1";
+  async function salvar() {
+    if (!edit.sigla.trim() || !edit.nome.trim()) {
+      addToast('Informe ao menos a sigla e o nome do órgão.');
+      return;
+    }
+    const id = edit.id || edit.sigla.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    await onSalvar({
+      ...edit,
+      id
+    });
+    addToast('✅ Órgão salvo.');
+    setEdit(null);
+  }
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    },
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "\xD3rg\xE3os e titulares"), React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, "Atualize aqui quando um secret\xE1rio mudar \u2014 a proposta usa sempre o dado atual.")), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), edit ? React.createElement("div", {
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-3"
+  }, React.createElement("div", {
+    className: "grid grid-cols-3 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Sigla *"), React.createElement("input", {
+    value: edit.sigla,
+    onChange: e => setEdit({
+      ...edit,
+      sigla: e.target.value
+    }),
+    className: ic,
+    placeholder: "SEGOV"
+  })), React.createElement("div", {
+    className: "col-span-2"
+  }, React.createElement("label", {
+    className: lc
+  }, "Grupo"), React.createElement("select", {
+    value: edit.grupo,
+    onChange: e => setEdit({
+      ...edit,
+      grupo: e.target.value
+    }),
+    className: ic
+  }, React.createElement("option", null, "Administra\xE7\xE3o Direta"), React.createElement("option", null, "Subprefeituras"), React.createElement("option", null, "Administra\xE7\xE3o Indireta"), React.createElement("option", null, "Outros")))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome completo do \xF3rg\xE3o *"), React.createElement("input", {
+    value: edit.nome,
+    onChange: e => setEdit({
+      ...edit,
+      nome: e.target.value
+    }),
+    className: ic,
+    placeholder: "Secretaria Municipal de Governo de Bel\xE9m \u2014 PA"
+  })), React.createElement("div", {
+    className: "grid grid-cols-2 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Titular"), React.createElement("input", {
+    value: edit.titular,
+    onChange: e => setEdit({
+      ...edit,
+      titular: e.target.value
+    }),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Cargo"), React.createElement("input", {
+    value: edit.cargo,
+    onChange: e => setEdit({
+      ...edit,
+      cargo: e.target.value
+    }),
+    className: ic
+  }))), React.createElement("div", {
+    className: "flex justify-end gap-2 pt-2"
+  }, React.createElement("button", {
+    onClick: () => setEdit(null),
+    className: "px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+  }, "Cancelar"), React.createElement("button", {
+    onClick: salvar,
+    className: "px-5 py-2 rounded-xl text-sm font-bold text-white",
+    style: {
+      background: BLUE
+    }
+  }, "Salvar \xF3rg\xE3o"))) : React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "px-6 py-3 border-b border-gray-100"
+  }, React.createElement("button", {
+    onClick: () => setEdit({
+      ...vazio
+    }),
+    className: "px-3 py-1.5 rounded-lg text-xs font-bold border-2 hover:bg-blue-50 transition-all",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, "+ Novo \xF3rg\xE3o")), React.createElement("div", {
+    className: "overflow-y-auto flex-1 divide-y divide-gray-50"
+  }, orgaos.map(o => React.createElement("div", {
+    key: o.id,
+    className: "px-6 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50"
+  }, React.createElement("div", {
+    className: "min-w-0 flex items-start gap-2.5"
+  }, React.createElement("span", {
+    className: "text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5",
+    style: {
+      background: '#eff6ff',
+      color: BLUE
+    }
+  }, o.sigla), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("p", {
+    className: "text-[12.5px] font-semibold text-gray-700 truncate"
+  }, o.nome), React.createElement("p", {
+    className: "text-[10.5px] text-gray-400 truncate"
+  }, o.titular || '—', " \xB7 ", o.cargo || '—'))), React.createElement("div", {
+    className: "flex items-center gap-1 flex-shrink-0"
+  }, React.createElement("button", {
+    onClick: () => setEdit({
+      ...o
+    }),
+    className: "p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+  }, React.createElement(Edit2, {
+    className: "w-3.5 h-3.5"
+  })), React.createElement("button", {
+    onClick: () => {
+      if (window.confirm(`Excluir "${o.sigla}"?`)) onExcluir(o.id);
+    },
+    className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  })))))))));
+}
+function PropostasEmissaoPage({
+  propostas,
+  orgaos,
+  currentUser,
+  onSalvar,
+  onExcluir,
+  onSalvarOrgao,
+  onExcluirOrgao,
+  addToast
+}) {
+  const [selId, setSelId] = React.useState(null);
+  const [d, setD] = React.useState(null);
+  const [salvando, setSalvando] = React.useState(false);
+  const [showOrgaos, setShowOrgaos] = React.useState(false);
+  const [aba, setAba] = React.useState('dados');
+  React.useEffect(() => {
+    if (!selId) {
+      setD(null);
+      return;
+    }
+    if (selId === 'nova') {
+      setD(propostaNova(currentUser));
+      return;
+    }
+    const p = propostas.find(x => x.id === selId);
+    setD(p ? {
+      ...propostaNova(currentUser),
+      ...p
+    } : null);
+  }, [selId]);
+  const set = (k, v) => setD(x => ({
+    ...x,
+    [k]: v
+  }));
+  const setL = (k, i, v) => setD(x => ({
+    ...x,
+    [k]: x[k].map((o, j) => j === i ? v : o)
+  }));
+  const addL = (k, v) => setD(x => ({
+    ...x,
+    [k]: [...(x[k] || []), v]
+  }));
+  const delL = (k, i) => setD(x => ({
+    ...x,
+    [k]: x[k].filter((_, j) => j !== i)
+  }));
+  const ic = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all";
+  const ta = ic + " resize-y";
+  const lc = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5";
+  async function salvar() {
+    if (!d.solucao.trim()) {
+      addToast('Informe o nome da solução.');
+      return;
+    }
+    if (!d.orgaoId) {
+      addToast('Selecione o órgão destinatário.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      const id = await onSalvar(selId === 'nova' ? null : selId, d);
+      addToast('✅ Proposta salva.');
+      if (id) setSelId(id);
+    } catch (e) {
+      addToast('Erro ao salvar: ' + (e.message || 'falha'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+  if (!d) {
+    return React.createElement("div", {
+      className: "flex-1 overflow-y-auto"
+    }, React.createElement("div", {
+      className: "max-w-5xl mx-auto px-6 py-6 space-y-5"
+    }, React.createElement("div", {
+      className: "flex items-center justify-between gap-3 flex-wrap"
+    }, React.createElement("div", {
+      className: "flex items-center gap-3"
+    }, React.createElement("div", {
+      className: "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
+      style: {
+        background: BLUE
+      }
+    }, React.createElement(FileText, {
+      className: "w-5 h-5 text-white"
+    })), React.createElement("div", null, React.createElement("h1", {
+      className: "text-xl font-black text-gray-800"
+    }, "Emiss\xE3o de Propostas"), React.createElement("p", {
+      className: "text-[11px] text-gray-400 mt-0.5"
+    }, "Gera a proposta comercial no padr\xE3o Bel\xE9m Digital, pronta para PDF"))), React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, React.createElement("button", {
+      onClick: () => setShowOrgaos(true),
+      className: "px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50"
+    }, "\u2699 \xD3rg\xE3os (", orgaos.length, ")"), React.createElement("button", {
+      onClick: () => setSelId('nova'),
+      className: "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90",
+      style: {
+        background: BLUE
+      }
+    }, React.createElement(Plus, {
+      className: "w-4 h-4"
+    }), " Nova proposta"))), React.createElement("div", {
+      className: "bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    }, propostas.length === 0 ? React.createElement("div", {
+      className: "text-center py-16 text-gray-300"
+    }, React.createElement(FileText, {
+      className: "w-10 h-10 mx-auto mb-3 opacity-30"
+    }), React.createElement("p", {
+      className: "text-sm font-medium"
+    }, "Nenhuma proposta emitida ainda"), React.createElement("p", {
+      className: "text-xs mt-1 text-gray-300"
+    }, "Clique em \"Nova proposta\" para come\xE7ar")) : React.createElement("table", {
+      className: "w-full text-sm"
+    }, React.createElement("thead", {
+      style: {
+        background: '#f8fafc'
+      }
+    }, React.createElement("tr", null, ['Nº', 'Solução', 'Órgão', 'Data', 'Valor', ''].map(h => React.createElement("th", {
+      key: h,
+      className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+    }, h)))), React.createElement("tbody", null, propostas.map(p => {
+      const tot = (p.itens || []).reduce((s, i) => s + parseBRL(i.valorUnit) * (parseFloat(i.qtde) || 0), 0);
+      return React.createElement("tr", {
+        key: p.id,
+        className: "border-t border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer",
+        onClick: () => setSelId(p.id)
+      }, React.createElement("td", {
+        className: "px-5 py-3 font-black whitespace-nowrap",
+        style: {
+          color: BLUE
+        }
+      }, p.numero), React.createElement("td", {
+        className: "px-5 py-3 font-semibold text-gray-800 max-w-[260px]"
+      }, React.createElement("p", {
+        className: "truncate"
+      }, p.solucao)), React.createElement("td", {
+        className: "px-5 py-3"
+      }, React.createElement("span", {
+        className: "text-[10px] font-black px-2 py-0.5 rounded",
+        style: {
+          background: '#eff6ff',
+          color: BLUE
+        }
+      }, p.orgaoSigla)), React.createElement("td", {
+        className: "px-5 py-3 text-gray-500 whitespace-nowrap"
+      }, p.data ? p.data.split('-').reverse().join('/') : '—'), React.createElement("td", {
+        className: "px-5 py-3 font-bold whitespace-nowrap",
+        style: {
+          color: GREEN
+        }
+      }, tot ? 'R$ ' + propBRL(tot) : '—'), React.createElement("td", {
+        className: "px-5 py-3 text-right whitespace-nowrap"
+      }, React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          abrirProposta(p);
+        },
+        className: "text-xs font-bold mr-3 hover:underline",
+        style: {
+          color: BLUE
+        }
+      }, "abrir PDF"), React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          if (window.confirm('Excluir esta proposta?')) onExcluir(p.id);
+        },
+        className: "text-xs font-semibold text-red-500 hover:underline"
+      }, "excluir")));
+    }))))), showOrgaos && React.createElement(OrgaosModal, {
+      orgaos: orgaos,
+      onSalvar: onSalvarOrgao,
+      onExcluir: onExcluirOrgao,
+      onClose: () => setShowOrgaos(false),
+      addToast: addToast
+    }));
+  }
+  const ABAS = [{
+    k: 'dados',
+    l: 'Dados gerais'
+  }, {
+    k: 'texto',
+    l: 'Textos'
+  }, {
+    k: 'modulos',
+    l: 'Funcionalidades'
+  }, {
+    k: 'impl',
+    l: 'Implantação'
+  }, {
+    k: 'valores',
+    l: 'Investimento'
+  }, {
+    k: 'cond',
+    l: 'Condições'
+  }];
+  const totalItens = (d.itens || []).reduce((s, i) => s + parseBRL(i.valorUnit) * (parseFloat(i.qtde) || 0), 0);
+  return React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, React.createElement("div", {
+    className: "max-w-4xl mx-auto px-6 py-6 space-y-4"
+  }, React.createElement("div", {
+    className: "flex items-start justify-between gap-3 flex-wrap"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 min-w-0"
+  }, React.createElement("button", {
+    onClick: () => {
+      setSelId(null);
+      setD(null);
+    },
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+  }, React.createElement(ChevronRight, {
+    className: "w-4 h-4 rotate-180"
+  })), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h1", {
+    className: "text-lg font-black text-gray-800 truncate"
+  }, d.solucao || 'Nova proposta'), React.createElement("p", {
+    className: "text-[11px] text-gray-400 truncate"
+  }, "N\xBA ", d.numero, d.orgaoSigla ? ` · ${d.orgaoSigla}` : ''))), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("button", {
+    onClick: () => abrirProposta(d),
+    className: "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 hover:bg-blue-50",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, React.createElement(FileText, {
+    className: "w-4 h-4"
+  }), " Gerar PDF"), React.createElement("button", {
+    onClick: salvar,
+    disabled: salvando,
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90",
+    style: {
+      background: BLUE
+    }
+  }, salvando ? 'Salvando…' : 'Salvar'))), React.createElement("div", {
+    className: "flex gap-1 p-1 rounded-2xl w-fit flex-wrap",
+    style: {
+      background: '#eff6ff'
+    }
+  }, ABAS.map(a => React.createElement("button", {
+    key: a.k,
+    onClick: () => setAba(a.k),
+    className: "px-4 py-1.5 rounded-xl text-[12.5px] font-bold transition-all",
+    style: aba === a.k ? {
+      background: BLUE,
+      color: '#fff'
+    } : {
+      color: '#94a3b8'
+    }
+  }, a.l))), aba === 'dados' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "N\xBA da proposta"), React.createElement("input", {
+    value: d.numero,
+    onChange: e => set('numero', e.target.value),
+    className: ic,
+    placeholder: "001/2026"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Tipo"), React.createElement("select", {
+    value: d.tipo,
+    onChange: e => set('tipo', e.target.value),
+    className: ic
+  }, React.createElement("option", null, "Proposta Comercial"), React.createElement("option", null, "Proposta T\xE9cnica e Comercial")))), React.createElement("div", {
+    className: "grid grid-cols-3 gap-4"
+  }, React.createElement("div", {
+    className: "col-span-2"
+  }, React.createElement("label", {
+    className: lc
+  }, "Solu\xE7\xE3o / objeto *"), React.createElement("input", {
+    value: d.solucao,
+    onChange: e => set('solucao', e.target.value),
+    className: ic,
+    placeholder: "Sistema de Gest\xE3o de Processos Judiciais"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Sigla"), React.createElement("input", {
+    value: d.sigla,
+    onChange: e => set('sigla', e.target.value),
+    className: ic,
+    placeholder: "SGPJ"
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "\xD3rg\xE3o destinat\xE1rio *"), React.createElement(OrgaoPicker, {
+    orgaos: orgaos,
+    valorId: d.orgaoId,
+    onEditar: () => setShowOrgaos(true),
+    onPick: o => setD(x => ({
+      ...x,
+      orgaoId: o.id,
+      orgaoNome: o.nome,
+      orgaoSigla: o.sigla,
+      titular: o.titular,
+      cargo: o.cargo
+    }))
+  })), React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Titular (destinat\xE1rio)"), React.createElement("input", {
+    value: d.titular,
+    onChange: e => set('titular', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Cargo"), React.createElement("input", {
+    value: d.cargo,
+    onChange: e => set('cargo', e.target.value),
+    className: ic
+  }))), React.createElement("p", {
+    className: "text-[10.5px] text-gray-400 -mt-2"
+  }, "Preenchidos automaticamente ao selecionar o \xF3rg\xE3o. Pode ajustar aqui s\xF3 para esta proposta, ou atualizar no cadastro (\u2699 \xD3rg\xE3os) se o titular mudou de vez."), React.createElement("div", {
+    className: "grid grid-cols-3 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Data"), React.createElement("input", {
+    type: "date",
+    value: d.data,
+    onChange: e => set('data', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Validade"), React.createElement("input", {
+    value: d.validade,
+    onChange: e => set('validade', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Modelo (capa)"), React.createElement("input", {
+    value: d.modelo,
+    onChange: e => set('modelo', e.target.value),
+    className: ic,
+    placeholder: "SaaS \xB7 opcional"
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Refer\xEAncia (carta)"), React.createElement("textarea", {
+    rows: 2,
+    value: d.referencia,
+    onChange: e => set('referencia', e.target.value),
+    className: ta,
+    placeholder: "Proposta para licenciamento, implanta\xE7\xE3o e suporte ao\u2026"
+  })), React.createElement("div", {
+    className: "pt-2 border-t border-gray-100"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2"
+  }, "Assinatura"), React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome"), React.createElement("input", {
+    value: d.assNome,
+    onChange: e => set('assNome', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Cargo"), React.createElement("input", {
+    value: d.assCargo,
+    onChange: e => set('assCargo', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "E-mail"), React.createElement("input", {
+    value: d.assEmail,
+    onChange: e => set('assEmail', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Telefone"), React.createElement("input", {
+    value: d.assFone,
+    onChange: e => set('assFone', e.target.value),
+    className: ic
+  }))))), aba === 'texto' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Carta de apresenta\xE7\xE3o"), React.createElement("textarea", {
+    rows: 4,
+    value: d.carta,
+    onChange: e => set('carta', e.target.value),
+    className: ta
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Apresenta\xE7\xE3o"), React.createElement("textarea", {
+    rows: 6,
+    value: d.apresentacao,
+    onChange: e => set('apresentacao', e.target.value),
+    className: ta,
+    placeholder: "O projeto de implanta\xE7\xE3o do sistema visa\u2026"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Objeto da proposta"), React.createElement("textarea", {
+    rows: 4,
+    value: d.objeto,
+    onChange: e => set('objeto', e.target.value),
+    className: ta
+  })), React.createElement(ListaEditavel, {
+    titulo: "Benef\xEDcios",
+    campo: "beneficios",
+    d: d,
+    setL: setL,
+    addL: addL,
+    delL: delL,
+    lc: lc
+  }), React.createElement(ListaEditavel, {
+    titulo: "Servi\xE7os a serem contratados",
+    campo: "servicos",
+    d: d,
+    setL: setL,
+    addL: addL,
+    delL: delL,
+    lc: lc
+  })), aba === 'modulos' && React.createElement("div", {
+    className: "space-y-3"
+  }, (d.modulos || []).map((m, mi) => React.createElement("div", {
+    key: mi,
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("input", {
+    value: m.titulo,
+    onChange: e => setL('modulos', mi, {
+      ...m,
+      titulo: e.target.value
+    }),
+    className: ic + ' font-bold',
+    placeholder: "5.1 \u2014 M\xF3dulo de gest\xE3o de processos"
+  }), React.createElement("button", {
+    onClick: () => delL('modulos', mi),
+    className: "p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4"
+  }))), (m.itens || []).map((it, ii) => React.createElement("div", {
+    key: ii,
+    className: "pl-3 border-l-2 space-y-1.5",
+    style: {
+      borderColor: '#e0e7ff'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("input", {
+    value: it.nome,
+    onChange: e => setL('modulos', mi, {
+      ...m,
+      itens: m.itens.map((x, j) => j === ii ? {
+        ...x,
+        nome: e.target.value
+      } : x)
+    }),
+    className: ic + ' font-semibold',
+    placeholder: "Nome da funcionalidade"
+  }), React.createElement("button", {
+    onClick: () => setL('modulos', mi, {
+      ...m,
+      itens: m.itens.filter((_, j) => j !== ii)
+    }),
+    className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5"
+  }))), React.createElement("textarea", {
+    rows: 2,
+    value: it.desc,
+    onChange: e => setL('modulos', mi, {
+      ...m,
+      itens: m.itens.map((x, j) => j === ii ? {
+        ...x,
+        desc: e.target.value
+      } : x)
+    }),
+    className: ta,
+    placeholder: "Descri\xE7\xE3o da funcionalidade"
+  }))), React.createElement("button", {
+    onClick: () => setL('modulos', mi, {
+      ...m,
+      itens: [...(m.itens || []), {
+        nome: '',
+        desc: ''
+      }]
+    }),
+    className: "text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 hover:bg-blue-50",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, "+ Funcionalidade"))), React.createElement("button", {
+    onClick: () => addL('modulos', {
+      titulo: '',
+      itens: [{
+        nome: '',
+        desc: ''
+      }]
+    }),
+    className: "w-full py-2.5 rounded-xl text-sm font-bold border-2 border-dashed hover:bg-blue-50",
+    style: {
+      borderColor: '#bfdbfe',
+      color: BLUE
+    }
+  }, "+ Adicionar m\xF3dulo")), aba === 'impl' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Texto de implanta\xE7\xE3o"), React.createElement("textarea", {
+    rows: 3,
+    value: d.implantacao,
+    onChange: e => set('implantacao', e.target.value),
+    className: ta
+  })), React.createElement(ListaEditavel, {
+    titulo: "Etapas",
+    campo: "etapas",
+    objKey: "texto",
+    d: d,
+    setL: setL,
+    addL: addL,
+    delL: delL,
+    lc: lc,
+    rows: 2
+  }), React.createElement("div", null, React.createElement("p", {
+    className: lc
+  }, "Cronograma de implanta\xE7\xE3o"), (d.cronograma || []).map((c, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2 mb-2"
+  }, React.createElement("input", {
+    value: c.mes,
+    onChange: e => setL('cronograma', i, {
+      ...c,
+      mes: e.target.value
+    }),
+    className: ic + ' w-20 flex-shrink-0 text-center font-bold',
+    placeholder: "1\xBA"
+  }), React.createElement("textarea", {
+    rows: 2,
+    value: c.fase,
+    onChange: e => setL('cronograma', i, {
+      ...c,
+      fase: e.target.value
+    }),
+    className: ta,
+    placeholder: "Uma fase por linha"
+  }), React.createElement("button", {
+    onClick: () => delL('cronograma', i),
+    className: "p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4"
+  })))), React.createElement("button", {
+    onClick: () => addL('cronograma', {
+      mes: '',
+      fase: ''
+    }),
+    className: "text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 hover:bg-blue-50",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, "+ M\xEAs")), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Prazo total de implanta\xE7\xE3o"), React.createElement("input", {
+    value: d.prazoImplantacao,
+    onChange: e => set('prazoImplantacao', e.target.value),
+    className: ic
+  }))), aba === 'valores' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Texto introdut\xF3rio"), React.createElement("textarea", {
+    rows: 3,
+    value: d.investimentoTexto,
+    onChange: e => set('investimentoTexto', e.target.value),
+    className: ta
+  })), React.createElement("div", null, React.createElement("p", {
+    className: lc
+  }, "Itens do investimento"), (d.itens || []).map((it, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2 mb-2 items-start"
+  }, React.createElement("input", {
+    value: it.descricao,
+    onChange: e => setL('itens', i, {
+      ...it,
+      descricao: e.target.value
+    }),
+    className: ic,
+    placeholder: "Descri\xE7\xE3o do item"
+  }), React.createElement("input", {
+    value: it.qtde,
+    onChange: e => setL('itens', i, {
+      ...it,
+      qtde: e.target.value.replace(/[^\d]/g, '')
+    }),
+    className: ic + ' w-20 flex-shrink-0 text-center',
+    placeholder: "Qtd"
+  }), React.createElement("input", {
+    value: it.valorUnit,
+    onChange: e => setL('itens', i, {
+      ...it,
+      valorUnit: e.target.value
+    }),
+    className: ic + ' w-36 flex-shrink-0 text-right',
+    placeholder: "0,00"
+  }), React.createElement("span", {
+    className: "w-32 flex-shrink-0 text-right text-sm font-bold pt-2.5 whitespace-nowrap",
+    style: {
+      color: GREEN
+    }
+  }, propBRL(parseBRL(it.valorUnit) * (parseFloat(it.qtde) || 0))), React.createElement("button", {
+    onClick: () => delL('itens', i),
+    className: "p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4"
+  })))), React.createElement("div", {
+    className: "flex items-center justify-between mt-3 pt-3 border-t-2",
+    style: {
+      borderColor: '#c7d2fe'
+    }
+  }, React.createElement("button", {
+    onClick: () => addL('itens', {
+      descricao: '',
+      qtde: '1',
+      valorUnit: ''
+    }),
+    className: "text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 hover:bg-blue-50",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, "+ Item"), React.createElement("span", {
+    className: "text-sm font-black",
+    style: {
+      color: '#3730a3'
+    }
+  }, "Valor global: R$ ", propBRL(totalItens))))), aba === 'cond' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Vig\xEAncia"), React.createElement("input", {
+    value: d.vigencia,
+    onChange: e => set('vigencia', e.target.value),
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Validade da proposta"), React.createElement("input", {
+    value: d.validade,
+    onChange: e => set('validade', e.target.value),
+    className: ic
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Reajuste de pre\xE7os"), React.createElement("textarea", {
+    rows: 3,
+    value: d.reajuste,
+    onChange: e => set('reajuste', e.target.value),
+    className: ta
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Suspens\xE3o"), React.createElement("textarea", {
+    rows: 2,
+    value: d.suspensao,
+    onChange: e => set('suspensao', e.target.value),
+    className: ta
+  })), React.createElement(ListaEditavel, {
+    titulo: "Responsabilidades \u2014 Bel\xE9m Digital",
+    campo: "respContratada",
+    d: d,
+    setL: setL,
+    addL: addL,
+    delL: delL,
+    lc: lc,
+    rows: 2
+  }), React.createElement(ListaEditavel, {
+    titulo: "Responsabilidades \u2014 Contratante",
+    campo: "respContratante",
+    d: d,
+    setL: setL,
+    addL: addL,
+    delL: delL,
+    lc: lc,
+    rows: 2
+  }))), showOrgaos && React.createElement(OrgaosModal, {
+    orgaos: orgaos,
+    onSalvar: onSalvarOrgao,
+    onExcluir: onExcluirOrgao,
+    onClose: () => setShowOrgaos(false),
+    addToast: addToast
+  }));
+}
+function ListaEditavel({
+  titulo,
+  campo,
+  objKey,
+  d,
+  setL,
+  addL,
+  delL,
+  lc,
+  rows = 2
+}) {
+  const val = i => objKey ? i?.[objKey] ?? '' : i ?? '';
+  const mk = (i, v) => objKey ? {
+    ...(i || {}),
+    [objKey]: v
+  } : v;
+  return React.createElement("div", null, React.createElement("p", {
+    className: lc
+  }, titulo), (d[campo] || []).map((item, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2 mb-2 items-start"
+  }, React.createElement("span", {
+    className: "text-[11px] font-bold text-gray-300 pt-3 w-4 flex-shrink-0"
+  }, i + 1), React.createElement("textarea", {
+    rows: rows,
+    value: val(item),
+    onChange: e => setL(campo, i, mk(item, e.target.value)),
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y"
+  }), React.createElement("button", {
+    onClick: () => delL(campo, i),
+    className: "p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4"
+  })))), React.createElement("button", {
+    onClick: () => addL(campo, objKey ? {
+      [objKey]: ''
+    } : ''),
+    className: "text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 hover:bg-blue-50",
+    style: {
+      borderColor: BLUE,
+      color: BLUE
+    }
+  }, "+ Adicionar"));
 }
 function CertidaoCard({
   cert,
@@ -15697,6 +17317,9 @@ function App() {
   const [cronogramas, setCronogramas] = useState([]);
   const [showCertidoesPage, setShowCertidoesPage] = useState(false);
   const [certidoes, setCertidoes] = useState([]);
+  const [showPropEmissao, setShowPropEmissao] = useState(false);
+  const [propostasEmitidas, setPropostasEmitidas] = useState([]);
+  const [orgaos, setOrgaos] = useState([]);
   const [gcspModules, setGcspModules] = useState({});
   const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
@@ -15860,6 +17483,24 @@ function App() {
         id: d.id
       })));
     });
+    db.collection(COL('orgaos')).get().then(snap => {
+      if (!snap.empty) return;
+      const b = db.batch();
+      ORGAOS_SEED.forEach(o => b.set(db.collection(COL('orgaos')).doc(o.id), o));
+      return b.commit();
+    }).catch(console.error);
+    const unsubOrg = db.collection(COL('orgaos')).onSnapshot(snap => {
+      setOrgaos(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
+    const unsubPropEm = db.collection(COL('propostas_emitidas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setPropostasEmitidas(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
       setGcspModules(doc.exists && doc.data().modules || {});
     });
@@ -15869,6 +17510,8 @@ function App() {
       unsubArcanjo();
       unsubCron();
       unsubCert();
+      unsubOrg();
+      unsubPropEm();
       unsubCfg();
     };
   }, []);
@@ -16209,6 +17852,7 @@ function App() {
     setShowArcanjoGerencial(false);
     setShowCronogramaPage(false);
     setShowCertidoesPage(false);
+    setShowPropEmissao(false);
     setShowProposalBI(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
@@ -16745,6 +18389,38 @@ function App() {
   }
   async function handleDeleteGdoc(id) {
     await db.collection(COL('gdocs')).doc(id).delete();
+  }
+  async function handleSalvarProposta(id, dados) {
+    const limpo = {
+      ...dados
+    };
+    delete limpo.id;
+    if (id) {
+      await db.collection(COL('propostas_emitidas')).doc(id).set(limpo, {
+        merge: true
+      });
+      return id;
+    }
+    const ref = await db.collection(COL('propostas_emitidas')).add({
+      ...limpo,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return ref.id;
+  }
+  async function handleExcluirProposta(id) {
+    await db.collection(COL('propostas_emitidas')).doc(id).delete();
+  }
+  async function handleSalvarOrgao(o) {
+    const {
+      id,
+      ...resto
+    } = o;
+    await db.collection(COL('orgaos')).doc(id).set(resto, {
+      merge: true
+    });
+  }
+  async function handleExcluirOrgao(id) {
+    await db.collection(COL('orgaos')).doc(id).delete();
   }
   async function handleAttachCertidao(cert, file) {
     if (file.type !== 'application/pdf') {
@@ -17389,6 +19065,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -17409,6 +19086,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -17427,6 +19105,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -17449,6 +19128,26 @@ function App() {
       setShowAdmin(false);
       setShowCronogramaPage(true);
     }
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && React.createElement(SidebarBtn, {
+    icon: FileText,
+    label: "Emitir Proposta",
+    active: showPropEmissao,
+    onClick: () => {
+      setShowProposalBI(false);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowGdocPage(false);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
+      setShowPropEmissao(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+      setShowPropEmissao(true);
+    }
   }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Shield,
     label: "Certid\xF5es",
@@ -17464,6 +19163,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -17483,6 +19183,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setShowProposalBI(false);
       setActiveContractNumber(null);
       setShowForm(false);
@@ -17497,6 +19198,7 @@ function App() {
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
       setShowCertidoesPage(false);
+      setShowPropEmissao(false);
       setShowGdocPage(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -17605,7 +19307,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -18318,6 +20020,15 @@ function App() {
       setShowProposalBI(false);
       setShowProposalsPage(true);
     }
+  }) : showPropEmissao ? React.createElement(PropostasEmissaoPage, {
+    propostas: propostasEmitidas,
+    orgaos: orgaos,
+    currentUser: currentUser,
+    onSalvar: handleSalvarProposta,
+    onExcluir: handleExcluirProposta,
+    onSalvarOrgao: handleSalvarOrgao,
+    onExcluirOrgao: handleExcluirOrgao,
+    addToast: addToast
   }) : showCertidoesPage ? React.createElement(CertidoesPage, {
     certidoes: certidoes,
     pdfs: pdfStorage,
