@@ -1768,56 +1768,79 @@ const LEAD_SOLUCOES = [{
   id: 'obras',
   nome: 'Gestão de Obras',
   cor: '#b45309',
-  termos: ['gestao de obras', 'gerenciamento de obras', 'fiscalizacao de obras', 'medicao de obras', 'acompanhamento de obras', 'obras publicas']
+  fortes: ['gestao de obras', 'gerenciamento de obras', 'fiscalizacao de obras', 'medicao de obras', 'acompanhamento de obras', 'gestao de contratos de obras'],
+  fracos: ['obras publicas', 'engenharia']
 }, {
   id: 'tributario',
   nome: 'Gestão Tributária',
   cor: '#15803d',
-  termos: ['gestao tributaria', 'sistema tributario', 'arrecadacao municipal', 'iptu', 'divida ativa', 'administracao tributaria']
+  fortes: ['gestao tributaria', 'sistema tributario', 'administracao tributaria', 'arrecadacao municipal', 'iptu', 'divida ativa', 'itbi', 'cadastro imobiliario', 'planta generica de valores'],
+  fracos: ['arrecadacao', 'tributos', 'receita municipal']
 }, {
   id: 'nfse',
   nome: 'Nota Fiscal / ISS',
   cor: '#0891b2',
-  termos: ['nota fiscal de servico', 'nfs-e', 'nfse', 'nota fiscal eletronica', 'iss', 'imposto sobre servico']
+  fortes: ['nota fiscal de servico', 'nota fiscal eletronica', 'nfs-e', 'nfse', 'nfe', 'imposto sobre servico', 'iss', 'issqn', 'declaracao eletronica de servicos'],
+  fracos: ['nota fiscal', 'escrituracao fiscal']
 }, {
   id: 'judicial',
   nome: 'Processos Judiciais',
   cor: '#1d4ed8',
-  termos: ['processos judiciais', 'gestao judicial', 'procuradoria', 'peticionamento', 'execucao fiscal', 'contencioso']
+  fortes: ['processos judiciais', 'gestao judicial', 'peticionamento eletronico', 'execucao fiscal', 'processo eletronico', 'gestao de processos administrativos'],
+  fracos: ['procuradoria', 'contencioso', 'peticionamento', 'juridico']
 }, {
   id: 'pedagogico',
   nome: 'Gestão Pedagógica',
   cor: '#7c3aed',
-  termos: ['gestao pedagogica', 'gestao escolar', 'diario de classe', 'sistema educacional', 'rede municipal de ensino', 'censo escolar']
+  fortes: ['gestao pedagogica', 'gestao escolar', 'diario de classe', 'diario eletronico', 'sistema educacional', 'censo escolar', 'matricula online', 'gestao da educacao'],
+  fracos: ['rede municipal de ensino', 'secretaria de educacao', 'escolar']
 }, {
   id: 'monitoria',
   nome: 'Monitoramento com IA',
   cor: '#be185d',
-  termos: ['videomonitoramento', 'video monitoramento', 'monitoramento por camera', 'reconhecimento facial', 'inteligencia artificial', 'cameras de seguranca', 'leitura de placas', 'ocr de placas']
+  fortes: ['videomonitoramento', 'video monitoramento', 'monitoramento por camera', 'circuito fechado de televisao', 'cftv', 'reconhecimento facial', 'leitura de placas', 'ocr de placas', 'leitura automatica de placas', 'cameras de seguranca', 'camera de seguranca', 'monitoramento de imagens'],
+  fracos: ['videovigilancia', 'videomonitoramento urbano', 'central de videomonitoramento']
 }];
-const LEAD_REFORCO = ['sistema', 'software', 'solucao', 'plataforma', 'licenciamento', 'licenca', 'saas', 'tecnologia da informacao'];
+const LEAD_SCORE_MIN = 3;
+const LEAD_REFORCO = ['sistema', 'sistemas', 'software', 'solucao tecnologica', 'plataforma', 'licenciamento', 'licenca de uso', 'saas', 'tecnologia da informacao', 'aplicativo', 'modulo'];
 function leadNorm(s) {
-  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function leadContem(texto, termo) {
+  const t = leadNorm(termo);
+  if (!t) return false;
+  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(texto);
 }
 function leadClassificar(objeto) {
   const t = leadNorm(objeto);
+  if (!t) return null;
+  const reforco = LEAD_REFORCO.filter(r => leadContem(t, r)).length;
   const achados = [];
   let score = 0;
   LEAD_SOLUCOES.forEach(s => {
-    const hits = s.termos.filter(termo => t.includes(leadNorm(termo)));
-    if (hits.length) {
-      achados.push(s.id);
-      score += hits.length * 2;
-    }
+    const fortes = (s.fortes || []).filter(termo => leadContem(t, termo)).length;
+    const fracos = reforco ? (s.fracos || []).filter(termo => leadContem(t, termo)).length : 0;
+    if (!fortes && !fracos) return;
+    achados.push(s.id);
+    score += fortes * 3 + fracos;
   });
   if (!achados.length) return null;
-  const reforco = LEAD_REFORCO.filter(r => t.includes(r)).length;
   score += reforco;
+  if (score < LEAD_SCORE_MIN) return null;
   return {
     solucoes: achados,
     score,
     reforco
   };
+}
+function leadLinkPncp(item) {
+  if (item.linkSistemaOrigem) return item.linkSistemaOrigem;
+  const m = /^(\d+)-\d+-(\d+)\/(\d{4})$/.exec(String(item.numeroControlePNCP || '').trim());
+  if (m) return `https://pncp.gov.br/app/editais/${m[1]}/${m[3]}/${m[2]}`;
+  const cnpj = (item.orgaoEntidade || {}).cnpj;
+  if (cnpj && item.anoCompra && item.sequencialCompra) return `https://pncp.gov.br/app/editais/${cnpj}/${item.anoCompra}/${item.sequencialCompra}`;
+  return '';
 }
 function leadDoPncp(item, solucoes, score) {
   const org = item.orgaoEntidade || {};
@@ -1837,12 +1860,41 @@ function leadDoPncp(item, solucoes, score) {
     aberturaProposta: (item.dataAberturaProposta || '').slice(0, 10),
     encerramentoProposta: (item.dataEncerramentoProposta || '').slice(0, 10),
     situacao: item.situacaoCompraNome || '',
-    link: item.linkSistemaOrigem || '',
+    link: leadLinkPncp(item),
     solucoes,
     score,
     status: 'novo',
     capturadoEm: new Date().toISOString()
   };
+}
+const LEAD_PAUSA = 2500;
+const LEAD_MAX_PAGINAS = 12;
+const LEAD_BACKOFF = [30000, 60000, 90000];
+const leadEspera = ms => new Promise(r => setTimeout(r, ms));
+async function leadFetchPncp(url, onProgresso) {
+  for (let i = 0; i <= LEAD_BACKOFF.length; i++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 30000);
+    let r = null,
+      falha = null;
+    try {
+      r = await fetch(url, {
+        signal: ctl.signal
+      });
+    } catch (e) {
+      falha = e;
+    }
+    clearTimeout(timer);
+    const sobrecarga = r && (r.status === 429 || r.status === 502 || r.status === 503);
+    if (r && !sobrecarga) return r;
+    if (i === LEAD_BACKOFF.length) {
+      if (falha) throw falha;
+      return r;
+    }
+    const espera = LEAD_BACKOFF[i];
+    onProgresso?.(`Portal ocupado — aguardando ${espera / 1000}s para continuar…`);
+    await leadEspera(espera);
+  }
 }
 async function buscarLeadsPncp({
   dias = 3,
@@ -1855,7 +1907,9 @@ async function buscarLeadsPncp({
   const dIni = fmt(new Date(hoje.getTime() - dias * 86400000));
   const achados = new Map();
   const erros = [];
-  let consultadas = 0;
+  let consultadas = 0,
+    analisados = 0,
+    primeira = true;
   const alvos = ufs.length ? ufs : [''];
   for (const modal of PNCP_MODALIDADES) {
     for (const uf of alvos) {
@@ -1870,30 +1924,28 @@ async function buscarLeadsPncp({
           tamanhoPagina: '50'
         });
         if (uf) qs.set('uf', uf);
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 30000);
         try {
           onProgresso?.(`${modal.nome}${uf ? ' · ' + uf : ''} — página ${pagina}…`);
-          const r = await fetch(`${PNCP_API}?${qs}`, {
-            signal: ctl.signal
-          });
-          clearTimeout(timer);
+          if (!primeira) await leadEspera(LEAD_PAUSA);
+          primeira = false;
+          const r = await leadFetchPncp(`${PNCP_API}?${qs}`, onProgresso);
           consultadas++;
           if (r.status === 204) break;
           if (!r.ok) {
-            erros.push(`${modal.nome}${uf ? '/' + uf : ''}: HTTP ${r.status}`);
+            erros.push(`${modal.nome}${uf ? '/' + uf : ''}: HTTP ${r.status}${r.status === 429 ? ' (limite de requisições do portal)' : ''}`);
             break;
           }
           const d = await r.json();
-          totalPaginas = Math.min(Number(d.totalPaginas) || 1, 6);
+          totalPaginas = Math.min(Number(d.totalPaginas) || 1, LEAD_MAX_PAGINAS);
           (d.data || []).forEach(item => {
+            analisados++;
             const c = leadClassificar(item.objetoCompra);
             if (!c) return;
             const lead = leadDoPncp(item, c.solucoes, c.score);
-            if (!achados.has(lead.id)) achados.set(lead.id, lead);
+            const antigo = achados.get(lead.id);
+            if (!antigo || lead.score > antigo.score) achados.set(lead.id, lead);
           });
         } catch (e) {
-          clearTimeout(timer);
           erros.push(`${modal.nome}${uf ? '/' + uf : ''}: ${e.name === 'AbortError' ? 'tempo esgotado' : e.message}`);
           break;
         }
@@ -1904,7 +1956,8 @@ async function buscarLeadsPncp({
   return {
     leads: [...achados.values()].sort((a, b) => b.score - a.score),
     erros,
-    consultadas
+    consultadas,
+    analisados
   };
 }
 const LEAD_STATUS = [{

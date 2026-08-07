@@ -768,43 +768,97 @@
       { cod: 4, nome:'Concorrência Eletrônica' },
     ];
 
+    /* Termos por linha de solução.
+       'fortes'  → sozinhos já caracterizam a oportunidade.
+       'fracos'  → só contam se o objeto também falar de software/sistema/plataforma,
+                   senão viram falso positivo (ex.: "inteligencia artificial" aparece
+                   em contrato de nuvem, "procuradoria" no nome do próprio órgão). */
     const LEAD_SOLUCOES = [
-      { id:'obras',      nome:'Gestão de Obras',           cor:'#b45309',
-        termos:['gestao de obras','gerenciamento de obras','fiscalizacao de obras','medicao de obras','acompanhamento de obras','obras publicas'] },
-      { id:'tributario', nome:'Gestão Tributária',         cor:'#15803d',
-        termos:['gestao tributaria','sistema tributario','arrecadacao municipal','iptu','divida ativa','administracao tributaria'] },
-      { id:'nfse',       nome:'Nota Fiscal / ISS',         cor:'#0891b2',
-        termos:['nota fiscal de servico','nfs-e','nfse','nota fiscal eletronica','iss','imposto sobre servico'] },
-      { id:'judicial',   nome:'Processos Judiciais',       cor:'#1d4ed8',
-        termos:['processos judiciais','gestao judicial','procuradoria','peticionamento','execucao fiscal','contencioso'] },
-      { id:'pedagogico', nome:'Gestão Pedagógica',         cor:'#7c3aed',
-        termos:['gestao pedagogica','gestao escolar','diario de classe','sistema educacional','rede municipal de ensino','censo escolar'] },
-      { id:'monitoria',  nome:'Monitoramento com IA',      cor:'#be185d',
-        termos:['videomonitoramento','video monitoramento','monitoramento por camera','reconhecimento facial','inteligencia artificial','cameras de seguranca','leitura de placas','ocr de placas'] },
+      { id:'obras',      nome:'Gestão de Obras',      cor:'#b45309',
+        fortes:['gestao de obras','gerenciamento de obras','fiscalizacao de obras','medicao de obras',
+                'acompanhamento de obras','gestao de contratos de obras'],
+        fracos:['obras publicas','engenharia'] },
+      { id:'tributario', nome:'Gestão Tributária',    cor:'#15803d',
+        fortes:['gestao tributaria','sistema tributario','administracao tributaria','arrecadacao municipal',
+                'iptu','divida ativa','itbi','cadastro imobiliario','planta generica de valores'],
+        fracos:['arrecadacao','tributos','receita municipal'] },
+      { id:'nfse',       nome:'Nota Fiscal / ISS',    cor:'#0891b2',
+        fortes:['nota fiscal de servico','nota fiscal eletronica','nfs-e','nfse','nfe',
+                'imposto sobre servico','iss','issqn','declaracao eletronica de servicos'],
+        fracos:['nota fiscal','escrituracao fiscal'] },
+      { id:'judicial',   nome:'Processos Judiciais',  cor:'#1d4ed8',
+        fortes:['processos judiciais','gestao judicial','peticionamento eletronico','execucao fiscal',
+                'processo eletronico','gestao de processos administrativos'],
+        fracos:['procuradoria','contencioso','peticionamento','juridico'] },
+      { id:'pedagogico', nome:'Gestão Pedagógica',    cor:'#7c3aed',
+        fortes:['gestao pedagogica','gestao escolar','diario de classe','diario eletronico',
+                'sistema educacional','censo escolar','matricula online','gestao da educacao'],
+        fracos:['rede municipal de ensino','secretaria de educacao','escolar'] },
+      { id:'monitoria',  nome:'Monitoramento com IA', cor:'#be185d',
+        fortes:['videomonitoramento','video monitoramento','monitoramento por camera','circuito fechado de televisao',
+                'cftv','reconhecimento facial','leitura de placas','ocr de placas','leitura automatica de placas',
+                'cameras de seguranca','camera de seguranca','monitoramento de imagens'],
+        // 'monitoramento' sozinho é largo demais (monitoramento de pacientes, de nuvem,
+        // de alarmes) — só vale acompanhado de imagem/vídeo, que já está em 'fortes'.
+        fracos:['videovigilancia','videomonitoramento urbano','central de videomonitoramento'] },
     ];
 
-    // Palavras que reforçam ser contratação de software (evita falso positivo)
-    const LEAD_REFORCO = ['sistema','software','solucao','plataforma','licenciamento','licenca','saas','tecnologia da informacao'];
+    /* Pontuação mínima para um edital virar lead. Um termo fraco + a palavra
+       "plataforma" somam 2 e não bastam — isso deixava passar contrato de nuvem
+       e de monitoramento de pacientes. */
+    const LEAD_SCORE_MIN = 3;
+
+    // Palavras que caracterizam contratação de software (o nosso ramo)
+    const LEAD_REFORCO = ['sistema','sistemas','software','solucao tecnologica','plataforma','licenciamento',
+                          'licenca de uso','saas','tecnologia da informacao','aplicativo','modulo'];
 
     function leadNorm(s) {
-      return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+      return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9\s-]/g,' ').replace(/\s+/g,' ').trim();
+    }
+
+    /* Casamento por palavra inteira. Sem isso, "iss" casa dentro de
+       "comissão", "emissão", "transmissão" e enche a lista de lixo. */
+    function leadContem(texto, termo) {
+      const t = leadNorm(termo);
+      if (!t) return false;
+      const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(texto);
     }
 
     /* Classifica um objeto de licitação nas linhas de solução.
-       Devolve { solucoes:[ids], score } — score alto = mais aderente. */
+       Devolve { solucoes:[ids], score, reforco } ou null.
+       Termo fraco só entra se o objeto também mencionar software/sistema. */
     function leadClassificar(objeto) {
       const t = leadNorm(objeto);
+      if (!t) return null;
+      const reforco = LEAD_REFORCO.filter(r => leadContem(t, r)).length;
       const achados = [];
       let score = 0;
       LEAD_SOLUCOES.forEach(s => {
-        const hits = s.termos.filter(termo => t.includes(leadNorm(termo)));
-        if (hits.length) { achados.push(s.id); score += hits.length * 2; }
+        const fortes = (s.fortes || []).filter(termo => leadContem(t, termo)).length;
+        const fracos = reforco ? (s.fracos || []).filter(termo => leadContem(t, termo)).length : 0;
+        if (!fortes && !fracos) return;
+        achados.push(s.id);
+        score += fortes * 3 + fracos;
       });
       if (!achados.length) return null;
-      // Reforço: menciona software/sistema/plataforma → mais provável ser o nosso alvo
-      const reforco = LEAD_REFORCO.filter(r => t.includes(r)).length;
       score += reforco;
+      if (score < LEAD_SCORE_MIN) return null;
       return { solucoes: achados, score, reforco };
+    }
+
+    /* Monta o link do edital no portal. O campo linkSistemaOrigem vem vazio na
+       maioria dos registros, mas numeroControlePNCP (CNPJ-1-SEQUENCIAL/ANO)
+       sempre existe e dá para remontar a URL pública a partir dele. */
+    function leadLinkPncp(item) {
+      if (item.linkSistemaOrigem) return item.linkSistemaOrigem;
+      const m = /^(\d+)-\d+-(\d+)\/(\d{4})$/.exec(String(item.numeroControlePNCP || '').trim());
+      if (m) return `https://pncp.gov.br/app/editais/${m[1]}/${m[3]}/${m[2]}`;
+      const cnpj = (item.orgaoEntidade || {}).cnpj;
+      if (cnpj && item.anoCompra && item.sequencialCompra)
+        return `https://pncp.gov.br/app/editais/${cnpj}/${item.anoCompra}/${item.sequencialCompra}`;
+      return '';
     }
 
     // Converte um registro do PNCP no formato do lead
@@ -826,11 +880,42 @@
         aberturaProposta:    (item.dataAberturaProposta || '').slice(0,10),
         encerramentoProposta:(item.dataEncerramentoProposta || '').slice(0,10),
         situacao:    item.situacaoCompraNome || '',
-        link:        item.linkSistemaOrigem || '',
+        link:        leadLinkPncp(item),
         solucoes, score,
         status: 'novo',
         capturadoEm: new Date().toISOString(),
       };
+    }
+
+    /* Limites do portal, medidos na prática (ago/2026):
+       · ~8 requisições em rajada já disparam HTTP 429;
+       · depois do 429 leva ~80s para liberar, passando por 502/503 no meio;
+       · a 1 requisição a cada 2,5s dá para emendar dezenas sem nenhuma falha.
+       Daí o ritmo fixo abaixo e a espera longa quando mesmo assim estourar. */
+    const LEAD_PAUSA       = 2500;  // intervalo entre requisições
+    const LEAD_MAX_PAGINAS = 12;    // por modalidade → 600 editais (4 modalidades ≈ 2 min)
+    const LEAD_BACKOFF     = [30000, 60000, 90000];
+
+    const leadEspera = ms => new Promise(r => setTimeout(r, ms));
+
+    /* Uma requisição ao PNCP com espera longa em caso de 429/502/503.
+       Sem isso só a primeira modalidade era varrida e as outras três
+       eram descartadas em silêncio. */
+    async function leadFetchPncp(url, onProgresso) {
+      for (let i = 0; i <= LEAD_BACKOFF.length; i++) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 30000);
+        let r = null, falha = null;
+        try { r = await fetch(url, { signal: ctl.signal }); }
+        catch(e) { falha = e; }
+        clearTimeout(timer);
+        const sobrecarga = r && (r.status === 429 || r.status === 502 || r.status === 503);
+        if (r && !sobrecarga) return r;
+        if (i === LEAD_BACKOFF.length) { if (falha) throw falha; return r; }
+        const espera = LEAD_BACKOFF[i];
+        onProgresso?.(`Portal ocupado — aguardando ${espera/1000}s para continuar…`);
+        await leadEspera(espera);
+      }
     }
 
     /* Busca no PNCP em uma janela de dias. Devolve { leads, erros, consultadas } */
@@ -841,7 +926,7 @@
       const dIni = fmt(new Date(hoje.getTime() - dias*86400000));
       const achados = new Map();
       const erros = [];
-      let consultadas = 0;
+      let consultadas = 0, analisados = 0, primeira = true;
 
       const alvos = ufs.length ? ufs : [''];   // '' = todas as UFs
       for (const modal of PNCP_MODALIDADES) {
@@ -854,25 +939,31 @@
               pagina: String(pagina), tamanhoPagina: '50',
             });
             if (uf) qs.set('uf', uf);
-            const ctl = new AbortController();
-            const timer = setTimeout(() => ctl.abort(), 30000);
             try {
               onProgresso?.(`${modal.nome}${uf ? ' · '+uf : ''} — página ${pagina}…`);
-              const r = await fetch(`${PNCP_API}?${qs}`, { signal: ctl.signal });
-              clearTimeout(timer);
+              if (!primeira) await leadEspera(LEAD_PAUSA);   // respeita o limite do portal
+              primeira = false;
+              const r = await leadFetchPncp(`${PNCP_API}?${qs}`, onProgresso);
               consultadas++;
               if (r.status === 204) break;             // sem conteúdo
-              if (!r.ok) { erros.push(`${modal.nome}${uf?'/'+uf:''}: HTTP ${r.status}`); break; }
+              if (!r.ok) {
+                erros.push(`${modal.nome}${uf?'/'+uf:''}: HTTP ${r.status}${r.status === 429 ? ' (limite de requisições do portal)' : ''}`);
+                break;
+              }
               const d = await r.json();
-              totalPaginas = Math.min(Number(d.totalPaginas) || 1, 6);  // teto de segurança
+              /* O portal não filtra por palavra-chave: a triagem é toda nossa, então
+                 é preciso baixar as páginas. Dispensa sozinha passa de 200 páginas numa
+                 janela de 4 dias — o teto de 6 lia menos de 3% dos editais. */
+              totalPaginas = Math.min(Number(d.totalPaginas) || 1, LEAD_MAX_PAGINAS);
               (d.data || []).forEach(item => {
+                analisados++;
                 const c = leadClassificar(item.objetoCompra);
                 if (!c) return;
                 const lead = leadDoPncp(item, c.solucoes, c.score);
-                if (!achados.has(lead.id)) achados.set(lead.id, lead);
+                const antigo = achados.get(lead.id);
+                if (!antigo || lead.score > antigo.score) achados.set(lead.id, lead);
               });
             } catch(e) {
-              clearTimeout(timer);
               erros.push(`${modal.nome}${uf?'/'+uf:''}: ${e.name === 'AbortError' ? 'tempo esgotado' : e.message}`);
               break;
             }
@@ -880,7 +971,7 @@
           } while (pagina <= totalPaginas);
         }
       }
-      return { leads: [...achados.values()].sort((a,b) => b.score - a.score), erros, consultadas };
+      return { leads: [...achados.values()].sort((a,b) => b.score - a.score), erros, consultadas, analisados };
     }
 
     const LEAD_STATUS = [
