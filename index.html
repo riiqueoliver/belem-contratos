@@ -37,6 +37,68 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    /* ════════════════════════════════════════════════════
+       TEMA ESCURO — reescreve as superfícies mais usadas.
+       Só entra quando data-tema="escuro" está no <html>.
+       ════════════════════════════════════════════════════ */
+    html[data-tema="escuro"] { color-scheme: dark; }
+    html[data-tema="escuro"] body { background: #0f172a !important; color: #e2e8f0; }
+    html[data-tema="escuro"] ::-webkit-scrollbar-thumb { background: #475569; }
+
+    /* superfícies */
+    html[data-tema="escuro"] .bg-white          { background-color: #1e293b !important; }
+    html[data-tema="escuro"] .bg-slate-100      { background-color: #0f172a !important; }
+    html[data-tema="escuro"] .bg-slate-50,
+    html[data-tema="escuro"] .bg-gray-50        { background-color: #1a2437 !important; }
+    html[data-tema="escuro"] .bg-gray-100       { background-color: #243146 !important; }
+
+    /* textos */
+    html[data-tema="escuro"] .text-gray-800,
+    html[data-tema="escuro"] .text-gray-900,
+    html[data-tema="escuro"] .text-slate-700,
+    html[data-tema="escuro"] .text-slate-800    { color: #e2e8f0 !important; }
+    html[data-tema="escuro"] .text-gray-700,
+    html[data-tema="escuro"] .text-gray-600     { color: #cbd5e1 !important; }
+    html[data-tema="escuro"] .text-gray-500     { color: #94a3b8 !important; }
+    html[data-tema="escuro"] .text-gray-400,
+    html[data-tema="escuro"] .text-gray-300     { color: #64748b !important; }
+
+    /* bordas */
+    html[data-tema="escuro"] .border-gray-100,
+    html[data-tema="escuro"] .border-gray-200,
+    html[data-tema="escuro"] .border-gray-50,
+    html[data-tema="escuro"] .border-slate-200  { border-color: #334155 !important; }
+    html[data-tema="escuro"] .divide-gray-50 > * + *,
+    html[data-tema="escuro"] .divide-gray-100 > * + * { border-color: #334155 !important; }
+
+    /* campos de formulário */
+    html[data-tema="escuro"] input,
+    html[data-tema="escuro"] select,
+    html[data-tema="escuro"] textarea {
+      background-color: #172033 !important; color: #e2e8f0 !important; border-color: #334155 !important;
+    }
+    html[data-tema="escuro"] input::placeholder,
+    html[data-tema="escuro"] textarea::placeholder { color: #64748b !important; }
+    html[data-tema="escuro"] option { background: #1e293b; color: #e2e8f0; }
+    html[data-tema="escuro"] input[type="date"] { color-scheme: dark; }
+
+    /* tabelas e faixas claras usadas via style inline */
+    html[data-tema="escuro"] table thead tr[style],
+    html[data-tema="escuro"] [style*="background:#f8fafc"],
+    html[data-tema="escuro"] [style*="background: #f8fafc"],
+    html[data-tema="escuro"] [style*="background:#f1f5f9"],
+    html[data-tema="escuro"] [style*="background: #f1f5f9"] {
+      background-color: #1a2437 !important;
+    }
+    /* hovers claros */
+    html[data-tema="escuro"] .hover\:bg-gray-50:hover  { background-color: #243146 !important; }
+    html[data-tema="escuro"] .hover\:bg-gray-100:hover { background-color: #2b3a52 !important; }
+    html[data-tema="escuro"] .hover\:bg-blue-50:hover  { background-color: #1e3a5f !important; }
+    /* sombras mais discretas no escuro */
+    html[data-tema="escuro"] .shadow-sm, html[data-tema="escuro"] .shadow-md,
+    html[data-tema="escuro"] .shadow-lg, html[data-tema="escuro"] .shadow-xl,
+    html[data-tema="escuro"] .shadow-2xl { box-shadow: 0 4px 20px rgba(0,0,0,.45) !important; }
     @keyframes pulse-ring {
       0%   { box-shadow: 0 0 0 0 rgba(58,138,53,0.35); }
       70%  { box-shadow: 0 0 0 8px rgba(58,138,53,0); }
@@ -182,7 +244,40 @@
       { key:'gdoc',       label:'GDoc' },
     ];
 
-    const BLUE  = SYS.blue;
+    /* ═══════════════════════════════════════════════════════
+       PERSONALIZAÇÃO — modo claro/escuro e cor de destaque.
+       Aplicado antes do render para não piscar na abertura.
+    ═══════════════════════════════════════════════════════ */
+    const TEMA_KEY = SYS.prefix + 'bd-tema';
+    const TEMA_ACCENTS = [
+      { id:'padrao',   nome:'Padrão',     cor: SYS.blue,  desc:'Identidade do sistema' },
+      { id:'petroleo', nome:'Petróleo',   cor:'#0E7490',  desc:'Azul esverdeado' },
+      { id:'violeta',  nome:'Violeta',    cor:'#6D28D9',  desc:'Roxo corporativo' },
+      { id:'floresta', nome:'Floresta',   cor:'#166534',  desc:'Verde institucional' },
+      { id:'grafite',  nome:'Grafite',    cor:'#334155',  desc:'Neutro sóbrio' },
+      { id:'vinho',    nome:'Vinho',      cor:'#9F1239',  desc:'Bordô discreto' },
+    ];
+    function lerTema() {
+      try { return JSON.parse(localStorage.getItem(TEMA_KEY) || '{}'); } catch(e) { return {}; }
+    }
+    function salvarTema(t) {
+      try { localStorage.setItem(TEMA_KEY, JSON.stringify(t)); } catch(e) {}
+      aplicarTema(t);
+    }
+    function aplicarTema(t) {
+      // Roda no carregamento do módulo — nunca pode derrubar o app
+      try {
+        const modo = (t && t.modo) === 'escuro' ? 'escuro' : 'claro';
+        const raiz = document.documentElement;
+        if (raiz) raiz.setAttribute('data-tema', modo);
+        const meta = document.querySelector?.('meta[name="theme-color"]');
+        if (meta) meta.content = modo === 'escuro' ? '#0f172a' : '#ffffff';
+      } catch(e) { console.warn('tema:', e.message); }
+    }
+    const TEMA_PREF = lerTema();
+    aplicarTema(TEMA_PREF);
+
+    const BLUE  = (TEMA_ACCENTS.find(a => a.id === TEMA_PREF.accent) || {}).cor || SYS.blue;
     const GREEN = '#3A8A35';
 
     /* converte DD/MM/YYYY → YYYY-MM-DD */
@@ -657,6 +752,144 @@
       const intFmt = intRaw ? parseInt(intRaw, 10).toLocaleString('pt-BR') : '';
       return dec !== null ? `${intFmt},${dec}` : intFmt;
     }
+
+    /* ═══════════════════════════════════════════════════════
+       PROSPECÇÃO DE LEADS — varre o PNCP (Portal Nacional de
+       Contratações Públicas) atrás de oportunidades nas linhas
+       de solução da Belém Digital. Desde a Lei 14.133/2021 toda
+       contratação pública é publicada lá.
+    ═══════════════════════════════════════════════════════ */
+    const PNCP_API = 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao';
+    // Modalidades mais usadas em contratação de software
+    const PNCP_MODALIDADES = [
+      { cod: 6, nome:'Pregão Eletrônico' },
+      { cod: 8, nome:'Dispensa' },
+      { cod: 9, nome:'Inexigibilidade' },
+      { cod: 4, nome:'Concorrência Eletrônica' },
+    ];
+
+    const LEAD_SOLUCOES = [
+      { id:'obras',      nome:'Gestão de Obras',           cor:'#b45309',
+        termos:['gestao de obras','gerenciamento de obras','fiscalizacao de obras','medicao de obras','acompanhamento de obras','obras publicas'] },
+      { id:'tributario', nome:'Gestão Tributária',         cor:'#15803d',
+        termos:['gestao tributaria','sistema tributario','arrecadacao municipal','iptu','divida ativa','administracao tributaria'] },
+      { id:'nfse',       nome:'Nota Fiscal / ISS',         cor:'#0891b2',
+        termos:['nota fiscal de servico','nfs-e','nfse','nota fiscal eletronica','iss','imposto sobre servico'] },
+      { id:'judicial',   nome:'Processos Judiciais',       cor:'#1d4ed8',
+        termos:['processos judiciais','gestao judicial','procuradoria','peticionamento','execucao fiscal','contencioso'] },
+      { id:'pedagogico', nome:'Gestão Pedagógica',         cor:'#7c3aed',
+        termos:['gestao pedagogica','gestao escolar','diario de classe','sistema educacional','rede municipal de ensino','censo escolar'] },
+      { id:'monitoria',  nome:'Monitoramento com IA',      cor:'#be185d',
+        termos:['videomonitoramento','video monitoramento','monitoramento por camera','reconhecimento facial','inteligencia artificial','cameras de seguranca','leitura de placas','ocr de placas'] },
+    ];
+
+    // Palavras que reforçam ser contratação de software (evita falso positivo)
+    const LEAD_REFORCO = ['sistema','software','solucao','plataforma','licenciamento','licenca','saas','tecnologia da informacao'];
+
+    function leadNorm(s) {
+      return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    }
+
+    /* Classifica um objeto de licitação nas linhas de solução.
+       Devolve { solucoes:[ids], score } — score alto = mais aderente. */
+    function leadClassificar(objeto) {
+      const t = leadNorm(objeto);
+      const achados = [];
+      let score = 0;
+      LEAD_SOLUCOES.forEach(s => {
+        const hits = s.termos.filter(termo => t.includes(leadNorm(termo)));
+        if (hits.length) { achados.push(s.id); score += hits.length * 2; }
+      });
+      if (!achados.length) return null;
+      // Reforço: menciona software/sistema/plataforma → mais provável ser o nosso alvo
+      const reforco = LEAD_REFORCO.filter(r => t.includes(r)).length;
+      score += reforco;
+      return { solucoes: achados, score, reforco };
+    }
+
+    // Converte um registro do PNCP no formato do lead
+    function leadDoPncp(item, solucoes, score) {
+      const org = item.orgaoEntidade || {};
+      const uni = item.unidadeOrgao  || {};
+      return {
+        id: String(item.numeroControlePNCP || `${org.cnpj}-${item.numeroCompra}-${item.anoCompra}`).replace(/[^\w-]/g,'_'),
+        pncpId:      item.numeroControlePNCP || '',
+        objeto:      item.objetoCompra || '',
+        orgao:       org.razaoSocial || uni.nomeUnidade || '—',
+        cnpj:        org.cnpj || '',
+        unidade:     uni.nomeUnidade || '',
+        municipio:   uni.municipioNome || '',
+        uf:          uni.ufSigla || '',
+        modalidade:  item.modalidadeNome || '',
+        valor:       Number(item.valorTotalEstimado) || 0,
+        publicacao:  (item.dataPublicacaoPncp || '').slice(0,10),
+        aberturaProposta:    (item.dataAberturaProposta || '').slice(0,10),
+        encerramentoProposta:(item.dataEncerramentoProposta || '').slice(0,10),
+        situacao:    item.situacaoCompraNome || '',
+        link:        item.linkSistemaOrigem || '',
+        solucoes, score,
+        status: 'novo',
+        capturadoEm: new Date().toISOString(),
+      };
+    }
+
+    /* Busca no PNCP em uma janela de dias. Devolve { leads, erros, consultadas } */
+    async function buscarLeadsPncp({ dias = 3, ufs = [], onProgresso } = {}) {
+      const fmt = d => d.toISOString().slice(0,10).replace(/-/g,'');
+      const hoje = new Date();
+      const dFim = fmt(hoje);
+      const dIni = fmt(new Date(hoje.getTime() - dias*86400000));
+      const achados = new Map();
+      const erros = [];
+      let consultadas = 0;
+
+      const alvos = ufs.length ? ufs : [''];   // '' = todas as UFs
+      for (const modal of PNCP_MODALIDADES) {
+        for (const uf of alvos) {
+          let pagina = 1, totalPaginas = 1;
+          do {
+            const qs = new URLSearchParams({
+              dataInicial: dIni, dataFinal: dFim,
+              codigoModalidadeContratacao: String(modal.cod),
+              pagina: String(pagina), tamanhoPagina: '50',
+            });
+            if (uf) qs.set('uf', uf);
+            const ctl = new AbortController();
+            const timer = setTimeout(() => ctl.abort(), 30000);
+            try {
+              onProgresso?.(`${modal.nome}${uf ? ' · '+uf : ''} — página ${pagina}…`);
+              const r = await fetch(`${PNCP_API}?${qs}`, { signal: ctl.signal });
+              clearTimeout(timer);
+              consultadas++;
+              if (r.status === 204) break;             // sem conteúdo
+              if (!r.ok) { erros.push(`${modal.nome}${uf?'/'+uf:''}: HTTP ${r.status}`); break; }
+              const d = await r.json();
+              totalPaginas = Math.min(Number(d.totalPaginas) || 1, 6);  // teto de segurança
+              (d.data || []).forEach(item => {
+                const c = leadClassificar(item.objetoCompra);
+                if (!c) return;
+                const lead = leadDoPncp(item, c.solucoes, c.score);
+                if (!achados.has(lead.id)) achados.set(lead.id, lead);
+              });
+            } catch(e) {
+              clearTimeout(timer);
+              erros.push(`${modal.nome}${uf?'/'+uf:''}: ${e.name === 'AbortError' ? 'tempo esgotado' : e.message}`);
+              break;
+            }
+            pagina++;
+          } while (pagina <= totalPaginas);
+        }
+      }
+      return { leads: [...achados.values()].sort((a,b) => b.score - a.score), erros, consultadas };
+    }
+
+    const LEAD_STATUS = [
+      { id:'novo',      label:'Novo',        cor:'#1d4ed8', bg:'#dbeafe' },
+      { id:'analise',   label:'Em análise',  cor:'#b45309', bg:'#fef3c7' },
+      { id:'contatado', label:'Contatado',   cor:'#7c3aed', bg:'#ede9fe' },
+      { id:'proposta',  label:'Proposta',    cor:'#15803d', bg:'#dcfce7' },
+      { id:'descartado',label:'Descartado',  cor:'#6b7280', bg:'#f3f4f6' },
+    ];
 
     /* ═══════════════════════════════════════════════════════
        EMISSÃO DE PROPOSTAS — gera o documento no padrão
@@ -4350,6 +4583,264 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               })}
             </div>
           )}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PÁGINA DE PROSPECÇÃO DE LEADS
+    ═══════════════════════════════════════════════════════ */
+    function LeadsPage({ leads, sync, onBuscar, onStatus, onExcluir, addToast }) {
+      const [buscando, setBuscando] = React.useState(false);
+      const [progresso, setProgresso] = React.useState('');
+      const [erros,     setErros]     = React.useState([]);
+      const [fSolucao,  setFSolucao]  = React.useState('');
+      const [fStatus,   setFStatus]   = React.useState('');
+      const [fUf,       setFUf]       = React.useState('');
+      const [busca,     setBusca]     = React.useState('');
+      const [dias,      setDias]      = React.useState(3);
+
+      async function buscar() {
+        setBuscando(true); setErros([]); setProgresso('Iniciando…');
+        try {
+          const res = await onBuscar({ dias, onProgresso: setProgresso });
+          setErros(res.erros || []);
+          const n = res.novos || 0;
+          addToast(n > 0
+            ? `🎯 ${n} nova(s) oportunidade(s) encontrada(s)!`
+            : `Busca concluída — nenhuma oportunidade nova nas linhas monitoradas.`);
+        } catch(e) {
+          addToast('Erro na busca: ' + (e.message || 'falha'));
+          setErros([e.message || 'falha desconhecida']);
+        } finally { setBuscando(false); setProgresso(''); }
+      }
+
+      const ufs = React.useMemo(() =>
+        [...new Set(leads.map(l => l.uf).filter(Boolean))].sort(), [leads]);
+
+      const filtrados = React.useMemo(() => leads.filter(l => {
+        if (fSolucao && !(l.solucoes||[]).includes(fSolucao)) return false;
+        if (fStatus  && l.status !== fStatus) return false;
+        if (fUf      && l.uf !== fUf) return false;
+        if (busca) {
+          const q = leadNorm(busca);
+          if (!leadNorm(l.objeto).includes(q) && !leadNorm(l.orgao).includes(q) && !leadNorm(l.municipio).includes(q)) return false;
+        }
+        return true;
+      }), [leads, fSolucao, fStatus, fUf, busca]);
+
+      const kpi = React.useMemo(() => {
+        const porSol = {};
+        LEAD_SOLUCOES.forEach(s => porSol[s.id] = 0);
+        leads.forEach(l => (l.solucoes||[]).forEach(s => porSol[s] != null && porSol[s]++));
+        return {
+          total: leads.length,
+          novos: leads.filter(l => l.status === 'novo').length,
+          emAndamento: leads.filter(l => ['analise','contatado','proposta'].includes(l.status)).length,
+          valor: leads.filter(l => l.status !== 'descartado').reduce((s,l) => s + (l.valor||0), 0),
+          porSol,
+        };
+      }, [leads]);
+
+      const fmtD = s => s ? s.split('-').reverse().join('/') : '—';
+      const diasAte = s => {
+        if (!s) return null;
+        const d = new Date(s + 'T12:00:00'); const h = new Date(); h.setHours(0,0,0,0);
+        return Math.round((d - h) / 86400000);
+      };
+
+      return (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-6 py-6 space-y-4">
+            {/* Cabeçalho */}
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style={{background: BLUE}}>
+                  <TrendingUp className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-black text-gray-800">Prospecção de Oportunidades</h1>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Varredura no PNCP — Portal Nacional de Contratações Públicas
+                    {sync?.em && <span> · última busca {new Date(sync.em).toLocaleString('pt-BR')}</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select value={dias} onChange={e => setDias(Number(e.target.value))}
+                  className="border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-bold bg-white cursor-pointer">
+                  <option value={1}>últimas 24h</option>
+                  <option value={3}>últimos 3 dias</option>
+                  <option value={7}>últimos 7 dias</option>
+                  <option value={15}>últimos 15 dias</option>
+                </select>
+                <button onClick={buscar} disabled={buscando}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+                  style={{background: BLUE}}>
+                  {buscando ? '⏳ Buscando…' : '🔎 Buscar agora'}
+                </button>
+              </div>
+            </div>
+
+            {buscando && progresso && (
+              <div className="rounded-xl px-4 py-2.5 text-[12px] font-medium border"
+                   style={{background:'#eff6ff', borderColor:'#bfdbfe', color:'#1d4ed8'}}>
+                {progresso}
+              </div>
+            )}
+            {erros.length > 0 && !buscando && (
+              <div className="rounded-xl px-4 py-3 text-[12px] border" style={{background:'#fffbeb', borderColor:'#fde68a', color:'#92400e'}}>
+                <p className="font-bold mb-1">A consulta ao PNCP falhou parcialmente ({erros.length}):</p>
+                <ul className="space-y-0.5">{erros.slice(0,4).map((e,i) => <li key={i}>· {e}</li>)}</ul>
+                <p className="mt-1.5 text-[11px] opacity-80">O portal do governo costuma ficar instável. Tente de novo em alguns minutos — os leads já capturados permanecem salvos.</p>
+              </div>
+            )}
+
+            {/* KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { l:'Oportunidades', v:kpi.total,       s:'monitoradas',      c: BLUE },
+                { l:'Novas',         v:kpi.novos,       s:'aguardando triagem', c:'#b45309' },
+                { l:'Em andamento',  v:kpi.emAndamento, s:'análise · contato · proposta', c:'#7c3aed' },
+                { l:'Valor estimado',v:fmtCurrencyShort(kpi.valor), s:'soma das ativas', c:'#15803d', txt:true },
+              ].map((k,i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-200 px-4 py-3.5 shadow-sm">
+                  <p className="text-[9.5px] font-bold uppercase tracking-widest text-gray-400">{k.l}</p>
+                  <p className={`${k.txt ? 'text-xl' : 'text-2xl'} font-black leading-tight mt-0.5`} style={{color:k.c}}>{k.v}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{k.s}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Linhas de solução monitoradas */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Linhas monitoradas — clique para filtrar</p>
+              <div className="flex flex-wrap gap-2">
+                {LEAD_SOLUCOES.map(s => {
+                  const ativo = fSolucao === s.id;
+                  return (
+                    <button key={s.id} onClick={() => setFSolucao(ativo ? '' : s.id)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[12px] font-bold border-2 transition-all"
+                      style={ativo ? {background:s.cor, borderColor:s.cor, color:'#fff'}
+                                   : {borderColor:s.cor+'44', color:s.cor, background:s.cor+'0d'}}>
+                      {s.nome}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={ativo ? {background:'rgba(255,255,255,.25)'} : {background:s.cor+'22'}}>
+                        {kpi.porSol[s.id] || 0}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Filtros */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar por objeto, órgão ou município…"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+              <select value={fStatus} onChange={e => setFStatus(e.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer">
+                <option value="">Todos os status</option>
+                {LEAD_STATUS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+              <select value={fUf} onChange={e => setFUf(e.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer">
+                <option value="">Todas as UFs</option>
+                {ufs.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <span className="text-xs font-semibold text-gray-400 whitespace-nowrap">
+                {filtrados.length} de {leads.length}
+              </span>
+            </div>
+
+            {/* Lista */}
+            {filtrados.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-200 text-center py-16 text-gray-300">
+                <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">
+                  {leads.length === 0 ? 'Nenhuma oportunidade capturada ainda' : 'Nenhum resultado com esses filtros'}
+                </p>
+                {leads.length === 0 && (
+                  <p className="text-xs mt-1 text-gray-300">Clique em "Buscar agora" para varrer o PNCP</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {filtrados.map(l => {
+                  const st = LEAD_STATUS.find(s => s.id === l.status) || LEAD_STATUS[0];
+                  const dPrazo = diasAte(l.encerramentoProposta);
+                  return (
+                    <div key={l.id} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm"
+                         style={{borderLeft:`4px solid ${st.cor}`}}>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            {(l.solucoes||[]).map(sid => {
+                              const s = LEAD_SOLUCOES.find(x => x.id === sid);
+                              return s ? <span key={sid} className="text-[9.5px] font-black px-2 py-0.5 rounded uppercase tracking-wide"
+                                               style={{background:s.cor+'1a', color:s.cor}}>{s.nome}</span> : null;
+                            })}
+                            {l.uf && <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{l.uf}</span>}
+                            {dPrazo !== null && dPrazo >= 0 && (
+                              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded"
+                                    style={dPrazo <= 5 ? {background:'#fee2e2',color:'#b91c1c'} : {background:'#f1f5f9',color:'#475569'}}>
+                                {dPrazo === 0 ? 'encerra hoje' : `encerra em ${dPrazo}d`}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[13.5px] font-semibold text-gray-800 leading-snug">{l.objeto}</p>
+                          <p className="text-[11.5px] text-gray-500 mt-1">
+                            <b className="text-gray-600">{l.orgao}</b>
+                            {l.municipio && ` · ${l.municipio}`}
+                            {l.modalidade && ` · ${l.modalidade}`}
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            Publicado {fmtD(l.publicacao)}
+                            {l.encerramentoProposta && ` · propostas até ${fmtD(l.encerramentoProposta)}`}
+                            {l.valor > 0 && <span className="font-bold ml-1" style={{color:'#15803d'}}> · {fmtCurrency(l.valor)}</span>}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                          <select value={l.status} onChange={e => onStatus(l.id, e.target.value)}
+                            className="border rounded-lg px-2 py-1 text-[11px] font-bold cursor-pointer"
+                            style={{background:st.bg, color:st.cor, borderColor:st.cor+'44'}}>
+                            {LEAD_STATUS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                          </select>
+                          <div className="flex items-center gap-1.5">
+                            {l.link && (
+                              <a href={l.link} target="_blank" rel="noopener noreferrer"
+                                 className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg text-white"
+                                 style={{background: BLUE}}>
+                                <ExternalLink className="w-3 h-3" /> edital
+                              </a>
+                            )}
+                            {l.pncpId && (
+                              <a href={`https://pncp.gov.br/app/editais/${String(l.pncpId).replace(/-/g,'/')}`}
+                                 target="_blank" rel="noopener noreferrer"
+                                 className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                                PNCP
+                              </a>
+                            )}
+                            <button onClick={() => { if (window.confirm('Remover esta oportunidade?')) onExcluir(l.id); }}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="text-[10.5px] text-gray-400 text-center pb-2">
+              Fonte: PNCP (Lei 14.133/2021). A varredura roda automaticamente uma vez por dia ao abrir o sistema
+              e pode ser disparada manualmente a qualquer momento.
+            </p>
+          </div>
         </div>
       );
     }
@@ -9682,7 +10173,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       );
     }
 
-    function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser, apiKey, onAddInstallment, addToast, initialTab, gcspModules, onToggleGcspModule }) {
+    function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser, apiKey, onAddInstallment, addToast, initialTab, gcspModules, onToggleGcspModule, tema = {}, onTema = () => {}, leads = [], propostasEmitidas = [], certidoes = [] }) {
       const [filter, setFilter]               = useState('');
       const [tab, setTab]                     = useState('dashboard');
       // Quando o dashboard abre com uma aba específica solicitada, navega para ela
@@ -11978,6 +12469,67 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 </p>
               </div>
 
+              {/* ── Personalização da interface ── */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>🎨</div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm">Personalização da interface</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Aparência do sistema neste navegador. Fica salvo só para você.</p>
+                  </div>
+                </div>
+
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2">Modo de exibição</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id:'claro',  nome:'Claro',  desc:'Padrão do sistema', bg:'#f1f5f9', fg:'#0f172a', bar:'#ffffff' },
+                    { id:'escuro', nome:'Escuro', desc:'Menor cansaço visual', bg:'#0f172a', fg:'#e2e8f0', bar:'#1e293b' },
+                  ].map(m => {
+                    const ativo = (tema.modo || 'claro') === m.id;
+                    return (
+                      <button key={m.id} onClick={() => onTema({ modo: m.id })}
+                        className="rounded-xl border-2 p-3 text-left transition-all"
+                        style={{ borderColor: ativo ? BLUE : '#e5e7eb', boxShadow: ativo ? `0 0 0 3px ${BLUE}22` : 'none' }}>
+                        <div className="rounded-lg overflow-hidden mb-2 border" style={{borderColor:'#e5e7eb'}}>
+                          <div style={{background:m.bar, height:10}} />
+                          <div style={{background:m.bg, height:34, display:'flex', alignItems:'center', padding:'0 8px', gap:4}}>
+                            <span style={{background:BLUE, width:16, height:16, borderRadius:4, display:'block'}} />
+                            <span style={{background:m.bar, flex:1, height:14, borderRadius:3, display:'block'}} />
+                          </div>
+                        </div>
+                        <p className="text-[12.5px] font-bold" style={{color: ativo ? BLUE : '#374151'}}>
+                          {m.nome} {ativo && '✓'}
+                        </p>
+                        <p className="text-[10px] text-gray-400">{m.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-5 mb-2">Cor de destaque</p>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {TEMA_ACCENTS.map(a => {
+                    const ativo = (tema.accent || 'padrao') === a.id;
+                    return (
+                      <button key={a.id} onClick={() => onTema({ accent: a.id })}
+                        title={a.desc}
+                        className="rounded-xl border-2 p-2 flex flex-col items-center gap-1.5 transition-all"
+                        style={{ borderColor: ativo ? a.cor : '#e5e7eb', boxShadow: ativo ? `0 0 0 3px ${a.cor}22` : 'none' }}>
+                        <span className="w-full rounded-lg" style={{background:a.cor, height:26}} />
+                        <span className="text-[10.5px] font-bold" style={{color: ativo ? a.cor : '#6b7280'}}>{a.nome}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+                  A cor de destaque é aplicada ao recarregar a página, pois vale para todo o sistema.
+                </p>
+                <button onClick={() => window.location.reload()}
+                  className="mt-2 px-4 py-2 rounded-xl text-xs font-bold text-white" style={{background: BLUE}}>
+                  Aplicar e recarregar
+                </button>
+              </div>
+
               {/* ── Controle do sistema GCSP (só visível no sistema principal) ── */}
               {SYS.id === 'main' && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -12283,6 +12835,11 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       const [cronogramas,          setCronogramas]          = useState([]);
       const [showCertidoesPage,    setShowCertidoesPage]    = useState(false);
       const [certidoes,            setCertidoes]            = useState([]);
+      const [showLeadsPage,        setShowLeadsPage]        = useState(false);
+      const [leads,                setLeads]                = useState([]);
+      const [leadSync,             setLeadSync]             = useState(null);
+      // Personalização (tema)
+      const [tema,                 setTema]                 = useState(() => lerTema());
       // Privacidade: começa sempre oculto a cada sessão
       const [ocultarValores,       setOcultarValores]       = useState(true);
       // Sincroniza durante o render — os filhos renderizam depois e já pegam o valor certo
@@ -12443,12 +13000,19 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         const unsubPropEm = db.collection(COL('propostas_emitidas')).orderBy('createdAt','desc').onSnapshot(snap => {
           setPropostasEmitidas(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
+        const unsubLeads = db.collection(COL('leads')).onSnapshot(snap => {
+          setLeads(snap.docs.map(d => ({ ...d.data(), id: d.id }))
+            .sort((a,b) => (b.publicacao||'').localeCompare(a.publicacao||'') || (b.score||0)-(a.score||0)));
+        });
+        const unsubLeadSync = db.collection(COL('system_meta')).doc('leadSync').onSnapshot(doc => {
+          setLeadSync(doc.exists ? doc.data() : null);
+        });
         // Config de módulos do GCSP — coleção NÃO prefixada (compartilhada): o admin
         // do sistema principal edita e o GCSP lê a mesma configuração.
         const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
           setGcspModules((doc.exists && doc.data().modules) || {});
         });
-        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubCfg(); };
+        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
       }, []);
 
       const uniqueContractCount = useMemo(() => {
@@ -12781,7 +13345,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         setShowInstallmentsPage(false);
         setShowProposalsPage(false);
         setShowGdocPage(false);
-        setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false);
+        setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false);
         setShowProposalBI(false);
         if (ARCANJO_ONLY.has(currentUser?.username)) {
           setShowArcanjoPage(true);
@@ -13221,6 +13785,51 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         await db.collection(COL('gdocs')).doc(id).delete();
       }
 
+      /* ── Prospecção de leads ── */
+      async function handleBuscarLeads({ dias = 3, onProgresso } = {}) {
+        const res = await buscarLeadsPncp({ dias, onProgresso });
+        // Só grava o que ainda não existe — preserva o status já trabalhado
+        const existentes = new Set(leads.map(l => l.id));
+        const novos = res.leads.filter(l => !existentes.has(l.id));
+        for (const bloco of Array.from({ length: Math.ceil(novos.length/400) }, (_,i) => novos.slice(i*400, i*400+400))) {
+          const b = db.batch();
+          bloco.forEach(l => { const { id, ...resto } = l; b.set(db.collection(COL('leads')).doc(id), resto); });
+          await b.commit();
+        }
+        await db.collection(COL('system_meta')).doc('leadSync').set({
+          em: new Date().toISOString(), dia: new Date().toISOString().slice(0,10),
+          encontrados: res.leads.length, novos: novos.length,
+          erros: res.erros.length, consultas: res.consultadas,
+        });
+        return { ...res, novos: novos.length };
+      }
+      async function handleStatusLead(id, status) {
+        await db.collection(COL('leads')).doc(id).set({ status }, { merge:true });
+      }
+      async function handleExcluirLead(id) {
+        await db.collection(COL('leads')).doc(id).delete();
+      }
+
+      // Varredura automática — uma vez por dia, ao abrir o sistema
+      const leadAutoRef = useRef(false);
+      useEffect(() => {
+        if (!dbReady || !currentUser || leadAutoRef.current) return;
+        if (ARCANJO_ONLY.has(currentUser.username)) return;
+        const hoje = new Date().toISOString().slice(0,10);
+        if (leadSync?.dia === hoje) return;          // já rodou hoje
+        leadAutoRef.current = true;
+        handleBuscarLeads({ dias: 2 })
+          .then(r => { if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`); })
+          .catch(() => {});                          // silencioso: o portal do governo oscila
+      }, [dbReady, currentUser, leadSync]);
+
+      /* ── Personalização (tema) ── */
+      function handleTema(novo) {
+        const t = { ...tema, ...novo };
+        setTema(t);
+        salvarTema(t);
+      }
+
       /* ── Emissão de propostas ── */
       async function handleSalvarProposta(id, dados) {
         const limpo = { ...dados };
@@ -13598,6 +14207,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                           initialTab={adminInitialTab}
                           gcspModules={gcspModules}
                           onToggleGcspModule={handleToggleGcspModule}
+                          tema={tema} onTema={handleTema}
+                          leads={leads} propostasEmitidas={propostasEmitidas} certidoes={certidoes}
                           addToast={addToast} />
 
           {/* ── SIDEBAR ────────────────────────────────────────── */}
@@ -13699,7 +14310,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 <SidebarBtn
                   icon={Clipboard}
                   label={`Contratos (${uniqueContractCount})`}
-                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
+                  onClick={() => { setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }}
                   badge={hasAlert_sb ? totalHomeAlerts_sb : 0}
                   active={showContractsPage && !activeContractNumber} />
               )}
@@ -13707,13 +14318,13 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('parcelas') && (
                 <SidebarBtn icon={ParcelasIcon} label="Parcelas"
                   active={showInstallmentsPage}
-                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && (
                 <SidebarBtn icon={Briefcase} label="Propostas"
                   active={showProposalsPage}
-                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {/* BI de Propostas: acessado pelo indicador dentro do módulo de Propostas */}
@@ -13724,30 +14335,37 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                   onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCronogramaPage(true); }} />
               )}
 
+              {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={TrendingUp} label="Oportunidades"
+                  active={showLeadsPage}
+                  badge={leads.filter(l => l.status === 'novo').length}
+                  onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowLeadsPage(true); }} />
+              )}
+
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && (
                 <SidebarBtn icon={FileText} label="Emitir Proposta"
                   active={showPropEmissao}
-                  onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowPropEmissao(true); }} />
+                  onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowPropEmissao(true); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Shield} label="Certidões"
                   active={showCertidoesPage}
                   badge={certidoes.filter(c => ['expired','expiring'].includes(certStatus(c))).length}
-                  onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCertidoesPage(true); }} />
+                  onClick={() => { setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCertidoesPage(true); }} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && (
                 <SidebarBtn icon={Layers} label="GDoc"
                   active={showGdocPage}
                   badge={gdocs.length > 0 ? 0 : 0}
-                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {ARCANJO_USERS.has(currentUser.username) && (
                 <SidebarBtn icon={ArcanjoIcon} label="Arcanjo's"
                   active={showArcanjoPage}
-                  onClick={() => { setShowArcanjoPage(true); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowArcanjoPage(true); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {ARCANJO_USERS.has(currentUser.username) && (
@@ -13844,7 +14462,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               </div>
             </header>
 
-          <main className={(showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+          <main className={(showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
 
             {/* Form */}
             {showForm && (
@@ -14346,6 +14964,16 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               /* ── BI PROPOSTAS ── */
               <ProposalBIPage proposals={proposals}
                 onBack={() => { setShowProposalBI(false); setShowProposalsPage(true); }} />
+            ) : showLeadsPage ? (
+              /* ── PROSPECÇÃO DE OPORTUNIDADES ── */
+              <LeadsPage
+                leads={leads}
+                sync={leadSync}
+                onBuscar={handleBuscarLeads}
+                onStatus={handleStatusLead}
+                onExcluir={handleExcluirLead}
+                addToast={addToast}
+              />
             ) : showPropEmissao ? (
               /* ── EMISSÃO DE PROPOSTAS ── */
               <PropostasEmissaoPage
