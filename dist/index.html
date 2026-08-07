@@ -18731,6 +18731,19 @@ function App() {
     const qty = ids.length;
     addToast(`🗑️ ${qty === 1 ? '1 parcela excluída.' : `${qty} parcelas excluídas.`}`);
   }
+  const leadAutoRef = useRef(false);
+  useEffect(() => {
+    if (!dbReady || !currentUser || leadAutoRef.current) return;
+    if (ARCANJO_ONLY.has(currentUser.username)) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (leadSync?.dia === hoje) return;
+    leadAutoRef.current = true;
+    handleBuscarLeads({
+      dias: 2
+    }).then(r => {
+      if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`);
+    }).catch(() => {});
+  }, [dbReady, currentUser, leadSync]);
   if (!dbReady) return React.createElement("div", {
     className: "min-h-screen flex flex-col items-center justify-center gap-5",
     style: {
@@ -19228,19 +19241,6 @@ function App() {
   async function handleExcluirLead(id) {
     await db.collection(COL('leads')).doc(id).delete();
   }
-  const leadAutoRef = useRef(false);
-  useEffect(() => {
-    if (!dbReady || !currentUser || leadAutoRef.current) return;
-    if (ARCANJO_ONLY.has(currentUser.username)) return;
-    const hoje = new Date().toISOString().slice(0, 10);
-    if (leadSync?.dia === hoje) return;
-    leadAutoRef.current = true;
-    handleBuscarLeads({
-      dias: 2
-    }).then(r => {
-      if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`);
-    }).catch(() => {});
-  }, [dbReady, currentUser, leadSync]);
   function handleTema(novo) {
     const t = {
       ...tema,
