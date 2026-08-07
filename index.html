@@ -331,13 +331,34 @@
     function fmtDate(d) {
       return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
     }
-    function fmtCurrency(v) {
+    /* ── Modo privacidade ──────────────────────────────────
+       Ao abrir o sistema os valores vêm ocultos; o olho na
+       barra superior libera a visualização. Não é persistido:
+       toda nova sessão começa protegida. */
+    let VALORES_OCULTOS = true;
+    function setValoresOcultos(v) { VALORES_OCULTOS = v; }
+    const MASCARA_VALOR = '•••••';
+
+    // Formata SEM máscara — para documentos gerados (GDoc, relatórios,
+    // propostas, exportações), que nunca podem sair com valores ocultos.
+    function fmtCurrencyRaw(v) {
       if (v === null || v === undefined || v === '') return '—';
       return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v));
+    }
+    function fmtCurrency(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
+      return fmtCurrencyRaw(v);
+    }
+    // Para valores já formatados vindos do banco (ex.: "663.000,00")
+    function fmtBRLTexto(s) {
+      if (!s) return '—';
+      return VALORES_OCULTOS ? `R$ ${MASCARA_VALOR}` : `R$ ${s}`;
     }
     function fmtCurrencyShort(v) {
       const n = Number(v);
       if (!n) return '—';
+      if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
       if (n >= 1000000) {
         // 1M, 1,1M, 2,5M …  (1 casa decimal; remove ,0 para deixar mais limpo)
         const m = (n / 1000000).toFixed(1).replace('.', ',');
@@ -1316,7 +1337,7 @@ Regras:
       const comp   = gdocCompetencia(inst.refMonth);
       const orgao  = (meta.unit || meta.contractorName || '').trim() || '—';
       const valor  = parseBRL(inst.billingValue);
-      const valorF = fmtCurrency(valor);                    // R$ 663.000,00
+      const valorF = fmtCurrencyRaw(valor);                 // R$ 663.000,00 (nunca mascarado)
       const valorC = valorF.replace(/\s/g, '');             // R$663.000,00 (padrão da instrução)
       const contrato = inst.contractNumber || '';
 
@@ -6690,7 +6711,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                              className="w-full text-xs font-bold text-green-700 bg-transparent border-b border-green-300 focus:outline-none focus:border-green-500 pb-0.5" />
                                     ) : (
                                       <p className="text-sm font-bold text-green-700 leading-tight">
-                                        {c.billingValue ? `R$ ${c.billingValue}` : '—'}
+                                        {fmtBRLTexto(c.billingValue)}
                                       </p>
                                     )}
                                   </div>
@@ -6787,7 +6808,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                               <span className="flex items-center gap-1.5">
                                 <DollarSign className="w-3.5 h-3.5 text-gray-400" />
                                 <span className="text-gray-400">Valor:</span>
-                                <span className="font-bold text-gray-700">R$ {c.billingValue}</span>
+                                <span className="font-bold text-gray-700">{fmtBRLTexto(c.billingValue)}</span>
                               </span>
                             )}
                             {c.gdoc && (
@@ -7953,11 +7974,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     function cronPctTxt(v) { return cronNum(v).toFixed(2).replace('.', ',') + '%'; }
     function cronSomaAliq(tributos) { return (tributos || []).reduce((s, t) => s + cronNum(t.aliquota), 0); }
     // "R$ 1.234,56" — sempre com unidade explícita
-    function cronBRL(v) { return 'R$ ' + cronNum(v).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+    function cronBRL(v) {
+      if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
+      return 'R$ ' + cronNum(v).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
     // Compacto para as células mensais — com cifra, sem centavos
     function cronCompact(v) {
       const n = cronNum(v);
       if (!n) return '—';
+      if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
       return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits:0, maximumFractionDigits:0 });
     }
 
@@ -12258,6 +12283,10 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       const [cronogramas,          setCronogramas]          = useState([]);
       const [showCertidoesPage,    setShowCertidoesPage]    = useState(false);
       const [certidoes,            setCertidoes]            = useState([]);
+      // Privacidade: começa sempre oculto a cada sessão
+      const [ocultarValores,       setOcultarValores]       = useState(true);
+      // Sincroniza durante o render — os filhos renderizam depois e já pegam o valor certo
+      setValoresOcultos(ocultarValores);
       const [showPropEmissao,      setShowPropEmissao]      = useState(false);
       const [propostasEmitidas,    setPropostasEmitidas]    = useState([]);
       const [orgaos,               setOrgaos]               = useState([]);
@@ -13781,6 +13810,20 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               </div>
 
               <div className="flex items-center gap-4">
+                {/* Modo privacidade — oculta/revela os valores em tela */}
+                {!showArcanjoPage && !showArcanjoGerencial && (
+                  <button onClick={() => setOcultarValores(v => !v)}
+                    className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all"
+                    style={ocultarValores
+                      ? {background:'#f1f5f9', color:'#475569', borderColor:'#e2e8f0'}
+                      : {background:'#eff6ff', color: BLUE, borderColor:'#bfdbfe'}}
+                    title={ocultarValores
+                      ? 'Valores ocultos — clique para exibir'
+                      : 'Valores visíveis — clique para ocultar'}>
+                    {ocultarValores ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span className="hidden sm:inline">{ocultarValores ? 'Valores ocultos' : 'Valores visíveis'}</span>
+                  </button>
+                )}
                 {!showArcanjoPage && !showArcanjoGerencial && (<>
                   {/* Indicador de alertas */}
                   {hasAlert_sb && (

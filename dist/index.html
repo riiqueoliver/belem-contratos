@@ -1250,16 +1250,31 @@ function fmtDate(d) {
     year: 'numeric'
   });
 }
-function fmtCurrency(v) {
+let VALORES_OCULTOS = true;
+function setValoresOcultos(v) {
+  VALORES_OCULTOS = v;
+}
+const MASCARA_VALOR = '•••••';
+function fmtCurrencyRaw(v) {
   if (v === null || v === undefined || v === '') return '—';
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL'
   }).format(Number(v));
 }
+function fmtCurrency(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
+  return fmtCurrencyRaw(v);
+}
+function fmtBRLTexto(s) {
+  if (!s) return '—';
+  return VALORES_OCULTOS ? `R$ ${MASCARA_VALOR}` : `R$ ${s}`;
+}
 function fmtCurrencyShort(v) {
   const n = Number(v);
   if (!n) return '—';
+  if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
   if (n >= 1000000) {
     const m = (n / 1000000).toFixed(1).replace('.', ',');
     return `R$ ${m.endsWith(',0') ? m.slice(0, -2) : m}M`;
@@ -2519,7 +2534,7 @@ function buildGdocPayload(inst, meta) {
   const comp = gdocCompetencia(inst.refMonth);
   const orgao = (meta.unit || meta.contractorName || '').trim() || '—';
   const valor = parseBRL(inst.billingValue);
-  const valorF = fmtCurrency(valor);
+  const valorF = fmtCurrencyRaw(valor);
   const valorC = valorF.replace(/\s/g, '');
   const contrato = inst.contractNumber || '';
   const instrucaoInicial = `PAGAMENTO DE NOTA FISCAL - COMPETÊNCIA ${comp.caixaAlta} - ` + `CONTRATO N°${contrato} COM A ${orgao} NO VALOR DE ${valorC}.`;
@@ -9575,7 +9590,7 @@ function ContractDetailView({
         className: "w-full text-xs font-bold text-green-700 bg-transparent border-b border-green-300 focus:outline-none focus:border-green-500 pb-0.5"
       }) : React.createElement("p", {
         className: "text-sm font-bold text-green-700 leading-tight"
-      }, c.billingValue ? `R$ ${c.billingValue}` : '—')), React.createElement("div", {
+      }, fmtBRLTexto(c.billingValue))), React.createElement("div", {
         className: "rounded-xl p-3 border border-gray-100 bg-gray-50"
       }, React.createElement("p", {
         className: "text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1"
@@ -9672,7 +9687,7 @@ function ContractDetailView({
       className: "text-gray-400"
     }, "Valor:"), React.createElement("span", {
       className: "font-bold text-gray-700"
-    }, "R$ ", c.billingValue)), c.gdoc && React.createElement("span", {
+    }, fmtBRLTexto(c.billingValue))), c.gdoc && React.createElement("span", {
       className: "flex items-center gap-1.5"
     }, React.createElement(FileText, {
       className: "w-3.5 h-3.5",
@@ -11357,6 +11372,7 @@ function cronSomaAliq(tributos) {
   return (tributos || []).reduce((s, t) => s + cronNum(t.aliquota), 0);
 }
 function cronBRL(v) {
+  if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
   return 'R$ ' + cronNum(v).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -11365,6 +11381,7 @@ function cronBRL(v) {
 function cronCompact(v) {
   const n = cronNum(v);
   if (!n) return '—';
+  if (VALORES_OCULTOS) return `R$ ${MASCARA_VALOR}`;
   return 'R$ ' + n.toLocaleString('pt-BR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -17317,6 +17334,8 @@ function App() {
   const [cronogramas, setCronogramas] = useState([]);
   const [showCertidoesPage, setShowCertidoesPage] = useState(false);
   const [certidoes, setCertidoes] = useState([]);
+  const [ocultarValores, setOcultarValores] = useState(true);
+  setValoresOcultos(ocultarValores);
   const [showPropEmissao, setShowPropEmissao] = useState(false);
   const [propostasEmitidas, setPropostasEmitidas] = useState([]);
   const [orgaos, setOrgaos] = useState([]);
@@ -19283,7 +19302,26 @@ function App() {
     title: SYS.sub
   }, "GCSP")), React.createElement("div", {
     className: "flex items-center gap-4"
-  }, !showArcanjoPage && !showArcanjoGerencial && React.createElement(React.Fragment, null, hasAlert_sb && React.createElement("span", {
+  }, !showArcanjoPage && !showArcanjoGerencial && React.createElement("button", {
+    onClick: () => setOcultarValores(v => !v),
+    className: "flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all",
+    style: ocultarValores ? {
+      background: '#f1f5f9',
+      color: '#475569',
+      borderColor: '#e2e8f0'
+    } : {
+      background: '#eff6ff',
+      color: BLUE,
+      borderColor: '#bfdbfe'
+    },
+    title: ocultarValores ? 'Valores ocultos — clique para exibir' : 'Valores visíveis — clique para ocultar'
+  }, ocultarValores ? React.createElement(EyeOff, {
+    className: "w-3.5 h-3.5"
+  }) : React.createElement(Eye, {
+    className: "w-3.5 h-3.5"
+  }), React.createElement("span", {
+    className: "hidden sm:inline"
+  }, ocultarValores ? 'Valores ocultos' : 'Valores visíveis')), !showArcanjoPage && !showArcanjoGerencial && React.createElement(React.Fragment, null, hasAlert_sb && React.createElement("span", {
     className: "flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg",
     style: {
       background: '#fef2f2',
