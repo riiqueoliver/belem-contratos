@@ -1246,6 +1246,23 @@ const ImageIcon = ({
 }), React.createElement("polyline", {
   points: "21 15 16 10 5 21"
 }));
+const Receipt = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("path", {
+  d: "M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2.5 1.5L9 2 6.5 3.5z"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "8",
+  x2: "15",
+  y2: "8"
+}), React.createElement("line", {
+  x1: "8",
+  y1: "12",
+  x2: "15",
+  y2: "12"
+}));
 const GDocLayersIcon = ({
   className
 }) => React.createElement(SVG, {
@@ -1452,6 +1469,76 @@ const STEPS = [{
   slaType: 'calendar'
 }];
 const TOTAL_STEPS = STEPS.length;
+function liqData(br) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(br || '').trim());
+  if (!m) return null;
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+function liqValor(s) {
+  if (!s) return null;
+  const n = Number(String(s).replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+function liqParse(texto) {
+  const t = String(texto || '').replace(/\s+/g, ' ');
+  const r = {
+    numero: null,
+    data: null,
+    empenho: null,
+    nfNumero: null,
+    nfData: null,
+    valorLiquidado: null,
+    valorPago: null,
+    retencao: null,
+    orgao: null
+  };
+  const dl = /Data\s+da\s+Liquida[çc][ãa]o\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i.exec(t) || /(\d{1,2}\/\d{1,2}\/\d{4})\s*Data\s+da\s+Liquida[çc][ãa]o/i.exec(t);
+  if (dl) r.data = liqData(dl[1]);
+  const cab = /Nota\s+de\s+Liquida[çc][ãa]o\s*N?[º°o]?\s*(\d+)\s*\/\s*(\d{4})[^\d]{0,20}Data\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i.exec(t);
+  if (cab) {
+    r.numero = `${cab[1]}/${cab[2]}`;
+    if (!r.data) r.data = liqData(cab[3]);
+  }
+  const emp = /Empenho\s*N?[º°o]?\s*(\d+)\s*\/\s*(\d{4})/i.exec(t);
+  if (emp) r.empenho = `${emp[1]}/${emp[2]}`;
+  const nf = /Nota\s+Fiscal\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d+)/i.exec(t);
+  if (nf) {
+    r.nfData = liqData(nf[1]);
+    r.nfNumero = nf[2];
+  }
+  const tot = /Totais\.*\s*([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/i.exec(t);
+  if (tot) {
+    r.valorLiquidado = liqValor(tot[1]);
+    r.retencao = liqValor(tot[2]);
+    r.valorPago = liqValor(tot[3]);
+  }
+  const org = /Org[ãa]o\s*:\s*([^:]{3,90}?)\s+Unidade\s*:/i.exec(t);
+  if (org) r.orgao = org[1].trim();
+  return r;
+}
+async function liqLerPdf(arrayBuffer) {
+  if (!window.pdfjsLib) return {
+    erro: 'Leitor de PDF ainda carregando. Tente de novo em alguns segundos.'
+  };
+  try {
+    const pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer
+    }).promise;
+    let texto = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const c = await (await pdf.getPage(i)).getTextContent();
+      texto += c.items.map(it => it.str).join(' ') + '\n';
+    }
+    if (texto.replace(/\s/g, '').length < 40) return {
+      erro: 'Este PDF é digitalizado (sem texto). Informe a data manualmente.'
+    };
+    return liqParse(texto);
+  } catch (e) {
+    return {
+      erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido.')
+    };
+  }
+}
 function stepDeadline(nfDate, stepId) {
   const step = STEPS.find(s => s.id === stepId);
   if (!step || !step.sla) return null;
@@ -8613,6 +8700,212 @@ function GdocEmitModal({
     }
   }, "Abrir GDoc \u2197")))));
 }
+function NotaLiquidacaoCard({
+  c,
+  pdfStorage,
+  onSalvar,
+  onRemover,
+  onVer,
+  addToast
+}) {
+  const [lendo, setLendo] = React.useState(false);
+  const [rascunho, setRascunho] = React.useState(null);
+  const [salvando, setSalvando] = React.useState(false);
+  const liq = c.liquidacao || null;
+  const temPdf = !!pdfStorage['liq_' + c.id];
+  const pago = c.currentStep > TOTAL_STEPS;
+  async function escolher(file) {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      addToast('❌ Selecione um arquivo PDF.');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('❌ PDF muito grande. Limite: 8 MB.');
+      return;
+    }
+    setLendo(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const lido = await liqLerPdf(buf);
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      if (lido.erro) addToast('⚠️ ' + lido.erro);else if (!lido.data) addToast('⚠️ Não achei a data de liquidação. Preencha à mão.');
+      setRascunho({
+        base64,
+        dados: {
+          ...(lido.erro ? {} : lido),
+          arquivo: file.name
+        }
+      });
+    } catch (e) {
+      addToast('❌ Erro ao ler o arquivo: ' + (e.message || 'tente novamente.'));
+    } finally {
+      setLendo(false);
+    }
+  }
+  async function confirmar() {
+    if (!rascunho?.dados?.data) {
+      addToast('❌ Informe a data da liquidação.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await onSalvar(c.id, rascunho);
+      setRascunho(null);
+    } catch (e) {
+      addToast('❌ Erro ao salvar: ' + (e.message || 'tente novamente.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+  const divergeNf = rascunho?.dados?.nfNumero && c.nfNumber && String(rascunho.dados.nfNumero) !== String(c.nfNumber).trim();
+  const borda = pago ? '#86efac' : rascunho ? '#7dd3fc' : '#e2e8f0';
+  const fundo = pago ? '#f0fdf4' : rascunho ? '#f0f9ff' : '#f8fafc';
+  return React.createElement("div", {
+    className: "mx-5 mb-4 rounded-xl border-2 overflow-hidden",
+    style: {
+      borderColor: borda
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 px-4 py-2.5 border-b",
+    style: {
+      background: fundo,
+      borderColor: borda
+    }
+  }, React.createElement(Receipt, {
+    className: "w-3.5 h-3.5 flex-shrink-0",
+    style: {
+      color: pago ? '#16a34a' : '#64748b'
+    }
+  }), React.createElement("p", {
+    className: "text-xs font-bold text-gray-700 flex-1"
+  }, "Nota de Liquida\xE7\xE3o"), pago ? React.createElement("span", {
+    className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-300 flex items-center gap-1"
+  }, React.createElement(CheckCircle, {
+    className: "w-3 h-3"
+  }), " Parcela paga") : React.createElement("span", {
+    className: "text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300"
+  }, "n\xE3o anexada")), React.createElement("div", {
+    className: "px-4 py-3"
+  }, liq && !rascunho && React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3"
+  }, [['Data da liquidação', liq.data ? new Date(liq.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'], ['Nº liquidação', liq.numero || '—'], ['Empenho', liq.empenho || '—'], ['Valor pago', liq.valorPago != null ? fmtCurrency(liq.valorPago) : '—']].map(([rot, val]) => React.createElement("div", {
+    key: rot,
+    className: "rounded-lg border border-gray-200 bg-white px-3 py-2"
+  }, React.createElement("p", {
+    className: "text-[9px] font-bold uppercase tracking-wider text-gray-400"
+  }, rot), React.createElement("p", {
+    className: "text-xs font-bold text-gray-800 mt-0.5 truncate"
+  }, val)))), React.createElement("div", {
+    className: "flex flex-wrap gap-2"
+  }, temPdf && React.createElement("button", {
+    onClick: () => onVer('liq_' + c.id, `Nota de Liquidação – ${c.contractNumber} · Parcela ${c.installment}/${c.totalInstallments}`),
+    className: "flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-lg text-white shadow-sm hover:opacity-90 transition-opacity",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Eye, {
+    className: "w-3.5 h-3.5"
+  }), " Visualizar PDF"), React.createElement("label", {
+    className: "flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
+  }, React.createElement(Upload, {
+    className: "w-3.5 h-3.5"
+  }), " Substituir", React.createElement("input", {
+    type: "file",
+    accept: "application/pdf",
+    className: "hidden",
+    onChange: e => escolher(e.target.files[0])
+  })), React.createElement("button", {
+    onClick: () => onRemover(c.id),
+    className: "flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-white text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  }), " Remover"))), rascunho && React.createElement(React.Fragment, null, React.createElement("p", {
+    className: "text-xs text-gray-500 mb-3 leading-snug"
+  }, "Confira os dados lidos do PDF. Ao confirmar, a parcela \xE9 marcada como", React.createElement("strong", null, " paga"), " e passa a contar nos indicadores."), React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "text-[9px] font-bold uppercase tracking-wider text-gray-400"
+  }, "Data da liquida\xE7\xE3o *"), React.createElement("input", {
+    type: "date",
+    value: rascunho.dados.data || '',
+    onChange: e => setRascunho(r => ({
+      ...r,
+      dados: {
+        ...r.dados,
+        data: e.target.value
+      }
+    })),
+    className: "w-full mt-1 px-3 py-2 rounded-lg border border-gray-300 text-sm font-bold focus:outline-none focus:ring-2",
+    style: {
+      color: BLUE
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[9px] font-bold uppercase tracking-wider text-gray-400"
+  }, "N\xBA da liquida\xE7\xE3o"), React.createElement("input", {
+    type: "text",
+    value: rascunho.dados.numero || '',
+    onChange: e => setRascunho(r => ({
+      ...r,
+      dados: {
+        ...r.dados,
+        numero: e.target.value
+      }
+    })),
+    placeholder: "\u2014",
+    className: "w-full mt-1 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2"
+  }))), React.createElement("div", {
+    className: "flex flex-wrap gap-2 mb-3 text-[11px] text-gray-500"
+  }, rascunho.dados.empenho && React.createElement("span", {
+    className: "px-2 py-1 rounded-md bg-gray-100"
+  }, "Empenho ", rascunho.dados.empenho), rascunho.dados.nfNumero && React.createElement("span", {
+    className: "px-2 py-1 rounded-md bg-gray-100"
+  }, "NF ", rascunho.dados.nfNumero), rascunho.dados.valorPago != null && React.createElement("span", {
+    className: "px-2 py-1 rounded-md bg-gray-100"
+  }, "Pago ", fmtCurrency(rascunho.dados.valorPago)), rascunho.dados.retencao ? React.createElement("span", {
+    className: "px-2 py-1 rounded-md bg-gray-100"
+  }, "Reten\xE7\xE3o ", fmtCurrency(rascunho.dados.retencao)) : null), divergeNf && React.createElement("div", {
+    className: "mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-800"
+  }, "\u26A0 A nota de liquida\xE7\xE3o \xE9 da ", React.createElement("strong", null, "NF ", rascunho.dados.nfNumero), ", mas esta parcela est\xE1 com a ", React.createElement("strong", null, "NF ", c.nfNumber), ". Confira se \xE9 o documento certo."), React.createElement("div", {
+    className: "flex flex-wrap gap-2"
+  }, React.createElement("button", {
+    onClick: confirmar,
+    disabled: salvando || !rascunho.dados.data,
+    className: "flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50",
+    style: {
+      background: GREEN
+    }
+  }, React.createElement(CheckCircle, {
+    className: "w-4 h-4"
+  }), salvando ? 'Salvando…' : 'Confirmar e marcar como paga'), React.createElement("button", {
+    onClick: () => setRascunho(null),
+    className: "text-xs font-semibold px-3 py-2 rounded-lg bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"
+  }, "Cancelar"))), !liq && !rascunho && React.createElement(React.Fragment, null, React.createElement("p", {
+    className: "text-xs text-gray-500 mb-3 leading-snug"
+  }, "Anexe a nota de liquida\xE7\xE3o emitida pelo GIIG. O sistema l\xEA a data do pagamento, guarda o PDF para consulta e marca a parcela como paga."), React.createElement("label", {
+    className: "cursor-pointer inline-block"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-bold text-white hover:opacity-90 transition-opacity",
+    style: {
+      background: BLUE,
+      borderColor: BLUE,
+      opacity: lendo ? 0.6 : 1
+    }
+  }, React.createElement(Upload, {
+    className: "w-4 h-4"
+  }), lendo ? 'Lendo o PDF…' : 'Anexar Nota de Liquidação'), React.createElement("input", {
+    type: "file",
+    accept: "application/pdf",
+    className: "hidden",
+    disabled: lendo,
+    onChange: e => escolher(e.target.files[0])
+  })))));
+}
 function ContractDetailView({
   contractNumber,
   contracts,
@@ -8638,7 +8931,9 @@ function ContractDetailView({
   onUpdateNfData,
   onDelete,
   cronogramas,
-  addToast
+  addToast,
+  onSaveLiquidacao,
+  onDeleteLiquidacao
 }) {
   const cronoVinculado = (cronogramas || []).find(c => c.contratoVinculado === contractNumber) || null;
   const [gdocInst, setGdocInst] = useState(null);
@@ -10504,7 +10799,25 @@ function ContractDetailView({
       accept: "application/pdf",
       className: "hidden",
       onChange: e => e.target.files[0] && handleAttachPdf(pdfKey, e.target.files[0])
-    })))), React.createElement("div", {
+    })))), React.createElement(NotaLiquidacaoCard, {
+      c: c,
+      pdfStorage: pdfStorage,
+      addToast: addToast,
+      onSalvar: onSaveLiquidacao,
+      onRemover: onDeleteLiquidacao,
+      onVer: (chave, titulo) => {
+        const data = pdfStorage[chave];
+        if (!data) {
+          addToast('❌ PDF não encontrado.');
+          return;
+        }
+        setPdfViewer({
+          open: true,
+          src: data,
+          title: titulo
+        });
+      }
+    }), React.createElement("div", {
       className: "mx-5 mb-4 rounded-xl border-2 overflow-hidden",
       style: {
         borderColor: '#a78bfa'
@@ -18720,6 +19033,39 @@ function App() {
     await db.collection(COL('pdfs')).doc(String(installmentId)).delete();
     addToast('🗑️ PDF da NF removido.');
   }
+  async function handleSaveLiquidacao(installmentId, {
+    base64,
+    dados
+  }) {
+    const c = contracts.find(x => x.id === installmentId);
+    if (!c) return;
+    if (base64) await db.collection(COL('pdfs')).doc('liq_' + installmentId).set({
+      data: base64
+    });
+    const limpo = Object.fromEntries(Object.entries(dados || {}).filter(([, v]) => v !== undefined && v !== null));
+    await db.collection(COL('contracts')).doc(String(installmentId)).update({
+      liquidacao: {
+        ...limpo,
+        registradoEm: new Date().toISOString()
+      },
+      paymentDate: dados.data,
+      completedSteps: [...new Set([...(c.completedSteps || []), ...STEPS.map(s => s.id)])],
+      currentStep: TOTAL_STEPS + 1
+    });
+    addToast(`✅ Parcela ${c.installment}/${c.totalInstallments} marcada como paga em ${new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR')}.`);
+  }
+  async function handleDeleteLiquidacao(installmentId) {
+    const c = contracts.find(x => x.id === installmentId);
+    if (!c) return;
+    await db.collection(COL('pdfs')).doc('liq_' + installmentId).delete().catch(() => {});
+    await db.collection(COL('contracts')).doc(String(installmentId)).update({
+      liquidacao: firebase.firestore.FieldValue.delete(),
+      paymentDate: firebase.firestore.FieldValue.delete(),
+      completedSteps: (c.completedSteps || []).filter(s => s < TOTAL_STEPS),
+      currentStep: TOTAL_STEPS
+    });
+    addToast('🗑️ Nota de liquidação removida. A parcela voltou para "Aguardando pagamento".');
+  }
   async function handleSaveContractPdf(contractNumber, base64Data) {
     try {
       await db.collection(COL('pdfs')).doc('contract_' + contractNumber).set({
@@ -21060,6 +21406,8 @@ function App() {
     onNotify: handleNotify,
     onSavePdf: handleSavePdf,
     onDeletePdf: handleDeletePdf,
+    onSaveLiquidacao: handleSaveLiquidacao,
+    onDeleteLiquidacao: handleDeleteLiquidacao,
     onSaveContractPdf: handleSaveContractPdf,
     onDeleteContractPdf: handleDeleteContractPdf,
     onAddInstallment: handleAddInstallment,
