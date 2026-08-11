@@ -12382,6 +12382,116 @@ function cronCompact(v) {
     maximumFractionDigits: 0
   });
 }
+function moedaPartes(bruto) {
+  const limpo = String(bruto ?? '').replace(/[^\d,]/g, '');
+  const i = limpo.indexOf(',');
+  const temVirgula = i >= 0;
+  const inteiros = (temVirgula ? limpo.slice(0, i) : limpo).replace(/^0+(?=\d)/, '');
+  const centavos = temVirgula ? limpo.slice(i + 1).replace(/,/g, '').slice(0, 2) : '';
+  return {
+    inteiros,
+    centavos,
+    temVirgula
+  };
+}
+function moedaTexto(inteiros, centavos) {
+  if (!inteiros && !centavos) return '';
+  const int = (inteiros || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${int},${String(centavos || '').padEnd(2, '0')}`;
+}
+function moedaCaret(texto, nDigitos, nosCentavos) {
+  const virg = texto.indexOf(',');
+  if (nosCentavos) return virg < 0 ? texto.length : Math.min(texto.length, virg + 1 + nDigitos);
+  const limite = virg < 0 ? texto.length : virg;
+  if (nDigitos <= 0) return 0;
+  let vistos = 0;
+  for (let i = 0; i < limite; i++) {
+    if (texto[i] >= '0' && texto[i] <= '9') {
+      vistos++;
+      if (vistos === nDigitos) return i + 1;
+    }
+  }
+  return limite;
+}
+function moedaAplicar(bruto, pos) {
+  const antes = String(bruto ?? '').slice(0, pos ?? String(bruto ?? '').length);
+  let {
+    inteiros,
+    centavos,
+    temVirgula
+  } = moedaPartes(bruto);
+  if (temVirgula && !inteiros) inteiros = '0';
+  const texto = moedaTexto(inteiros, centavos);
+  const digAntes = (antes.match(/\d/g) || []).length;
+  const nosCentavos = temVirgula && antes.includes(',');
+  const nDig = nosCentavos ? Math.max(0, digAntes - inteiros.length) : digAntes;
+  return {
+    texto,
+    caret: moedaCaret(texto, nDig, nosCentavos)
+  };
+}
+function moedaDoValor(valor) {
+  if (valor === '' || valor === null || valor === undefined) return '';
+  return cronNum(valor).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function InputMoeda({
+  valor,
+  onChange,
+  className,
+  style,
+  placeholder = '0,00',
+  title
+}) {
+  const ref = React.useRef(null);
+  const caretRef = React.useRef(null);
+  const meuRef = React.useRef(null);
+  const [texto, setTexto] = React.useState(() => moedaDoValor(valor));
+  React.useEffect(() => {
+    const v = valor === '' || valor === null || valor === undefined ? '' : cronNum(valor);
+    if (v === meuRef.current) return;
+    meuRef.current = v;
+    setTexto(moedaDoValor(valor));
+  }, [valor]);
+  React.useLayoutEffect(() => {
+    if (caretRef.current != null && ref.current) {
+      try {
+        ref.current.setSelectionRange(caretRef.current, caretRef.current);
+      } catch (e) {}
+      caretRef.current = null;
+    }
+  });
+  function digitar(e) {
+    const el = e.target;
+    const r = moedaAplicar(el.value, el.selectionStart);
+    const num = r.texto === '' ? '' : cronNum(r.texto);
+    meuRef.current = num;
+    if (r.texto === texto) {
+      el.value = r.texto;
+      try {
+        el.setSelectionRange(r.caret, r.caret);
+      } catch (err) {}
+    } else {
+      caretRef.current = r.caret;
+      setTexto(r.texto);
+    }
+    onChange(num);
+  }
+  return React.createElement("input", {
+    ref: ref,
+    type: "text",
+    inputMode: "decimal",
+    value: texto,
+    onChange: digitar,
+    onFocus: e => e.target.select(),
+    placeholder: placeholder,
+    title: title,
+    className: className,
+    style: style
+  });
+}
 function calcCronograma({
   itens,
   prazo,
@@ -13474,7 +13584,7 @@ function CronogramaPage({
       item: d.itens.length + 1,
       descricao: '',
       quantidade: 1,
-      valor_unitario: 0,
+      valor_unitario: '',
       valor_total: 0,
       tipo_recorrencia: 'UNICO',
       mes_inicio: d.itens.length + 1,
@@ -14215,11 +14325,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       style: {
         borderBottom: '1px solid #f1f5f9'
       }
-    }, React.createElement("input", {
-      type: "text",
-      inputMode: "decimal",
-      value: it.valor_unitario,
-      onChange: e => setItem(i, 'valor_unitario', e.target.value.replace(/[^\d.,]/g, '')),
+    }, React.createElement(InputMoeda, {
+      valor: it.valor_unitario,
+      onChange: v => setItem(i, 'valor_unitario', v),
       className: "w-32 border rounded-lg px-2 py-1 text-xs font-bold text-right",
       style: yStyle
     })), React.createElement("td", {

@@ -8828,6 +8828,109 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits:0, maximumFractionDigits:0 });
     }
 
+    /* ── Campo de dinheiro com máscara ao vivo ──
+       O que se digita já sai formatado: 170000 vira 170.000,00.
+       Os dígitos formam os reais; a vírgula abre os centavos.
+       Fica no nível do módulo de propósito — definido dentro de outro
+       componente, remontaria a cada tecla e o cursor pularia para o fim. */
+    function moedaPartes(bruto) {
+      const limpo = String(bruto ?? '').replace(/[^\d,]/g, '');   // descarta os pontos que nós mesmos pomos
+      const i = limpo.indexOf(',');
+      const temVirgula = i >= 0;
+      const inteiros = (temVirgula ? limpo.slice(0, i) : limpo).replace(/^0+(?=\d)/, '');
+      const centavos = temVirgula ? limpo.slice(i + 1).replace(/,/g, '').slice(0, 2) : '';
+      return { inteiros, centavos, temVirgula };
+    }
+
+    function moedaTexto(inteiros, centavos) {
+      if (!inteiros && !centavos) return '';
+      const int = (inteiros || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return `${int},${String(centavos || '').padEnd(2, '0')}`;
+    }
+
+    /* Onde deixar o cursor: conta quantos dígitos ficaram à esquerda dele
+       e reencontra essa mesma posição no texto já formatado. Sem isso o
+       cursor pula para o fim toda vez que um ponto é inserido. */
+    function moedaCaret(texto, nDigitos, nosCentavos) {
+      const virg = texto.indexOf(',');
+      if (nosCentavos) return virg < 0 ? texto.length : Math.min(texto.length, virg + 1 + nDigitos);
+      const limite = virg < 0 ? texto.length : virg;
+      if (nDigitos <= 0) return 0;
+      let vistos = 0;
+      for (let i = 0; i < limite; i++) {
+        if (texto[i] >= '0' && texto[i] <= '9') { vistos++; if (vistos === nDigitos) return i + 1; }
+      }
+      return limite;
+    }
+
+    // Passo da máscara: texto cru + posição do cursor → texto formatado + novo cursor
+    function moedaAplicar(bruto, pos) {
+      const antes = String(bruto ?? '').slice(0, pos ?? String(bruto ?? '').length);
+      let { inteiros, centavos, temVirgula } = moedaPartes(bruto);
+      // quem começa pela vírgula está indo direto para os centavos
+      if (temVirgula && !inteiros) inteiros = '0';
+      const texto = moedaTexto(inteiros, centavos);
+      const digAntes    = (antes.match(/\d/g) || []).length;
+      const nosCentavos = temVirgula && antes.includes(',');
+      const nDig  = nosCentavos ? Math.max(0, digAntes - inteiros.length) : digAntes;
+      return { texto, caret: moedaCaret(texto, nDig, nosCentavos) };
+    }
+
+    function moedaDoValor(valor) {
+      if (valor === '' || valor === null || valor === undefined) return '';
+      return cronNum(valor).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    function InputMoeda({ valor, onChange, className, style, placeholder = '0,00', title }) {
+      const ref      = React.useRef(null);
+      const caretRef = React.useRef(null);
+      const meuRef   = React.useRef(null);   // último valor que nós mesmos emitimos
+
+      // O texto fica em estado próprio: derivar só do número não basta, porque
+      // teclas que não mudam o número (a vírgula) não re-renderizariam e o campo
+      // ficaria exibindo o texto cru digitado.
+      const [texto, setTexto] = React.useState(() => moedaDoValor(valor));
+
+      // Valor trocado por fora (abriu um registro, a IA preencheu, item novo)
+      React.useEffect(() => {
+        const v = (valor === '' || valor === null || valor === undefined) ? '' : cronNum(valor);
+        if (v === meuRef.current) return;    // eco da nossa própria digitação
+        meuRef.current = v;
+        setTexto(moedaDoValor(valor));
+      }, [valor]);
+
+      React.useLayoutEffect(() => {
+        if (caretRef.current != null && ref.current) {
+          try { ref.current.setSelectionRange(caretRef.current, caretRef.current); } catch(e) {}
+          caretRef.current = null;
+        }
+      });
+
+      function digitar(e) {
+        const el = e.target;
+        const r  = moedaAplicar(el.value, el.selectionStart);
+        const num = r.texto === '' ? '' : cronNum(r.texto);
+        meuRef.current = num;
+        if (r.texto === texto) {
+          // sem mudança de estado não há novo render: corrige o campo na hora
+          el.value = r.texto;
+          try { el.setSelectionRange(r.caret, r.caret); } catch(err) {}
+        } else {
+          caretRef.current = r.caret;
+          setTexto(r.texto);
+        }
+        onChange(num);
+      }
+
+      return (
+        <input ref={ref} type="text" inputMode="decimal" value={texto} onChange={digitar}
+               // seleciona tudo ao entrar: digitar por cima substitui, em vez de
+               // se misturar ao "0,00" que já estava no campo
+               onFocus={e => e.target.select()}
+               placeholder={placeholder} title={title} className={className} style={style} />
+      );
+    }
+
     // Motor de cálculo — distribui itens mês a mês e aplica impostos/rateio
     function calcCronograma({ itens, prazo, pctBD, base, aliquotaTotal }) {
       const nPrazo  = Math.max(1, Math.round(cronNum(prazo)) || 1);
@@ -9377,7 +9480,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         return nx;
       })}));
       const addItem = () => setDraft(d => ({ ...d, itens: [...d.itens, {
-        item: d.itens.length + 1, descricao: '', quantidade: 1, valor_unitario: 0,
+        item: d.itens.length + 1, descricao: '', quantidade: 1, valor_unitario: '',
         valor_total: 0, tipo_recorrencia: 'UNICO', mes_inicio: (d.itens.length + 1), meses_duracao: 1,
       }]}));
       const delItem = idx => setDraft(d => ({ ...d, itens: d.itens.filter((_,i) => i !== idx).map((it,i) => ({ ...it, item: i+1 })) }));
@@ -9903,8 +10006,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                             {mensal && <span className="text-gray-300 ml-1">meses</span>}
                           </td>
                           <td className="px-3 py-2 text-right" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <input type="text" inputMode="decimal" value={it.valor_unitario}
-                              onChange={e => setItem(i,'valor_unitario', e.target.value.replace(/[^\d.,]/g,''))}
+                            <InputMoeda valor={it.valor_unitario}
+                              onChange={v => setItem(i,'valor_unitario', v)}
                               className="w-32 border rounded-lg px-2 py-1 text-xs font-bold text-right" style={yStyle} />
                           </td>
                           <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{borderBottom:'1px solid #f1f5f9', color:'#166534', fontVariantNumeric:'tabular-nums'}}>
