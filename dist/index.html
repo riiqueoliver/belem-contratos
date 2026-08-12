@@ -11581,15 +11581,11 @@ function ArcanjoPage({
   const [statusMenu, setStatusMenu] = React.useState(null);
   const [activeIndicator, setActiveIndicator] = React.useState(null);
   const [sortBy, setSortBy] = React.useState('nome');
-  const [filterCadastroDe, setFilterCadastroDe] = React.useState('');
-  const [filterCadastroAte, setFilterCadastroAte] = React.useState('');
   React.useEffect(() => {
     setSearch('');
     setFilterLideranca('');
     setFilterCoordenador('');
     setActiveIndicator(null);
-    setFilterCadastroDe('');
-    setFilterCadastroAte('');
   }, [tab]);
   React.useEffect(() => {
     if (!statusMenu) return;
@@ -11611,12 +11607,6 @@ function ArcanjoPage({
     if (search && !r.nome?.toLowerCase().includes(search.toLowerCase()) && !r.cpf?.includes(search) && !r.lideranca?.toLowerCase().includes(search.toLowerCase()) && !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
     if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
-    if (filterCadastroDe || filterCadastroAte) {
-      const dCriado = toJsDate(r.createdAt);
-      if (!dCriado) return false;
-      if (filterCadastroDe && dCriado < new Date(filterCadastroDe + 'T00:00:00')) return false;
-      if (filterCadastroAte && dCriado > new Date(filterCadastroAte + 'T23:59:59')) return false;
-    }
     if (activeIndicator === 'atendidos' && r.status !== 'atendido' && r.status !== 'concluido') return false;
     if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
     if (activeIndicator === 'pendente' && r.status !== 'pendente') return false;
@@ -11898,53 +11888,10 @@ function ArcanjoPage({
   }, "Todos os Coordenadores"), coordenadorOpts.map(c => React.createElement("option", {
     key: c,
     value: c
-  }, c))), React.createElement("div", {
-    className: "flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all",
-    style: filterCadastroDe || filterCadastroAte ? {
-      borderColor: accentColor,
-      background: accentColor + '10'
-    } : {
-      borderColor: '#e5e7eb',
-      background: '#fff'
-    }
-  }, React.createElement(Calendar, {
-    className: "w-3.5 h-3.5 flex-shrink-0",
-    style: {
-      color: filterCadastroDe || filterCadastroAte ? accentColor : '#9ca3af'
-    }
-  }), React.createElement("span", {
-    className: "text-[11px] font-semibold whitespace-nowrap",
-    style: {
-      color: filterCadastroDe || filterCadastroAte ? accentColor : '#9ca3af'
-    }
-  }, "Cadastrado"), React.createElement("input", {
-    type: "date",
-    value: filterCadastroDe,
-    onChange: e => setFilterCadastroDe(e.target.value),
-    title: "Cadastrado a partir de",
-    max: filterCadastroAte || undefined,
-    className: "text-xs bg-transparent focus:outline-none py-1 w-32",
-    style: {
-      color: '#374151'
-    }
-  }), React.createElement("span", {
-    className: "text-gray-300 text-xs"
-  }, "\u2013"), React.createElement("input", {
-    type: "date",
-    value: filterCadastroAte,
-    onChange: e => setFilterCadastroAte(e.target.value),
-    title: "Cadastrado at\xE9",
-    min: filterCadastroDe || undefined,
-    className: "text-xs bg-transparent focus:outline-none py-1 w-32",
-    style: {
-      color: '#374151'
-    }
-  })), (filterLideranca || filterCoordenador || filterCadastroDe || filterCadastroAte) && React.createElement("button", {
+  }, c))), (filterLideranca || filterCoordenador) && React.createElement("button", {
     onClick: () => {
       setFilterLideranca('');
       setFilterCoordenador('');
-      setFilterCadastroDe('');
-      setFilterCadastroAte('');
     },
     className: "flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
   }, React.createElement(X, {
@@ -12024,7 +11971,7 @@ function ArcanjoPage({
       onMouseEnter: e => e.currentTarget.style.background = '#f5f3ff',
       onMouseLeave: e => e.currentTarget.style.background = ''
     }, React.createElement("td", {
-      className: "px-5 py-3"
+      className: "px-5 py-3 w-full"
     }, React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
@@ -12043,11 +11990,11 @@ function ArcanjoPage({
         color: sortBy === 'antigo' ? accentColor : '#c4c4d0'
       }
     }, fmtHaTempo(r.createdAt))), React.createElement("td", {
-      className: "px-5 py-3 text-gray-500"
+      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
     }, r.telefone || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-600"
+      className: "px-5 py-3 text-gray-600 whitespace-nowrap"
     }, r.lideranca || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-600"
+      className: "px-5 py-3 text-gray-600 whitespace-nowrap"
     }, r.coordenador || '—'), React.createElement("td", {
       className: "px-5 py-3 text-gray-500 whitespace-nowrap"
     }, r.dataAgendamento || '—'), tab === 'certidao' && React.createElement("td", {
