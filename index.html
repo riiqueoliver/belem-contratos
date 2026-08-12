@@ -13370,47 +13370,51 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       return doTA ? `Termo Aditivo nº ${doTA.number || '—'}` : 'Contrato original';
     }
 
-    // Linha compacta — prioriza densidade (ver mais contratos de uma vez na TV)
-    // sobre o tamanho de cada item individual.
-    function PainelTvRow({ item }) {
-      const cor = item.faixa === 'vencido' ? '#DC2626'
-        : item.faixa === '7'  ? '#D97706'
-        : item.faixa === '30' ? '#CA8A04'
-        : '#0E7490';
-      const bg = item.faixa === 'vencido' ? '#FEF2F2'
-        : item.faixa === '7'  ? '#FFFBEB'
-        : item.faixa === '30' ? '#FEFCE8'
-        : '#fff';
+    const PAINEL_TV_MONO = "'Consolas', 'SFMono-Regular', Menlo, monospace";
 
-      const diasTxt = item.dias === null ? '—'
-        : item.dias < 0 ? `venceu há ${Math.abs(item.dias)}d`
-        : item.dias === 0 ? 'vence hoje'
-        : `${item.dias}d restantes`;
-
+    // Linha da tabela de atenção (vencidos / próximos do vencimento) — layout de
+    // planilha/relatório oficial, sem cartão nem sombra: indicador de severidade
+    // é um pequeno marcador lateral, não a linha inteira colorida.
+    function PainelTvLinhaAtencao({ item, zebra }) {
+      const cor = item.faixa === 'vencido' ? '#B91C1C' : item.faixa === '7' ? '#B45309' : '#A16207';
+      const diasTxt = item.dias < 0 ? `Venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}`
+        : item.dias === 0 ? 'Vence hoje'
+        : `Vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
       const ehAditivo = item.origem !== 'Contrato original';
 
       return (
         <div style={{
-          display:'flex', alignItems:'center', gap:12, background:bg,
-          border:'1px solid #e2e8f0', borderLeft:`6px solid ${cor}`, borderRadius:10,
-          padding:'9px 14px', minWidth:0,
+          display:'grid', gridTemplateColumns:'18px 100px 1fr 100px 190px', alignItems:'center', gap:12,
+          padding:'8px 12px', background: zebra ? '#F8FAFC' : '#fff', borderBottom:'1px solid #E9EDF1',
         }}>
-          <span style={{fontSize:16, fontWeight:900, color:'#0f172a', flexShrink:0, minWidth:88}}>
-            Nº {item.contractNumber}
-          </span>
-          <span style={{fontSize:15, fontWeight:600, color:'#475569', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+          <span style={{width:9, height:9, borderRadius:2, background:cor, flexShrink:0}} />
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:14, fontWeight:700, color:'#1E293B'}}>{item.contractNumber}</span>
+          <span style={{fontSize:14, fontWeight:600, color:'#334155', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
             {item.contractorName || 'Empresa não informada'}
+            {ehAditivo && <span style={{color:'#94A3B8', fontWeight:600}}> · {item.origem}</span>}
           </span>
-          {ehAditivo && (
-            <span style={{fontSize:10, fontWeight:800, color:'#6366f1', background:'#eef2ff', padding:'2px 8px', borderRadius:999, flexShrink:0, whiteSpace:'nowrap'}}>
-              {item.origem}
-            </span>
-          )}
-          <span style={{fontSize:13, fontWeight:700, color:'#64748b', flexShrink:0, whiteSpace:'nowrap'}}>
-            até {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:13, color:'#64748B', textAlign:'right'}}>
+            {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
           </span>
-          <span style={{fontSize:13, fontWeight:800, color:cor, flexShrink:0, minWidth:104, textAlign:'right', whiteSpace:'nowrap'}}>
-            {diasTxt}
+          <span style={{fontSize:13, fontWeight:700, color:cor, textAlign:'right'}}>{diasTxt}</span>
+        </div>
+      );
+    }
+
+    // Linha da lista simples (contratos em dia) — sem cor, sem destaque,
+    // só referência: número, empresa, vigência.
+    function PainelTvLinhaLista({ item, zebra }) {
+      return (
+        <div style={{
+          display:'grid', gridTemplateColumns:'100px 1fr 100px', alignItems:'center', gap:12,
+          padding:'6px 12px', background: zebra ? '#FAFBFC' : 'transparent',
+        }}>
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:13, fontWeight:600, color:'#475569'}}>{item.contractNumber}</span>
+          <span style={{fontSize:13, color:'#64748B', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+            {item.contractorName || '—'}
+          </span>
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:12, color:'#94A3B8', textAlign:'right'}}>
+            {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
           </span>
         </div>
       );
@@ -13480,7 +13484,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         total:    lista.length,
       }), [lista]);
 
-      const totalPaginas = Math.max(1, Math.ceil(lista.length / PAINEL_TV_CARDS_POR_PAGINA));
+      // Só os "ok" entram na listagem simples e paginada; vencido/7/30 ficam
+      // sempre visíveis, sem paginação, na tabela de atenção.
+      const atencao = React.useMemo(() => lista.filter(i => i.faixa !== 'ok'), [lista]);
+      const demais  = React.useMemo(() => lista.filter(i => i.faixa === 'ok'), [lista]);
+
+      const totalPaginas = Math.max(1, Math.ceil(demais.length / PAINEL_TV_CARDS_POR_PAGINA));
 
       // Avança a página automaticamente — reinicia sempre que a lista muda de tamanho
       React.useEffect(() => {
@@ -13492,77 +13501,111 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         return () => clearInterval(t);
       }, [totalPaginas]);
 
-      const paginaAtual = lista.slice(pagina * PAINEL_TV_CARDS_POR_PAGINA, (pagina + 1) * PAINEL_TV_CARDS_POR_PAGINA);
+      const paginaAtual = demais.slice(pagina * PAINEL_TV_CARDS_POR_PAGINA, (pagina + 1) * PAINEL_TV_CARDS_POR_PAGINA);
+      // divide a página em 3 colunas de leitura vertical (1ª coluna 1-15, 2ª 16-30, …)
+      const porColuna = Math.ceil(PAINEL_TV_CARDS_POR_PAGINA / 3);
+      const colunas = [0, 1, 2].map(c => paginaAtual.slice(c * porColuna, (c + 1) * porColuna));
 
       return (
-        <div style={{minHeight:'100vh', background:'#F1F5F9', display:'flex', flexDirection:'column', padding:'16px 32px', boxSizing:'border-box'}}>
-          {/* Cabeçalho */}
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:14}}>
-            <div style={{display:'flex', alignItems:'center', gap:14}}>
-              <div style={{width:42, height:42, borderRadius:12, background:'#0E7490', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:24, height:24, objectFit:'contain'}}
-                     onError={e => { e.target.style.display='none'; }} />
-              </div>
+        <div style={{minHeight:'100vh', background:'#EDF0F2', display:'flex', flexDirection:'column', fontFamily:"'Calibri', Arial, sans-serif"}}>
+          {/* Cabeçalho — barra sólida, formato de sistema institucional */}
+          <div style={{background:'#0E5468', padding:'14px 32px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
+            <div style={{display:'flex', alignItems:'center', gap:12}}>
+              <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:26, height:26, objectFit:'contain'}}
+                   onError={e => { e.target.style.display='none'; }} />
               <div>
-                <h1 style={{fontSize:20, fontWeight:900, color:'#0f172a', margin:0, letterSpacing:'-0.02em'}}>Painel de Vigência de Contratos</h1>
-                <p style={{fontSize:12, color:'#64748b', margin:'1px 0 0 0', fontWeight:600}}>GCSP · Gerência de Contratos, Suprimentos e Patrimônio</p>
+                <p style={{fontSize:15, fontWeight:700, color:'#fff', margin:0, letterSpacing:'.02em'}}>
+                  CONTROLE DE VIGÊNCIA DE CONTRATOS
+                </p>
+                <p style={{fontSize:11, color:'#B4D9E2', margin:'1px 0 0 0'}}>
+                  GCSP — Gerência de Contratos, Suprimentos e Patrimônio
+                </p>
               </div>
             </div>
             <div style={{textAlign:'right'}}>
-              <p style={{fontSize:22, fontWeight:900, color:'#0E7490', margin:0, fontVariantNumeric:'tabular-nums'}}>
+              <span style={{fontSize:15, fontWeight:700, color:'#fff', fontVariantNumeric:'tabular-nums'}}>
                 {agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}
-              </p>
-              <p style={{fontSize:11, color:'#94a3b8', margin:'1px 0 0 0', fontWeight:600, textTransform:'capitalize'}}>
+              </span>
+              <span style={{fontSize:12, color:'#B4D9E2', marginLeft:10, textTransform:'capitalize'}}>
                 {agora.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}
-              </p>
+              </span>
             </div>
           </div>
 
-          {/* KPIs */}
-          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginBottom:16}}>
-            {[
-              { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FEF2F2', icone:AlertTriangle },
-              { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FFFBEB', icone:Clock },
-              { label:'Vencem em até 30 dias',   value:kpi.em30,     cor:'#CA8A04', bg:'#FEFCE8', icone:Clock },
-              { label:'Total de Contratos em Vigência', value:kpi.total, cor:'#0E7490', bg:'#F0FDFA', icone:CheckCircle },
-            ].map(({ label, value, cor, bg, icone: Icone }) => (
-              <div key={label} style={{background:bg, border:`2px solid ${cor}33`, borderRadius:14, padding:'10px 16px', display:'flex', alignItems:'center', gap:12}}>
-                <div style={{width:36, height:36, borderRadius:10, background:cor, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                  <Icone className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p style={{fontSize:24, fontWeight:900, color:cor, margin:0, lineHeight:1, fontVariantNumeric:'tabular-nums'}}>{value}</p>
-                  <p style={{fontSize:11, fontWeight:700, color:'#475569', margin:'2px 0 0 0'}}>{label}</p>
-                </div>
-              </div>
-            ))}
+          {/* Faixa de resumo — texto corrido, não cartões coloridos */}
+          <div style={{background:'#fff', borderBottom:'1px solid #D8DEE3', padding:'9px 32px', display:'flex', alignItems:'center', gap:22, flexWrap:'wrap'}}>
+            <span style={{fontSize:13, color:'#334155'}}>
+              <b style={{color:'#B91C1C'}}>{kpi.vencidos}</b> vencido{kpi.vencidos === 1 ? '' : 's'}
+            </span>
+            <span style={{color:'#CBD5E1'}}>│</span>
+            <span style={{fontSize:13, color:'#334155'}}>
+              <b style={{color:'#B45309'}}>{kpi.em7}</b> vence{kpi.em7 === 1 ? '' : 'm'} em até 7 dias
+            </span>
+            <span style={{color:'#CBD5E1'}}>│</span>
+            <span style={{fontSize:13, color:'#334155'}}>
+              <b style={{color:'#A16207'}}>{kpi.em30}</b> vence{kpi.em30 === 1 ? '' : 'm'} em até 30 dias
+            </span>
+            <span style={{color:'#CBD5E1'}}>│</span>
+            <span style={{fontSize:13, color:'#334155'}}>
+              <b style={{color:'#0E5468'}}>{kpi.total}</b> contrato{kpi.total === 1 ? '' : 's'} em vigência no total
+            </span>
           </div>
 
-          {/* Grade de contratos */}
-          <div style={{flex:1}}>
+          <div style={{flex:1, padding:'18px 32px', display:'flex', flexDirection:'column', gap:20, minHeight:0}}>
             {!pronto ? (
-              <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:300, color:'#94a3b8', fontSize:18, fontWeight:600}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:300, color:'#94A3B8', fontSize:16}}>
                 Carregando contratos…
               </div>
             ) : lista.length === 0 ? (
-              <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:300, color:'#94a3b8'}}>
-                <CheckCircle className="w-12 h-12 mb-3" style={{opacity:.3}} />
-                <p style={{fontSize:18, fontWeight:700}}>Nenhum contrato em vigência cadastrado</p>
+              <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:300, color:'#94A3B8'}}>
+                <CheckCircle className="w-10 h-10 mb-3" style={{opacity:.3}} />
+                <p style={{fontSize:16, fontWeight:600}}>Nenhum contrato em vigência cadastrado</p>
               </div>
             ) : (
-              <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gridAutoRows:'min-content', gap:'8px 16px'}}>
-                {paginaAtual.map(item => <PainelTvRow key={item.contractNumber} item={item} />)}
-              </div>
+              <>
+                {/* ── Requer atenção: vencidos e próximos do vencimento ── */}
+                {atencao.length > 0 && (
+                  <div>
+                    <p style={{fontSize:11, fontWeight:700, color:'#64748B', letterSpacing:'.08em', textTransform:'uppercase', margin:'0 0 6px 2px', borderBottom:'2px solid #0E5468', paddingBottom:5, display:'inline-block'}}>
+                      Requer atenção
+                    </p>
+                    <div style={{background:'#fff', border:'1px solid #D8DEE3', borderRadius:6}}>
+                      <div style={{display:'grid', gridTemplateColumns:'18px 100px 1fr 100px 190px', gap:12, padding:'7px 12px', background:'#F1F5F8', borderBottom:'1px solid #D8DEE3'}}>
+                        {['', 'Nº', 'Empresa', 'Vigência', 'Situação'].map((h, i) => (
+                          <span key={i} style={{fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.05em', textAlign: i >= 3 ? 'right' : 'left'}}>{h}</span>
+                        ))}
+                      </div>
+                      {atencao.map((item, i) => <PainelTvLinhaAtencao key={item.contractNumber} item={item} zebra={i % 2 === 1} />)}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Demais contratos, em dia — listagem simples de referência ── */}
+                {demais.length > 0 && (
+                  <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column'}}>
+                    <p style={{fontSize:11, fontWeight:700, color:'#94A3B8', letterSpacing:'.08em', textTransform:'uppercase', margin:'0 0 6px 2px'}}>
+                      Demais contratos em vigência
+                    </p>
+                    <div style={{background:'#fff', border:'1px solid #D8DEE3', borderRadius:6, padding:'4px 0', flex:1, display:'grid', gridTemplateColumns:'repeat(3, 1fr)', columnGap:0}}>
+                      {colunas.map((col, ci) => (
+                        <div key={ci} style={{borderLeft: ci > 0 ? '1px solid #EDF0F2' : 'none'}}>
+                          {col.map((item, i) => <PainelTvLinhaLista key={item.contractNumber} item={item} zebra={i % 2 === 1} />)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Rodapé */}
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:24, paddingTop:16, borderTop:'1px solid #e2e8f0'}}>
-            <p style={{fontSize:12, color:'#94a3b8', margin:0, fontWeight:600}}>Belém Digital · Atualização automática em tempo real</p>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 32px', borderTop:'1px solid #D8DEE3', background:'#fff'}}>
+            <p style={{fontSize:11, color:'#94A3B8', margin:0}}>Belém Digital · Atualização automática em tempo real</p>
             {totalPaginas > 1 && (
-              <div style={{display:'flex', gap:7}}>
+              <div style={{display:'flex', gap:6}}>
                 {Array.from({ length: totalPaginas }).map((_, i) => (
-                  <span key={i} style={{width: i === pagina ? 22 : 7, height:7, borderRadius:999, background: i === pagina ? '#0E7490' : '#cbd5e1', transition:'all .3s'}} />
+                  <span key={i} style={{width: i === pagina ? 18 : 6, height:6, borderRadius:999, background: i === pagina ? '#0E5468' : '#CBD5E1', transition:'all .3s'}} />
                 ))}
               </div>
             )}
