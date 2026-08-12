@@ -13104,6 +13104,17 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                   <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
                     As alterações refletem no sistema GCSP em tempo real. O sistema principal (este) não é afetado — sempre exibe todos os módulos.
                   </p>
+                  <a href="/gcsp/painel" target="_blank" rel="noopener"
+                     className="mt-4 flex items-center justify-between px-4 py-3 rounded-xl border transition-colors hover:opacity-90"
+                     style={{borderColor:'#0E7490', background:'#F0FDFA'}}>
+                    <div>
+                      <p className="text-sm font-bold" style={{color:'#0E7490'}}>Painel de TV — Vigência de Contratos</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Tela cheia, sem login, para exibir num monitor do setor. Atualiza em tempo real.</p>
+                    </div>
+                    <span className="text-xs font-bold flex items-center gap-1 flex-shrink-0" style={{color:'#0E7490'}}>
+                      Abrir <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
+                  </a>
                 </div>
               )}
             </div>
@@ -13327,6 +13338,230 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 <p className="text-[10px] font-bold text-gray-500">
                   {counts.completed} paga{counts.completed !== 1 ? 's' : ''} · {counts.overdue} atrasada{counts.overdue !== 1 ? 's' : ''}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PAINEL DE TV — /gcsp/painel
+       Tela para exibir num monitor/TV do setor, sem login: mostra
+       todos os contratos vigentes com alerta de vencimento (contrato
+       original ou termo aditivo). Lê direto do Firestore, atualiza
+       em tempo real via onSnapshot, e se auto-recarrega a cada 6h
+       como robustez de kiosk que fica ligado o dia inteiro.
+    ═══════════════════════════════════════════════════════ */
+    const PAINEL_TV_CARDS_POR_PAGINA = 9;
+    const PAINEL_TV_SEGUNDOS_POR_PAGINA = 10;
+
+    function painelTvDaysUntil(dateStr) {
+      if (!dateStr) return null;
+      const hoje = new Date(); hoje.setHours(12,0,0,0);
+      return Math.round((new Date(dateStr + 'T12:00:00') - hoje) / 86400000);
+    }
+
+    // Encontra o termo aditivo (se houver) que definiu a vigência atual do contrato
+    function painelTvOrigemVigencia(meta, additives) {
+      const lista = additives || [];
+      const doTA = lista.filter(a => a.newEndDate && a.newEndDate === meta.endDate)
+                         .sort((a, b) => (b.id || 0) - (a.id || 0))[0];
+      return doTA ? `Termo Aditivo nº ${doTA.number || '—'}` : 'Contrato original';
+    }
+
+    function PainelTvCard({ item }) {
+      const { cor, bg, borda, rotulo } = item.faixa === 'vencido'
+        ? { cor:'#DC2626', bg:'#FEF2F2', borda:'#FCA5A5', rotulo:'VENCIDO' }
+        : item.faixa === '7'
+        ? { cor:'#D97706', bg:'#FFFBEB', borda:'#FCD34D', rotulo:'VENCE EM ATÉ 7 DIAS' }
+        : item.faixa === '30'
+        ? { cor:'#CA8A04', bg:'#FEFCE8', borda:'#FDE68A', rotulo:'VENCE EM ATÉ 30 DIAS' }
+        : { cor:'#0E7490', bg:'#F0FDFA', borda:'#99F6E4', rotulo:'EM VIGÊNCIA' };
+
+      const diasTxt = item.dias === null ? '—'
+        : item.dias < 0 ? `venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}`
+        : item.dias === 0 ? 'vence hoje'
+        : `vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
+
+      return (
+        <div style={{
+          background:'#fff', borderRadius:20, border:`3px solid ${borda}`, padding:'22px 26px',
+          display:'flex', flexDirection:'column', gap:10, boxShadow:'0 4px 18px rgba(0,0,0,.06)', minWidth:0,
+        }}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
+            <span style={{fontSize:22, fontWeight:900, color:'#0f172a', letterSpacing:'-0.02em'}}>Nº {item.contractNumber}</span>
+            <span style={{fontSize:12, fontWeight:800, color:'#fff', background:cor, padding:'5px 12px', borderRadius:999, whiteSpace:'nowrap'}}>{rotulo}</span>
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:8, minWidth:0}}>
+            <Building2 className="w-5 h-5" style={{color:'#94a3b8', flexShrink:0}} />
+            <span style={{fontSize:18, fontWeight:700, color:'#334155', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+              {item.contractorName || 'Empresa não informada'}
+            </span>
+          </div>
+          <div style={{height:1, background:'#f1f5f9', margin:'2px 0'}} />
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
+            <div>
+              <p style={{fontSize:11, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em', margin:0}}>Vigência até</p>
+              <p style={{fontSize:20, fontWeight:800, color:'#0f172a', margin:'2px 0 0 0'}}>
+                {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+              </p>
+            </div>
+            <p style={{fontSize:15, fontWeight:800, color: cor, margin:0, textAlign:'right'}}>{diasTxt}</p>
+          </div>
+          <p style={{fontSize:12, color:'#94a3b8', margin:0, fontWeight:600}}>{item.origem}</p>
+        </div>
+      );
+    }
+
+    function PainelTV() {
+      const [contractMeta, setContractMeta] = React.useState({});
+      const [contractAdditives, setContractAdditives] = React.useState({});
+      const [pronto, setPronto] = React.useState(false);
+      const [agora, setAgora] = React.useState(new Date());
+      const [pagina, setPagina] = React.useState(0);
+
+      React.useEffect(() => {
+        const db = firebase.firestore();
+        const u1 = db.collection(COL('contractMeta')).onSnapshot(snap => {
+          const m = {}; snap.forEach(d => { m[d.id] = d.data(); });
+          setContractMeta(m); setPronto(true);
+        });
+        const u2 = db.collection(COL('contractAdditives')).onSnapshot(snap => {
+          const a = {}; snap.forEach(d => { a[d.id] = d.data().additives || []; });
+          setContractAdditives(a);
+        });
+        return () => { u1(); u2(); };
+      }, []);
+
+      // Relógio ao vivo
+      React.useEffect(() => {
+        const t = setInterval(() => setAgora(new Date()), 30000);
+        return () => clearInterval(t);
+      }, []);
+
+      // Kiosk 24/7: recarrega a página de tempos em tempos para evitar
+      // acúmulo de memória/estado obsoleto num navegador que nunca fecha
+      React.useEffect(() => {
+        const t = setTimeout(() => window.location.reload(), 6 * 60 * 60 * 1000);
+        return () => clearTimeout(t);
+      }, []);
+
+      const lista = React.useMemo(() => {
+        return Object.entries(contractMeta)
+          .filter(([cn, m]) => cn && (m.situation || 'ativo') === 'ativo')
+          .map(([cn, m]) => {
+            const dias = painelTvDaysUntil(m.endDate);
+            const faixa = dias === null ? 'ok' : dias < 0 ? 'vencido' : dias <= 7 ? '7' : dias <= 30 ? '30' : 'ok';
+            return {
+              contractNumber: cn,
+              contractorName: m.contractorName,
+              endDate: m.endDate,
+              dias, faixa,
+              origem: painelTvOrigemVigencia(m, contractAdditives[cn]),
+            };
+          })
+          .sort((a, b) => {
+            const rank = f => f === 'vencido' ? 0 : f === '7' ? 1 : f === '30' ? 2 : 3;
+            const rA = rank(a.faixa), rB = rank(b.faixa);
+            if (rA !== rB) return rA - rB;
+            if (a.dias === null) return 1;
+            if (b.dias === null) return -1;
+            return a.dias - b.dias;
+          });
+      }, [contractMeta, contractAdditives]);
+
+      const kpi = React.useMemo(() => ({
+        vencidos: lista.filter(i => i.faixa === 'vencido').length,
+        em7:      lista.filter(i => i.faixa === '7').length,
+        em30:     lista.filter(i => i.faixa === '30').length,
+        total:    lista.length,
+      }), [lista]);
+
+      const totalPaginas = Math.max(1, Math.ceil(lista.length / PAINEL_TV_CARDS_POR_PAGINA));
+
+      // Avança a página automaticamente — reinicia sempre que a lista muda de tamanho
+      React.useEffect(() => {
+        setPagina(0);
+      }, [totalPaginas]);
+      React.useEffect(() => {
+        if (totalPaginas <= 1) return;
+        const t = setInterval(() => setPagina(p => (p + 1) % totalPaginas), PAINEL_TV_SEGUNDOS_POR_PAGINA * 1000);
+        return () => clearInterval(t);
+      }, [totalPaginas]);
+
+      const paginaAtual = lista.slice(pagina * PAINEL_TV_CARDS_POR_PAGINA, (pagina + 1) * PAINEL_TV_CARDS_POR_PAGINA);
+
+      return (
+        <div style={{minHeight:'100vh', background:'#F1F5F9', display:'flex', flexDirection:'column', padding:'28px 40px', boxSizing:'border-box'}}>
+          {/* Cabeçalho */}
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:26, flexWrap:'wrap', gap:14}}>
+            <div style={{display:'flex', alignItems:'center', gap:16}}>
+              <div style={{width:56, height:56, borderRadius:16, background:'#0E7490', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                <img src="gcsp-symbol-white.png" alt="GCSP" style={{width:32, height:32, objectFit:'contain'}}
+                     onError={e => { e.target.style.display='none'; }} />
+              </div>
+              <div>
+                <h1 style={{fontSize:26, fontWeight:900, color:'#0f172a', margin:0, letterSpacing:'-0.02em'}}>Painel de Vigência de Contratos</h1>
+                <p style={{fontSize:14, color:'#64748b', margin:'2px 0 0 0', fontWeight:600}}>GCSP · Gerência de Contratos, Suprimentos e Patrimônio</p>
+              </div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <p style={{fontSize:28, fontWeight:900, color:'#0E7490', margin:0, fontVariantNumeric:'tabular-nums'}}>
+                {agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}
+              </p>
+              <p style={{fontSize:13, color:'#94a3b8', margin:'2px 0 0 0', fontWeight:600, textTransform:'capitalize'}}>
+                {agora.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}
+              </p>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:18, marginBottom:26}}>
+            {[
+              { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FEF2F2', icone:AlertTriangle },
+              { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FFFBEB', icone:Clock },
+              { label:'Vencem em até 30 dias',   value:kpi.em30,     cor:'#CA8A04', bg:'#FEFCE8', icone:Clock },
+              { label:'Total de Contratos em Vigência', value:kpi.total, cor:'#0E7490', bg:'#F0FDFA', icone:CheckCircle },
+            ].map(({ label, value, cor, bg, icone: Icone }) => (
+              <div key={label} style={{background:bg, border:`2px solid ${cor}33`, borderRadius:20, padding:'20px 24px', display:'flex', alignItems:'center', gap:16}}>
+                <div style={{width:52, height:52, borderRadius:14, background:cor, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                  <Icone className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p style={{fontSize:38, fontWeight:900, color:cor, margin:0, lineHeight:1, fontVariantNumeric:'tabular-nums'}}>{value}</p>
+                  <p style={{fontSize:13, fontWeight:700, color:'#475569', margin:'4px 0 0 0'}}>{label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Grade de contratos */}
+          <div style={{flex:1}}>
+            {!pronto ? (
+              <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:300, color:'#94a3b8', fontSize:18, fontWeight:600}}>
+                Carregando contratos…
+              </div>
+            ) : lista.length === 0 ? (
+              <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:300, color:'#94a3b8'}}>
+                <CheckCircle className="w-12 h-12 mb-3" style={{opacity:.3}} />
+                <p style={{fontSize:18, fontWeight:700}}>Nenhum contrato em vigência cadastrado</p>
+              </div>
+            ) : (
+              <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18}}>
+                {paginaAtual.map(item => <PainelTvCard key={item.contractNumber} item={item} />)}
+              </div>
+            )}
+          </div>
+
+          {/* Rodapé */}
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:24, paddingTop:16, borderTop:'1px solid #e2e8f0'}}>
+            <p style={{fontSize:12, color:'#94a3b8', margin:0, fontWeight:600}}>Belém Digital · Atualização automática em tempo real</p>
+            {totalPaginas > 1 && (
+              <div style={{display:'flex', gap:7}}>
+                {Array.from({ length: totalPaginas }).map((_, i) => (
+                  <span key={i} style={{width: i === pagina ? 22 : 7, height:7, borderRadius:999, background: i === pagina ? '#0E7490' : '#cbd5e1', transition:'all .3s'}} />
+                ))}
               </div>
             )}
           </div>
@@ -16418,7 +16653,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    // Painel de TV (/gcsp/painel) é tela própria, sem login — não passa pelo <App/>
+    const IS_PAINEL_TV = typeof window !== 'undefined' && /^\/gcsp\/painel\/?$/i.test(window.location.pathname || '');
+    ReactDOM.createRoot(document.getElementById('root')).render(IS_PAINEL_TV ? <PainelTV /> : <App />);
   </script>
 </body>
 </html>
