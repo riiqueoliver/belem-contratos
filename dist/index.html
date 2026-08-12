@@ -18701,68 +18701,103 @@ function painelTvOrigemVigencia(meta, additives) {
   return doTA ? `Termo Aditivo nº ${doTA.number || '—'}` : 'Contrato original';
 }
 const PAINEL_TV_MONO = "'Consolas', 'SFMono-Regular', Menlo, monospace";
-function PainelTvLinhaAtencao({
-  item,
-  zebra
+function PainelTvCardAtencao({
+  item
 }) {
-  const cor = item.faixa === 'vencido' ? '#B91C1C' : item.faixa === '7' ? '#B45309' : '#A16207';
+  const cor = item.faixa === 'vencido' ? '#DC2626' : item.faixa === '7' ? '#D97706' : '#CA8A04';
+  const bg = item.faixa === 'vencido' ? '#FEF2F2' : item.faixa === '7' ? '#FFFBEB' : '#FEFCE8';
+  const rotulo = item.faixa === 'vencido' ? 'VENCIDO' : item.faixa === '7' ? 'VENCE EM ATÉ 7 DIAS' : 'VENCE EM ATÉ 30 DIAS';
   const diasTxt = item.dias < 0 ? `Venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}` : item.dias === 0 ? 'Vence hoje' : `Vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
   const ehAditivo = item.origem !== 'Contrato original';
   return React.createElement("div", {
     style: {
-      display: 'grid',
-      gridTemplateColumns: '18px 100px 1fr 100px 190px',
+      background: '#fff',
+      borderRadius: 16,
+      border: `1px solid ${cor}44`,
+      borderTop: `4px solid ${cor}`,
+      padding: '14px 18px',
+      boxShadow: '0 2px 10px rgba(15,23,42,.06)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      minWidth: 0
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
       alignItems: 'center',
-      gap: 12,
-      padding: '8px 12px',
-      background: zebra ? '#F8FAFC' : '#fff',
-      borderBottom: '1px solid #E9EDF1'
+      justifyContent: 'space-between',
+      gap: 10
     }
   }, React.createElement("span", {
     style: {
-      width: 9,
-      height: 9,
-      borderRadius: 2,
-      background: cor,
-      flexShrink: 0
-    }
-  }), React.createElement("span", {
-    style: {
       fontFamily: PAINEL_TV_MONO,
-      fontSize: 14,
-      fontWeight: 700,
-      color: '#1E293B'
+      fontSize: 17,
+      fontWeight: 800,
+      color: '#0F172A'
     }
   }, item.contractNumber), React.createElement("span", {
     style: {
-      fontSize: 14,
+      fontSize: 10.5,
+      fontWeight: 800,
+      color: '#fff',
+      background: cor,
+      padding: '4px 10px',
+      borderRadius: 999,
+      whiteSpace: 'nowrap',
+      letterSpacing: '.02em'
+    }
+  }, rotulo)), React.createElement("span", {
+    style: {
+      fontSize: 14.5,
       fontWeight: 600,
       color: '#334155',
-      minWidth: 0,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
     }
-  }, item.contractorName || 'Empresa não informada', ehAditivo && React.createElement("span", {
+  }, item.contractorName || 'Empresa não informada'), React.createElement("div", {
     style: {
-      color: '#94A3B8',
-      fontWeight: 600
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 10,
+      marginTop: 2,
+      paddingTop: 8,
+      borderTop: `1px solid ${bg}`
     }
-  }, " \xB7 ", item.origem)), React.createElement("span", {
+  }, React.createElement("div", null, React.createElement("p", {
+    style: {
+      fontSize: 9.5,
+      fontWeight: 700,
+      color: '#94A3B8',
+      textTransform: 'uppercase',
+      letterSpacing: '.06em',
+      margin: 0
+    }
+  }, "Vig\xEAncia at\xE9"), React.createElement("p", {
     style: {
       fontFamily: PAINEL_TV_MONO,
-      fontSize: 13,
-      color: '#64748B',
-      textAlign: 'right'
+      fontSize: 15,
+      fontWeight: 700,
+      color: '#1E293B',
+      margin: '2px 0 0 0'
     }
-  }, item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'), React.createElement("span", {
+  }, item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—')), React.createElement("span", {
     style: {
       fontSize: 13,
-      fontWeight: 700,
+      fontWeight: 800,
       color: cor,
       textAlign: 'right'
     }
-  }, diasTxt));
+  }, diasTxt)), ehAditivo && React.createElement("p", {
+    style: {
+      fontSize: 10.5,
+      color: '#94A3B8',
+      margin: 0,
+      fontWeight: 600
+    }
+  }, "via ", item.origem));
 }
 function PainelTvLinhaLista({
   item,
@@ -18883,71 +18918,86 @@ function PainelTV() {
   return React.createElement("div", {
     style: {
       minHeight: '100vh',
-      background: '#EDF0F2',
+      background: '#F4F6F8',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: "'Calibri', Arial, sans-serif"
     }
   }, React.createElement("div", {
     style: {
-      background: '#0E5468',
-      padding: '14px 32px',
+      background: '#fff',
+      padding: '16px 32px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       flexWrap: 'wrap',
-      gap: 10
+      gap: 14,
+      boxShadow: '0 1px 3px rgba(15,23,42,.06)'
     }
   }, React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 12
+      gap: 14
+    }
+  }, React.createElement("div", {
+    style: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      background: 'linear-gradient(135deg, #0E7490, #0B5568)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
     }
   }, React.createElement("img", {
     src: "/gcsp-symbol-white.png",
     alt: "GCSP",
     style: {
-      width: 26,
-      height: 26,
+      width: 25,
+      height: 25,
       objectFit: 'contain'
     },
     onError: e => {
       e.target.style.display = 'none';
     }
-  }), React.createElement("div", null, React.createElement("p", {
+  })), React.createElement("div", null, React.createElement("h1", {
     style: {
-      fontSize: 15,
-      fontWeight: 700,
-      color: '#fff',
+      fontSize: 19,
+      fontWeight: 800,
+      color: '#0F172A',
       margin: 0,
-      letterSpacing: '.02em'
+      letterSpacing: '-0.01em'
     }
-  }, "CONTROLE DE VIG\xCANCIA DE CONTRATOS"), React.createElement("p", {
+  }, "Painel de Vig\xEAncia de Contratos"), React.createElement("p", {
     style: {
-      fontSize: 11,
-      color: '#B4D9E2',
-      margin: '1px 0 0 0'
+      fontSize: 12,
+      color: '#64748B',
+      margin: '1px 0 0 0',
+      fontWeight: 600
     }
-  }, "GCSP \u2014 Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))), React.createElement("div", {
+  }, "GCSP \xB7 Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))), React.createElement("div", {
     style: {
       textAlign: 'right'
     }
-  }, React.createElement("span", {
+  }, React.createElement("p", {
     style: {
-      fontSize: 15,
-      fontWeight: 700,
-      color: '#fff',
+      fontSize: 21,
+      fontWeight: 800,
+      color: '#0E7490',
+      margin: 0,
       fontVariantNumeric: 'tabular-nums'
     }
   }, agora.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit'
-  })), React.createElement("span", {
+  })), React.createElement("p", {
     style: {
-      fontSize: 12,
-      color: '#B4D9E2',
-      marginLeft: 10,
+      fontSize: 11,
+      color: '#94A3B8',
+      margin: '1px 0 0 0',
+      fontWeight: 600,
       textTransform: 'capitalize'
     }
   }, agora.toLocaleDateString('pt-BR', {
@@ -18957,63 +19007,86 @@ function PainelTV() {
     year: 'numeric'
   })))), React.createElement("div", {
     style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      gap: 14,
+      padding: '16px 32px 0 32px'
+    }
+  }, [{
+    label: 'Contratos Vencidos',
+    value: kpi.vencidos,
+    cor: '#DC2626',
+    bg: '#FEF2F2',
+    icone: AlertTriangle
+  }, {
+    label: 'Vencem em até 7 dias',
+    value: kpi.em7,
+    cor: '#D97706',
+    bg: '#FFFBEB',
+    icone: Clock
+  }, {
+    label: 'Vencem em até 30 dias',
+    value: kpi.em30,
+    cor: '#CA8A04',
+    bg: '#FEFCE8',
+    icone: Clock
+  }, {
+    label: 'Total em Vigência',
+    value: kpi.total,
+    cor: '#0E7490',
+    bg: '#F0FDFA',
+    icone: CheckCircle
+  }].map(({
+    label,
+    value,
+    cor,
+    bg,
+    icone: Icone
+  }) => React.createElement("div", {
+    key: label,
+    style: {
       background: '#fff',
-      borderBottom: '1px solid #D8DEE3',
-      padding: '9px 32px',
+      border: '1px solid #E7EBEF',
+      borderRadius: 14,
+      padding: '12px 18px',
       display: 'flex',
       alignItems: 'center',
-      gap: 22,
-      flexWrap: 'wrap'
+      gap: 14,
+      boxShadow: '0 1px 4px rgba(15,23,42,.04)'
     }
-  }, React.createElement("span", {
+  }, React.createElement("div", {
     style: {
-      fontSize: 13,
-      color: '#334155'
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      background: bg,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
     }
-  }, React.createElement("b", {
+  }, React.createElement(Icone, {
+    className: "w-5 h-5",
     style: {
-      color: '#B91C1C'
+      color: cor
     }
-  }, kpi.vencidos), " vencido", kpi.vencidos === 1 ? '' : 's'), React.createElement("span", {
+  })), React.createElement("div", null, React.createElement("p", {
     style: {
-      color: '#CBD5E1'
+      fontSize: 26,
+      fontWeight: 800,
+      color: '#0F172A',
+      margin: 0,
+      lineHeight: 1,
+      fontVariantNumeric: 'tabular-nums'
     }
-  }, "\u2502"), React.createElement("span", {
+  }, value), React.createElement("p", {
     style: {
-      fontSize: 13,
-      color: '#334155'
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: '#64748B',
+      margin: '2px 0 0 0'
     }
-  }, React.createElement("b", {
-    style: {
-      color: '#B45309'
-    }
-  }, kpi.em7), " vence", kpi.em7 === 1 ? '' : 'm', " em at\xE9 7 dias"), React.createElement("span", {
-    style: {
-      color: '#CBD5E1'
-    }
-  }, "\u2502"), React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: '#334155'
-    }
-  }, React.createElement("b", {
-    style: {
-      color: '#A16207'
-    }
-  }, kpi.em30), " vence", kpi.em30 === 1 ? '' : 'm', " em at\xE9 30 dias"), React.createElement("span", {
-    style: {
-      color: '#CBD5E1'
-    }
-  }, "\u2502"), React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: '#334155'
-    }
-  }, React.createElement("b", {
-    style: {
-      color: '#0E5468'
-    }
-  }, kpi.total), " contrato", kpi.total === 1 ? '' : 's', " em vig\xEAncia no total")), React.createElement("div", {
+  }, label))))), React.createElement("div", {
     style: {
       flex: 1,
       padding: '18px 32px',
@@ -19057,40 +19130,17 @@ function PainelTV() {
       color: '#64748B',
       letterSpacing: '.08em',
       textTransform: 'uppercase',
-      margin: '0 0 6px 2px',
-      borderBottom: '2px solid #0E5468',
-      paddingBottom: 5,
-      display: 'inline-block'
+      margin: '0 0 8px 2px'
     }
   }, "Requer aten\xE7\xE3o"), React.createElement("div", {
     style: {
-      background: '#fff',
-      border: '1px solid #D8DEE3',
-      borderRadius: 6
-    }
-  }, React.createElement("div", {
-    style: {
       display: 'grid',
-      gridTemplateColumns: '18px 100px 1fr 100px 190px',
-      gap: 12,
-      padding: '7px 12px',
-      background: '#F1F5F8',
-      borderBottom: '1px solid #D8DEE3'
+      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+      gap: 14
     }
-  }, ['', 'Nº', 'Empresa', 'Vigência', 'Situação'].map((h, i) => React.createElement("span", {
-    key: i,
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: '#94A3B8',
-      textTransform: 'uppercase',
-      letterSpacing: '.05em',
-      textAlign: i >= 3 ? 'right' : 'left'
-    }
-  }, h))), atencao.map((item, i) => React.createElement(PainelTvLinhaAtencao, {
+  }, atencao.map(item => React.createElement(PainelTvCardAtencao, {
     key: item.contractNumber,
-    item: item,
-    zebra: i % 2 === 1
+    item: item
   })))), demais.length > 0 && React.createElement("div", {
     style: {
       flex: 1,

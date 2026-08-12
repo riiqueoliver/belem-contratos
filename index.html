@@ -13372,11 +13372,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
     const PAINEL_TV_MONO = "'Consolas', 'SFMono-Regular', Menlo, monospace";
 
-    // Linha da tabela de atenção (vencidos / próximos do vencimento) — layout de
-    // planilha/relatório oficial, sem cartão nem sombra: indicador de severidade
-    // é um pequeno marcador lateral, não a linha inteira colorida.
-    function PainelTvLinhaAtencao({ item, zebra }) {
-      const cor = item.faixa === 'vencido' ? '#B91C1C' : item.faixa === '7' ? '#B45309' : '#A16207';
+    // Bloco de destaque para contratos vencidos / próximos do vencimento —
+    // cartão com cor de severidade, para chamar a atenção de longe na TV.
+    function PainelTvCardAtencao({ item }) {
+      const cor = item.faixa === 'vencido' ? '#DC2626' : item.faixa === '7' ? '#D97706' : '#CA8A04';
+      const bg  = item.faixa === 'vencido' ? '#FEF2F2' : item.faixa === '7' ? '#FFFBEB' : '#FEFCE8';
+      const rotulo = item.faixa === 'vencido' ? 'VENCIDO' : item.faixa === '7' ? 'VENCE EM ATÉ 7 DIAS' : 'VENCE EM ATÉ 30 DIAS';
       const diasTxt = item.dias < 0 ? `Venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}`
         : item.dias === 0 ? 'Vence hoje'
         : `Vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
@@ -13384,19 +13385,28 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
       return (
         <div style={{
-          display:'grid', gridTemplateColumns:'18px 100px 1fr 100px 190px', alignItems:'center', gap:12,
-          padding:'8px 12px', background: zebra ? '#F8FAFC' : '#fff', borderBottom:'1px solid #E9EDF1',
+          background:'#fff', borderRadius:16, border:`1px solid ${cor}44`, borderTop:`4px solid ${cor}`,
+          padding:'14px 18px', boxShadow:'0 2px 10px rgba(15,23,42,.06)', display:'flex', flexDirection:'column', gap:8, minWidth:0,
         }}>
-          <span style={{width:9, height:9, borderRadius:2, background:cor, flexShrink:0}} />
-          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:14, fontWeight:700, color:'#1E293B'}}>{item.contractNumber}</span>
-          <span style={{fontSize:14, fontWeight:600, color:'#334155', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
+            <span style={{fontFamily:PAINEL_TV_MONO, fontSize:17, fontWeight:800, color:'#0F172A'}}>{item.contractNumber}</span>
+            <span style={{fontSize:10.5, fontWeight:800, color:'#fff', background:cor, padding:'4px 10px', borderRadius:999, whiteSpace:'nowrap', letterSpacing:'.02em'}}>{rotulo}</span>
+          </div>
+          <span style={{fontSize:14.5, fontWeight:600, color:'#334155', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
             {item.contractorName || 'Empresa não informada'}
-            {ehAditivo && <span style={{color:'#94A3B8', fontWeight:600}}> · {item.origem}</span>}
           </span>
-          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:13, color:'#64748B', textAlign:'right'}}>
-            {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-          </span>
-          <span style={{fontSize:13, fontWeight:700, color:cor, textAlign:'right'}}>{diasTxt}</span>
+          <div style={{display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:10, marginTop:2, paddingTop:8, borderTop:`1px solid ${bg}`}}>
+            <div>
+              <p style={{fontSize:9.5, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.06em', margin:0}}>Vigência até</p>
+              <p style={{fontFamily:PAINEL_TV_MONO, fontSize:15, fontWeight:700, color:'#1E293B', margin:'2px 0 0 0'}}>
+                {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+              </p>
+            </div>
+            <span style={{fontSize:13, fontWeight:800, color:cor, textAlign:'right'}}>{diasTxt}</span>
+          </div>
+          {ehAditivo && (
+            <p style={{fontSize:10.5, color:'#94A3B8', margin:0, fontWeight:600}}>via {item.origem}</p>
+          )}
         </div>
       );
     }
@@ -13507,48 +13517,47 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       const colunas = [0, 1, 2].map(c => paginaAtual.slice(c * porColuna, (c + 1) * porColuna));
 
       return (
-        <div style={{minHeight:'100vh', background:'#EDF0F2', display:'flex', flexDirection:'column', fontFamily:"'Calibri', Arial, sans-serif"}}>
-          {/* Cabeçalho — barra sólida, formato de sistema institucional */}
-          <div style={{background:'#0E5468', padding:'14px 32px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
-            <div style={{display:'flex', alignItems:'center', gap:12}}>
-              <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:26, height:26, objectFit:'contain'}}
-                   onError={e => { e.target.style.display='none'; }} />
+        <div style={{minHeight:'100vh', background:'#F4F6F8', display:'flex', flexDirection:'column', fontFamily:"'Calibri', Arial, sans-serif"}}>
+          {/* Cabeçalho — claro, moderno */}
+          <div style={{background:'#fff', padding:'16px 32px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:14, boxShadow:'0 1px 3px rgba(15,23,42,.06)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:14}}>
+              <div style={{width:44, height:44, borderRadius:12, background:'linear-gradient(135deg, #0E7490, #0B5568)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:25, height:25, objectFit:'contain'}}
+                     onError={e => { e.target.style.display='none'; }} />
+              </div>
               <div>
-                <p style={{fontSize:15, fontWeight:700, color:'#fff', margin:0, letterSpacing:'.02em'}}>
-                  CONTROLE DE VIGÊNCIA DE CONTRATOS
-                </p>
-                <p style={{fontSize:11, color:'#B4D9E2', margin:'1px 0 0 0'}}>
-                  GCSP — Gerência de Contratos, Suprimentos e Patrimônio
-                </p>
+                <h1 style={{fontSize:19, fontWeight:800, color:'#0F172A', margin:0, letterSpacing:'-0.01em'}}>Painel de Vigência de Contratos</h1>
+                <p style={{fontSize:12, color:'#64748B', margin:'1px 0 0 0', fontWeight:600}}>GCSP · Gerência de Contratos, Suprimentos e Patrimônio</p>
               </div>
             </div>
             <div style={{textAlign:'right'}}>
-              <span style={{fontSize:15, fontWeight:700, color:'#fff', fontVariantNumeric:'tabular-nums'}}>
+              <p style={{fontSize:21, fontWeight:800, color:'#0E7490', margin:0, fontVariantNumeric:'tabular-nums'}}>
                 {agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}
-              </span>
-              <span style={{fontSize:12, color:'#B4D9E2', marginLeft:10, textTransform:'capitalize'}}>
+              </p>
+              <p style={{fontSize:11, color:'#94A3B8', margin:'1px 0 0 0', fontWeight:600, textTransform:'capitalize'}}>
                 {agora.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}
-              </span>
+              </p>
             </div>
           </div>
 
-          {/* Faixa de resumo — texto corrido, não cartões coloridos */}
-          <div style={{background:'#fff', borderBottom:'1px solid #D8DEE3', padding:'9px 32px', display:'flex', alignItems:'center', gap:22, flexWrap:'wrap'}}>
-            <span style={{fontSize:13, color:'#334155'}}>
-              <b style={{color:'#B91C1C'}}>{kpi.vencidos}</b> vencido{kpi.vencidos === 1 ? '' : 's'}
-            </span>
-            <span style={{color:'#CBD5E1'}}>│</span>
-            <span style={{fontSize:13, color:'#334155'}}>
-              <b style={{color:'#B45309'}}>{kpi.em7}</b> vence{kpi.em7 === 1 ? '' : 'm'} em até 7 dias
-            </span>
-            <span style={{color:'#CBD5E1'}}>│</span>
-            <span style={{fontSize:13, color:'#334155'}}>
-              <b style={{color:'#A16207'}}>{kpi.em30}</b> vence{kpi.em30 === 1 ? '' : 'm'} em até 30 dias
-            </span>
-            <span style={{color:'#CBD5E1'}}>│</span>
-            <span style={{fontSize:13, color:'#334155'}}>
-              <b style={{color:'#0E5468'}}>{kpi.total}</b> contrato{kpi.total === 1 ? '' : 's'} em vigência no total
-            </span>
+          {/* Indicadores — blocos, como no design original */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, padding:'16px 32px 0 32px'}}>
+            {[
+              { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FEF2F2', icone:AlertTriangle },
+              { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FFFBEB', icone:Clock },
+              { label:'Vencem em até 30 dias',   value:kpi.em30,     cor:'#CA8A04', bg:'#FEFCE8', icone:Clock },
+              { label:'Total em Vigência',       value:kpi.total,    cor:'#0E7490', bg:'#F0FDFA', icone:CheckCircle },
+            ].map(({ label, value, cor, bg, icone: Icone }) => (
+              <div key={label} style={{background:'#fff', border:'1px solid #E7EBEF', borderRadius:14, padding:'12px 18px', display:'flex', alignItems:'center', gap:14, boxShadow:'0 1px 4px rgba(15,23,42,.04)'}}>
+                <div style={{width:38, height:38, borderRadius:11, background:bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                  <Icone className="w-5 h-5" style={{color:cor}} />
+                </div>
+                <div>
+                  <p style={{fontSize:26, fontWeight:800, color:'#0F172A', margin:0, lineHeight:1, fontVariantNumeric:'tabular-nums'}}>{value}</p>
+                  <p style={{fontSize:11.5, fontWeight:600, color:'#64748B', margin:'2px 0 0 0'}}>{label}</p>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div style={{flex:1, padding:'18px 32px', display:'flex', flexDirection:'column', gap:20, minHeight:0}}>
@@ -13563,19 +13572,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               </div>
             ) : (
               <>
-                {/* ── Requer atenção: vencidos e próximos do vencimento ── */}
+                {/* ── Requer atenção: vencidos e próximos do vencimento, em blocos ── */}
                 {atencao.length > 0 && (
                   <div>
-                    <p style={{fontSize:11, fontWeight:700, color:'#64748B', letterSpacing:'.08em', textTransform:'uppercase', margin:'0 0 6px 2px', borderBottom:'2px solid #0E5468', paddingBottom:5, display:'inline-block'}}>
+                    <p style={{fontSize:11, fontWeight:700, color:'#64748B', letterSpacing:'.08em', textTransform:'uppercase', margin:'0 0 8px 2px'}}>
                       Requer atenção
                     </p>
-                    <div style={{background:'#fff', border:'1px solid #D8DEE3', borderRadius:6}}>
-                      <div style={{display:'grid', gridTemplateColumns:'18px 100px 1fr 100px 190px', gap:12, padding:'7px 12px', background:'#F1F5F8', borderBottom:'1px solid #D8DEE3'}}>
-                        {['', 'Nº', 'Empresa', 'Vigência', 'Situação'].map((h, i) => (
-                          <span key={i} style={{fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.05em', textAlign: i >= 3 ? 'right' : 'left'}}>{h}</span>
-                        ))}
-                      </div>
-                      {atencao.map((item, i) => <PainelTvLinhaAtencao key={item.contractNumber} item={item} zebra={i % 2 === 1} />)}
+                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:14}}>
+                      {atencao.map(item => <PainelTvCardAtencao key={item.contractNumber} item={item} />)}
                     </div>
                   </div>
                 )}
