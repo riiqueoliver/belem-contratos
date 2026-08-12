@@ -13353,8 +13353,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
        em tempo real via onSnapshot, e se auto-recarrega a cada 6h
        como robustez de kiosk que fica ligado o dia inteiro.
     ═══════════════════════════════════════════════════════ */
-    const PAINEL_TV_CARDS_POR_PAGINA = 9;
-    const PAINEL_TV_SEGUNDOS_POR_PAGINA = 10;
+    const PAINEL_TV_CARDS_POR_PAGINA = 28;
+    const PAINEL_TV_SEGUNDOS_POR_PAGINA = 14;
 
     function painelTvDaysUntil(dateStr) {
       if (!dateStr) return null;
@@ -13370,46 +13370,48 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       return doTA ? `Termo Aditivo nº ${doTA.number || '—'}` : 'Contrato original';
     }
 
-    function PainelTvCard({ item }) {
-      const { cor, bg, borda, rotulo } = item.faixa === 'vencido'
-        ? { cor:'#DC2626', bg:'#FEF2F2', borda:'#FCA5A5', rotulo:'VENCIDO' }
-        : item.faixa === '7'
-        ? { cor:'#D97706', bg:'#FFFBEB', borda:'#FCD34D', rotulo:'VENCE EM ATÉ 7 DIAS' }
-        : item.faixa === '30'
-        ? { cor:'#CA8A04', bg:'#FEFCE8', borda:'#FDE68A', rotulo:'VENCE EM ATÉ 30 DIAS' }
-        : { cor:'#0E7490', bg:'#F0FDFA', borda:'#99F6E4', rotulo:'EM VIGÊNCIA' };
+    // Linha compacta — prioriza densidade (ver mais contratos de uma vez na TV)
+    // sobre o tamanho de cada item individual.
+    function PainelTvRow({ item }) {
+      const cor = item.faixa === 'vencido' ? '#DC2626'
+        : item.faixa === '7'  ? '#D97706'
+        : item.faixa === '30' ? '#CA8A04'
+        : '#0E7490';
+      const bg = item.faixa === 'vencido' ? '#FEF2F2'
+        : item.faixa === '7'  ? '#FFFBEB'
+        : item.faixa === '30' ? '#FEFCE8'
+        : '#fff';
 
       const diasTxt = item.dias === null ? '—'
-        : item.dias < 0 ? `venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}`
+        : item.dias < 0 ? `venceu há ${Math.abs(item.dias)}d`
         : item.dias === 0 ? 'vence hoje'
-        : `vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
+        : `${item.dias}d restantes`;
+
+      const ehAditivo = item.origem !== 'Contrato original';
 
       return (
         <div style={{
-          background:'#fff', borderRadius:20, border:`3px solid ${borda}`, padding:'22px 26px',
-          display:'flex', flexDirection:'column', gap:10, boxShadow:'0 4px 18px rgba(0,0,0,.06)', minWidth:0,
+          display:'flex', alignItems:'center', gap:12, background:bg,
+          border:'1px solid #e2e8f0', borderLeft:`6px solid ${cor}`, borderRadius:10,
+          padding:'9px 14px', minWidth:0,
         }}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
-            <span style={{fontSize:22, fontWeight:900, color:'#0f172a', letterSpacing:'-0.02em'}}>Nº {item.contractNumber}</span>
-            <span style={{fontSize:12, fontWeight:800, color:'#fff', background:cor, padding:'5px 12px', borderRadius:999, whiteSpace:'nowrap'}}>{rotulo}</span>
-          </div>
-          <div style={{display:'flex', alignItems:'center', gap:8, minWidth:0}}>
-            <Building2 className="w-5 h-5" style={{color:'#94a3b8', flexShrink:0}} />
-            <span style={{fontSize:18, fontWeight:700, color:'#334155', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-              {item.contractorName || 'Empresa não informada'}
+          <span style={{fontSize:16, fontWeight:900, color:'#0f172a', flexShrink:0, minWidth:88}}>
+            Nº {item.contractNumber}
+          </span>
+          <span style={{fontSize:15, fontWeight:600, color:'#475569', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+            {item.contractorName || 'Empresa não informada'}
+          </span>
+          {ehAditivo && (
+            <span style={{fontSize:10, fontWeight:800, color:'#6366f1', background:'#eef2ff', padding:'2px 8px', borderRadius:999, flexShrink:0, whiteSpace:'nowrap'}}>
+              {item.origem}
             </span>
-          </div>
-          <div style={{height:1, background:'#f1f5f9', margin:'2px 0'}} />
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10}}>
-            <div>
-              <p style={{fontSize:11, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em', margin:0}}>Vigência até</p>
-              <p style={{fontSize:20, fontWeight:800, color:'#0f172a', margin:'2px 0 0 0'}}>
-                {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-              </p>
-            </div>
-            <p style={{fontSize:15, fontWeight:800, color: cor, margin:0, textAlign:'right'}}>{diasTxt}</p>
-          </div>
-          <p style={{fontSize:12, color:'#94a3b8', margin:0, fontWeight:600}}>{item.origem}</p>
+          )}
+          <span style={{fontSize:13, fontWeight:700, color:'#64748b', flexShrink:0, whiteSpace:'nowrap'}}>
+            até {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+          </span>
+          <span style={{fontSize:13, fontWeight:800, color:cor, flexShrink:0, minWidth:104, textAlign:'right', whiteSpace:'nowrap'}}>
+            {diasTxt}
+          </span>
         </div>
       );
     }
@@ -13493,44 +13495,44 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       const paginaAtual = lista.slice(pagina * PAINEL_TV_CARDS_POR_PAGINA, (pagina + 1) * PAINEL_TV_CARDS_POR_PAGINA);
 
       return (
-        <div style={{minHeight:'100vh', background:'#F1F5F9', display:'flex', flexDirection:'column', padding:'28px 40px', boxSizing:'border-box'}}>
+        <div style={{minHeight:'100vh', background:'#F1F5F9', display:'flex', flexDirection:'column', padding:'16px 32px', boxSizing:'border-box'}}>
           {/* Cabeçalho */}
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:26, flexWrap:'wrap', gap:14}}>
-            <div style={{display:'flex', alignItems:'center', gap:16}}>
-              <div style={{width:56, height:56, borderRadius:16, background:'#0E7490', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:32, height:32, objectFit:'contain'}}
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:14}}>
+            <div style={{display:'flex', alignItems:'center', gap:14}}>
+              <div style={{width:42, height:42, borderRadius:12, background:'#0E7490', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                <img src="/gcsp-symbol-white.png" alt="GCSP" style={{width:24, height:24, objectFit:'contain'}}
                      onError={e => { e.target.style.display='none'; }} />
               </div>
               <div>
-                <h1 style={{fontSize:26, fontWeight:900, color:'#0f172a', margin:0, letterSpacing:'-0.02em'}}>Painel de Vigência de Contratos</h1>
-                <p style={{fontSize:14, color:'#64748b', margin:'2px 0 0 0', fontWeight:600}}>GCSP · Gerência de Contratos, Suprimentos e Patrimônio</p>
+                <h1 style={{fontSize:20, fontWeight:900, color:'#0f172a', margin:0, letterSpacing:'-0.02em'}}>Painel de Vigência de Contratos</h1>
+                <p style={{fontSize:12, color:'#64748b', margin:'1px 0 0 0', fontWeight:600}}>GCSP · Gerência de Contratos, Suprimentos e Patrimônio</p>
               </div>
             </div>
             <div style={{textAlign:'right'}}>
-              <p style={{fontSize:28, fontWeight:900, color:'#0E7490', margin:0, fontVariantNumeric:'tabular-nums'}}>
+              <p style={{fontSize:22, fontWeight:900, color:'#0E7490', margin:0, fontVariantNumeric:'tabular-nums'}}>
                 {agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}
               </p>
-              <p style={{fontSize:13, color:'#94a3b8', margin:'2px 0 0 0', fontWeight:600, textTransform:'capitalize'}}>
+              <p style={{fontSize:11, color:'#94a3b8', margin:'1px 0 0 0', fontWeight:600, textTransform:'capitalize'}}>
                 {agora.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}
               </p>
             </div>
           </div>
 
           {/* KPIs */}
-          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:18, marginBottom:26}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginBottom:16}}>
             {[
               { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FEF2F2', icone:AlertTriangle },
               { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FFFBEB', icone:Clock },
               { label:'Vencem em até 30 dias',   value:kpi.em30,     cor:'#CA8A04', bg:'#FEFCE8', icone:Clock },
               { label:'Total de Contratos em Vigência', value:kpi.total, cor:'#0E7490', bg:'#F0FDFA', icone:CheckCircle },
             ].map(({ label, value, cor, bg, icone: Icone }) => (
-              <div key={label} style={{background:bg, border:`2px solid ${cor}33`, borderRadius:20, padding:'20px 24px', display:'flex', alignItems:'center', gap:16}}>
-                <div style={{width:52, height:52, borderRadius:14, background:cor, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                  <Icone className="w-6 h-6 text-white" />
+              <div key={label} style={{background:bg, border:`2px solid ${cor}33`, borderRadius:14, padding:'10px 16px', display:'flex', alignItems:'center', gap:12}}>
+                <div style={{width:36, height:36, borderRadius:10, background:cor, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                  <Icone className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p style={{fontSize:38, fontWeight:900, color:cor, margin:0, lineHeight:1, fontVariantNumeric:'tabular-nums'}}>{value}</p>
-                  <p style={{fontSize:13, fontWeight:700, color:'#475569', margin:'4px 0 0 0'}}>{label}</p>
+                  <p style={{fontSize:24, fontWeight:900, color:cor, margin:0, lineHeight:1, fontVariantNumeric:'tabular-nums'}}>{value}</p>
+                  <p style={{fontSize:11, fontWeight:700, color:'#475569', margin:'2px 0 0 0'}}>{label}</p>
                 </div>
               </div>
             ))}
@@ -13548,8 +13550,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 <p style={{fontSize:18, fontWeight:700}}>Nenhum contrato em vigência cadastrado</p>
               </div>
             ) : (
-              <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18}}>
-                {paginaAtual.map(item => <PainelTvCard key={item.contractNumber} item={item} />)}
+              <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gridAutoRows:'min-content', gap:'8px 16px'}}>
+                {paginaAtual.map(item => <PainelTvRow key={item.contractNumber} item={item} />)}
               </div>
             )}
           </div>

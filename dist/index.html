@@ -18687,8 +18687,8 @@ function NfListView({
     className: "text-[10px] font-bold text-gray-500"
   }, counts.completed, " paga", counts.completed !== 1 ? 's' : '', " \xB7 ", counts.overdue, " atrasada", counts.overdue !== 1 ? 's' : ''))));
 }
-const PAINEL_TV_CARDS_POR_PAGINA = 9;
-const PAINEL_TV_SEGUNDOS_POR_PAGINA = 10;
+const PAINEL_TV_CARDS_POR_PAGINA = 28;
+const PAINEL_TV_SEGUNDOS_POR_PAGINA = 14;
 function painelTvDaysUntil(dateStr) {
   if (!dateStr) return null;
   const hoje = new Date();
@@ -18700,139 +18700,74 @@ function painelTvOrigemVigencia(meta, additives) {
   const doTA = lista.filter(a => a.newEndDate && a.newEndDate === meta.endDate).sort((a, b) => (b.id || 0) - (a.id || 0))[0];
   return doTA ? `Termo Aditivo nº ${doTA.number || '—'}` : 'Contrato original';
 }
-function PainelTvCard({
+function PainelTvRow({
   item
 }) {
-  const {
-    cor,
-    bg,
-    borda,
-    rotulo
-  } = item.faixa === 'vencido' ? {
-    cor: '#DC2626',
-    bg: '#FEF2F2',
-    borda: '#FCA5A5',
-    rotulo: 'VENCIDO'
-  } : item.faixa === '7' ? {
-    cor: '#D97706',
-    bg: '#FFFBEB',
-    borda: '#FCD34D',
-    rotulo: 'VENCE EM ATÉ 7 DIAS'
-  } : item.faixa === '30' ? {
-    cor: '#CA8A04',
-    bg: '#FEFCE8',
-    borda: '#FDE68A',
-    rotulo: 'VENCE EM ATÉ 30 DIAS'
-  } : {
-    cor: '#0E7490',
-    bg: '#F0FDFA',
-    borda: '#99F6E4',
-    rotulo: 'EM VIGÊNCIA'
-  };
-  const diasTxt = item.dias === null ? '—' : item.dias < 0 ? `venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}` : item.dias === 0 ? 'vence hoje' : `vence em ${item.dias} dia${item.dias === 1 ? '' : 's'}`;
+  const cor = item.faixa === 'vencido' ? '#DC2626' : item.faixa === '7' ? '#D97706' : item.faixa === '30' ? '#CA8A04' : '#0E7490';
+  const bg = item.faixa === 'vencido' ? '#FEF2F2' : item.faixa === '7' ? '#FFFBEB' : item.faixa === '30' ? '#FEFCE8' : '#fff';
+  const diasTxt = item.dias === null ? '—' : item.dias < 0 ? `venceu há ${Math.abs(item.dias)}d` : item.dias === 0 ? 'vence hoje' : `${item.dias}d restantes`;
+  const ehAditivo = item.origem !== 'Contrato original';
   return React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: 20,
-      border: `3px solid ${borda}`,
-      padding: '22px 26px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 10,
-      boxShadow: '0 4px 18px rgba(0,0,0,.06)',
-      minWidth: 0
-    }
-  }, React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10
+      gap: 12,
+      background: bg,
+      border: '1px solid #e2e8f0',
+      borderLeft: `6px solid ${cor}`,
+      borderRadius: 10,
+      padding: '9px 14px',
+      minWidth: 0
     }
   }, React.createElement("span", {
     style: {
-      fontSize: 22,
+      fontSize: 16,
       fontWeight: 900,
       color: '#0f172a',
-      letterSpacing: '-0.02em'
+      flexShrink: 0,
+      minWidth: 88
     }
   }, "N\xBA ", item.contractNumber), React.createElement("span", {
     style: {
-      fontSize: 12,
-      fontWeight: 800,
-      color: '#fff',
-      background: cor,
-      padding: '5px 12px',
-      borderRadius: 999,
-      whiteSpace: 'nowrap'
-    }
-  }, rotulo)), React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      minWidth: 0
-    }
-  }, React.createElement(Building2, {
-    className: "w-5 h-5",
-    style: {
-      color: '#94a3b8',
-      flexShrink: 0
-    }
-  }), React.createElement("span", {
-    style: {
-      fontSize: 18,
-      fontWeight: 700,
-      color: '#334155',
+      fontSize: 15,
+      fontWeight: 600,
+      color: '#475569',
+      flex: 1,
+      minWidth: 0,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
     }
-  }, item.contractorName || 'Empresa não informada')), React.createElement("div", {
+  }, item.contractorName || 'Empresa não informada'), ehAditivo && React.createElement("span", {
     style: {
-      height: 1,
-      background: '#f1f5f9',
-      margin: '2px 0'
-    }
-  }), React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10
-    }
-  }, React.createElement("div", null, React.createElement("p", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      color: '#94a3b8',
-      textTransform: 'uppercase',
-      letterSpacing: '.06em',
-      margin: 0
-    }
-  }, "Vig\xEAncia at\xE9"), React.createElement("p", {
-    style: {
-      fontSize: 20,
+      fontSize: 10,
       fontWeight: 800,
-      color: '#0f172a',
-      margin: '2px 0 0 0'
+      color: '#6366f1',
+      background: '#eef2ff',
+      padding: '2px 8px',
+      borderRadius: 999,
+      flexShrink: 0,
+      whiteSpace: 'nowrap'
     }
-  }, item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—')), React.createElement("p", {
+  }, item.origem), React.createElement("span", {
     style: {
-      fontSize: 15,
+      fontSize: 13,
+      fontWeight: 700,
+      color: '#64748b',
+      flexShrink: 0,
+      whiteSpace: 'nowrap'
+    }
+  }, "at\xE9 ", item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'), React.createElement("span", {
+    style: {
+      fontSize: 13,
       fontWeight: 800,
       color: cor,
-      margin: 0,
-      textAlign: 'right'
+      flexShrink: 0,
+      minWidth: 104,
+      textAlign: 'right',
+      whiteSpace: 'nowrap'
     }
-  }, diasTxt)), React.createElement("p", {
-    style: {
-      fontSize: 12,
-      color: '#94a3b8',
-      margin: 0,
-      fontWeight: 600
-    }
-  }, item.origem));
+  }, diasTxt));
 }
 function PainelTV() {
   const [contractMeta, setContractMeta] = React.useState({});
@@ -18914,7 +18849,7 @@ function PainelTV() {
       background: '#F1F5F9',
       display: 'flex',
       flexDirection: 'column',
-      padding: '28px 40px',
+      padding: '16px 32px',
       boxSizing: 'border-box'
     }
   }, React.createElement("div", {
@@ -18922,7 +18857,7 @@ function PainelTV() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 26,
+      marginBottom: 14,
       flexWrap: 'wrap',
       gap: 14
     }
@@ -18930,13 +18865,13 @@ function PainelTV() {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 16
+      gap: 14
     }
   }, React.createElement("div", {
     style: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
+      width: 42,
+      height: 42,
+      borderRadius: 12,
       background: '#0E7490',
       display: 'flex',
       alignItems: 'center',
@@ -18947,8 +18882,8 @@ function PainelTV() {
     src: "/gcsp-symbol-white.png",
     alt: "GCSP",
     style: {
-      width: 32,
-      height: 32,
+      width: 24,
+      height: 24,
       objectFit: 'contain'
     },
     onError: e => {
@@ -18956,7 +18891,7 @@ function PainelTV() {
     }
   })), React.createElement("div", null, React.createElement("h1", {
     style: {
-      fontSize: 26,
+      fontSize: 20,
       fontWeight: 900,
       color: '#0f172a',
       margin: 0,
@@ -18964,9 +18899,9 @@ function PainelTV() {
     }
   }, "Painel de Vig\xEAncia de Contratos"), React.createElement("p", {
     style: {
-      fontSize: 14,
+      fontSize: 12,
       color: '#64748b',
-      margin: '2px 0 0 0',
+      margin: '1px 0 0 0',
       fontWeight: 600
     }
   }, "GCSP \xB7 Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))), React.createElement("div", {
@@ -18975,7 +18910,7 @@ function PainelTV() {
     }
   }, React.createElement("p", {
     style: {
-      fontSize: 28,
+      fontSize: 22,
       fontWeight: 900,
       color: '#0E7490',
       margin: 0,
@@ -18986,9 +18921,9 @@ function PainelTV() {
     minute: '2-digit'
   })), React.createElement("p", {
     style: {
-      fontSize: 13,
+      fontSize: 11,
       color: '#94a3b8',
-      margin: '2px 0 0 0',
+      margin: '1px 0 0 0',
       fontWeight: 600,
       textTransform: 'capitalize'
     }
@@ -19001,8 +18936,8 @@ function PainelTV() {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: 18,
-      marginBottom: 26
+      gap: 14,
+      marginBottom: 16
     }
   }, [{
     label: 'Contratos Vencidos',
@@ -19039,17 +18974,17 @@ function PainelTV() {
     style: {
       background: bg,
       border: `2px solid ${cor}33`,
-      borderRadius: 20,
-      padding: '20px 24px',
+      borderRadius: 14,
+      padding: '10px 16px',
       display: 'flex',
       alignItems: 'center',
-      gap: 16
+      gap: 12
     }
   }, React.createElement("div", {
     style: {
-      width: 52,
-      height: 52,
-      borderRadius: 14,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       background: cor,
       display: 'flex',
       alignItems: 'center',
@@ -19057,10 +18992,10 @@ function PainelTV() {
       flexShrink: 0
     }
   }, React.createElement(Icone, {
-    className: "w-6 h-6 text-white"
+    className: "w-4 h-4 text-white"
   })), React.createElement("div", null, React.createElement("p", {
     style: {
-      fontSize: 38,
+      fontSize: 24,
       fontWeight: 900,
       color: cor,
       margin: 0,
@@ -19069,10 +19004,10 @@ function PainelTV() {
     }
   }, value), React.createElement("p", {
     style: {
-      fontSize: 13,
+      fontSize: 11,
       fontWeight: 700,
       color: '#475569',
-      margin: '4px 0 0 0'
+      margin: '2px 0 0 0'
     }
   }, label))))), React.createElement("div", {
     style: {
@@ -19110,10 +19045,11 @@ function PainelTV() {
   }, "Nenhum contrato em vig\xEAncia cadastrado")) : React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
-      gap: 18
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gridAutoRows: 'min-content',
+      gap: '8px 16px'
     }
-  }, paginaAtual.map(item => React.createElement(PainelTvCard, {
+  }, paginaAtual.map(item => React.createElement(PainelTvRow, {
     key: item.contractNumber,
     item: item
   })))), React.createElement("div", {
