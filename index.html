@@ -8294,9 +8294,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [activeIndicator,   setActiveIndicator]   = React.useState(null);
       // Ordem de exibição: por nome, ou por cadastro — para sequenciar atendimento por quem espera há mais tempo
       const [sortBy,            setSortBy]            = React.useState('nome');
+      // Filtro por período de cadastro (data de criação do registro)
+      const [filterCadastroDe,  setFilterCadastroDe]  = React.useState('');
+      const [filterCadastroAte, setFilterCadastroAte] = React.useState('');
 
       React.useEffect(() => {
         setSearch(''); setFilterLideranca(''); setFilterCoordenador(''); setActiveIndicator(null);
+        setFilterCadastroDe(''); setFilterCadastroAte('');
       }, [tab]);
 
       React.useEffect(() => {
@@ -8326,6 +8330,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
         if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
+        if (filterCadastroDe || filterCadastroAte) {
+          const dCriado = toJsDate(r.createdAt);
+          if (!dCriado) return false;   // sem data de cadastro não entra num filtro de período
+          if (filterCadastroDe  && dCriado < new Date(filterCadastroDe + 'T00:00:00'))  return false;
+          if (filterCadastroAte && dCriado > new Date(filterCadastroAte + 'T23:59:59')) return false;
+        }
         if (activeIndicator === 'atendidos'   && r.status !== 'atendido' && r.status !== 'concluido') return false;
         if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
         if (activeIndicator === 'pendente'    && r.status !== 'pendente') return false;
@@ -8481,8 +8491,25 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 {coordenadorOpts.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
 
-              {(filterLideranca || filterCoordenador) && (
-                <button onClick={() => { setFilterLideranca(''); setFilterCoordenador(''); }}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all"
+                style={(filterCadastroDe || filterCadastroAte)
+                  ? {borderColor: accentColor, background: accentColor + '10'}
+                  : {borderColor:'#e5e7eb', background:'#fff'}}>
+                <Calendar className="w-3.5 h-3.5 flex-shrink-0" style={{color: (filterCadastroDe || filterCadastroAte) ? accentColor : '#9ca3af'}} />
+                <span className="text-[11px] font-semibold whitespace-nowrap" style={{color: (filterCadastroDe || filterCadastroAte) ? accentColor : '#9ca3af'}}>Cadastrado</span>
+                <input type="date" value={filterCadastroDe} onChange={e => setFilterCadastroDe(e.target.value)}
+                  title="Cadastrado a partir de"
+                  max={filterCadastroAte || undefined}
+                  className="text-xs bg-transparent focus:outline-none py-1 w-32" style={{color:'#374151'}} />
+                <span className="text-gray-300 text-xs">–</span>
+                <input type="date" value={filterCadastroAte} onChange={e => setFilterCadastroAte(e.target.value)}
+                  title="Cadastrado até"
+                  min={filterCadastroDe || undefined}
+                  className="text-xs bg-transparent focus:outline-none py-1 w-32" style={{color:'#374151'}} />
+              </div>
+
+              {(filterLideranca || filterCoordenador || filterCadastroDe || filterCadastroAte) && (
+                <button onClick={() => { setFilterLideranca(''); setFilterCoordenador(''); setFilterCadastroDe(''); setFilterCadastroAte(''); }}
                   className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
                   <X className="w-3.5 h-3.5" />
                   Limpar filtros
