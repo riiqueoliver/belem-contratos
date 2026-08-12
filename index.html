@@ -397,6 +397,7 @@
     const ScrollText      = ({className}) => <SVG className={className}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="9" x2="16" y2="9"/></SVG>;
     const ImageIcon       = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></SVG>;
     const Receipt         = ({className}) => <SVG className={className}><path d="M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2.5 1.5L9 2 6.5 3.5z"/><line x1="8" y1="8" x2="15" y2="8"/><line x1="8" y1="12" x2="15" y2="12"/></SVG>;
+    const ArrowUpDown     = ({className}) => <SVG className={className}><path d="M3 16l4 4 4-4"/><path d="M7 20V4"/><path d="M21 8l-4-4-4 4"/><path d="M17 4v16"/></SVG>;
     const GDocLayersIcon  = ({className}) => <SVG className={className}><rect x="2" y="14" width="14" height="8" rx="2"/><rect x="6" y="9" width="14" height="8" rx="2"/><rect x="10" y="4" width="12" height="7" rx="2"/></SVG>;
     const ParcelasIcon    = ({className}) => <SVG className={className}><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2-1.5L5.5 21Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></SVG>;
     const ArcanjoIcon     = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/></SVG>;
@@ -426,6 +427,30 @@
     }
     function fmtDate(d) {
       return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    }
+    // Converte createdAt (Timestamp do Firestore, Date ou string) em Date — ou null se ausente/inválido
+    function toJsDate(v) {
+      if (!v) return null;
+      if (typeof v.toDate === 'function') return v.toDate();
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function fmtCriadoEm(v) {
+      const d = toJsDate(v);
+      return d ? fmtDate(d) : '—';
+    }
+    // "há 3 dias", "hoje", "há 2 meses" — para priorizar quem está esperando há mais tempo
+    function fmtHaTempo(v) {
+      const d = toJsDate(v);
+      if (!d) return '';
+      const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+      if (dias <= 0) return 'hoje';
+      if (dias === 1) return 'há 1 dia';
+      if (dias < 30) return `há ${dias} dias`;
+      const meses = Math.floor(dias / 30);
+      if (meses < 12) return meses === 1 ? 'há 1 mês' : `há ${meses} meses`;
+      const anos = Math.floor(meses / 12);
+      return anos === 1 ? 'há 1 ano' : `há ${anos} anos`;
     }
     /* ── Modo privacidade ──────────────────────────────────
        Ao abrir o sistema os valores vêm ocultos; o olho na
@@ -8195,6 +8220,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         tab === 'certidao' ? { label: 'Tipo de Certidão', value: record.subtipo } : null,
         tab === 'rg' ? { label: 'Retorno', value: record.retorno } : null,
         { label: 'Observação', value: record.observacao },
+        record.createdAt ? { label: 'Cadastrado em', value: `${fmtCriadoEm(record.createdAt)} (${fmtHaTempo(record.createdAt)})` } : null,
       ].filter(Boolean);
 
       return (
@@ -8266,6 +8292,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [filterCoordenador, setFilterCoordenador] = React.useState('');
       const [statusMenu,        setStatusMenu]        = React.useState(null);
       const [activeIndicator,   setActiveIndicator]   = React.useState(null);
+      // Ordem de exibição: por nome, ou por cadastro — para sequenciar atendimento por quem espera há mais tempo
+      const [sortBy,            setSortBy]            = React.useState('nome');
 
       React.useEffect(() => {
         setSearch(''); setFilterLideranca(''); setFilterCoordenador(''); setActiveIndicator(null);
@@ -8304,7 +8332,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         if (activeIndicator === 'naoComp'     && r.status !== 'nao_compareceu') return false;
         if (activeIndicator === 'visita'      && r.status !== 'visita') return false;
         return true;
-      }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+      }).sort((a, b) => {
+        if (sortBy === 'antigo') {
+          const da = toJsDate(a.createdAt), db_ = toJsDate(b.createdAt);
+          if (da && db_) return da - db_;      // mais antigo primeiro
+          if (da) return -1;
+          if (db_) return 1;
+        }
+        return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+      });
 
       function getStatus(key) { return ARCANJO_ALL_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0]; }
 
@@ -8453,7 +8489,20 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </button>
               )}
 
-              <span className="ml-auto text-xs font-semibold text-gray-400 tracking-wide">
+              <div className="flex items-center gap-1.5 ml-auto">
+                <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                  title="Ordenar a lista"
+                  className="py-2 pl-2.5 pr-7 rounded-xl border text-xs font-semibold transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+                  style={sortBy === 'antigo'
+                    ? {borderColor: accentColor, color: accentColor, background: accentColor + '10', '--tw-ring-color': accentColor + '44'}
+                    : {borderColor:'#e5e7eb', color:'#6b7280', background:'#fff', '--tw-ring-color': accentColor + '44'}}>
+                  <option value="nome">Ordenar: Nome (A-Z)</option>
+                  <option value="antigo">Ordenar: Quem espera há mais tempo</option>
+                </select>
+              </div>
+
+              <span className="text-xs font-semibold text-gray-400 tracking-wide">
                 {filtered.length} {filtered.length === 1 ? 'pessoa' : 'pessoas'}
               </span>
             </div>
@@ -8479,6 +8528,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         {tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'}
                       </th>
+                      <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cadastrado em</th>
                       {tab === 'certidao' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo</th>}
                       {tab === 'rg' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Retorno</th>}
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Observação</th>
@@ -8502,6 +8552,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           <td className="px-5 py-3 text-gray-600">{r.lideranca || '—'}</td>
                           <td className="px-5 py-3 text-gray-600">{r.coordenador || '—'}</td>
                           <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{r.dataAgendamento || '—'}</td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <p className="text-gray-500 text-xs">{fmtCriadoEm(r.createdAt)}</p>
+                            {r.createdAt && (
+                              <p className="text-[10px] font-semibold mt-0.5" style={{color: sortBy === 'antigo' ? accentColor : '#c4c4d0'}}>
+                                {fmtHaTempo(r.createdAt)}
+                              </p>
+                            )}
+                          </td>
                           {tab === 'certidao' && (
                             <td className="px-5 py-3">
                               <span className="text-[11px] font-semibold px-2 py-1 rounded-full capitalize" style={{background:'#ecfeff', color:'#0891b2'}}>

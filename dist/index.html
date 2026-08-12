@@ -1263,6 +1263,19 @@ const Receipt = ({
   x2: "15",
   y2: "12"
 }));
+const ArrowUpDown = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("path", {
+  d: "M3 16l4 4 4-4"
+}), React.createElement("path", {
+  d: "M7 20V4"
+}), React.createElement("path", {
+  d: "M21 8l-4-4-4 4"
+}), React.createElement("path", {
+  d: "M17 4v16"
+}));
 const GDocLayersIcon = ({
   className
 }) => React.createElement(SVG, {
@@ -1386,6 +1399,28 @@ function fmtDate(d) {
     month: '2-digit',
     year: 'numeric'
   });
+}
+function toJsDate(v) {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') return v.toDate();
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtCriadoEm(v) {
+  const d = toJsDate(v);
+  return d ? fmtDate(d) : '—';
+}
+function fmtHaTempo(v) {
+  const d = toJsDate(v);
+  if (!d) return '';
+  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (dias <= 0) return 'hoje';
+  if (dias === 1) return 'há 1 dia';
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  if (meses < 12) return meses === 1 ? 'há 1 mês' : `há ${meses} meses`;
+  const anos = Math.floor(meses / 12);
+  return anos === 1 ? 'há 1 ano' : `há ${anos} anos`;
 }
 let VALORES_OCULTOS = true;
 function setValoresOcultos(v) {
@@ -11438,7 +11473,10 @@ function ArcanjoViewModal({
   } : null, {
     label: 'Observação',
     value: record.observacao
-  }].filter(Boolean);
+  }, record.createdAt ? {
+    label: 'Cadastrado em',
+    value: `${fmtCriadoEm(record.createdAt)} (${fmtHaTempo(record.createdAt)})`
+  } : null].filter(Boolean);
   return React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4",
     style: {
@@ -11542,6 +11580,7 @@ function ArcanjoPage({
   const [filterCoordenador, setFilterCoordenador] = React.useState('');
   const [statusMenu, setStatusMenu] = React.useState(null);
   const [activeIndicator, setActiveIndicator] = React.useState(null);
+  const [sortBy, setSortBy] = React.useState('nome');
   React.useEffect(() => {
     setSearch('');
     setFilterLideranca('');
@@ -11574,7 +11613,16 @@ function ArcanjoPage({
     if (activeIndicator === 'naoComp' && r.status !== 'nao_compareceu') return false;
     if (activeIndicator === 'visita' && r.status !== 'visita') return false;
     return true;
-  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  }).sort((a, b) => {
+    if (sortBy === 'antigo') {
+      const da = toJsDate(a.createdAt),
+        db_ = toJsDate(b.createdAt);
+      if (da && db_) return da - db_;
+      if (da) return -1;
+      if (db_) return 1;
+    }
+    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+  });
   function getStatus(key) {
     return ARCANJO_ALL_STATUSES.find(s => s.key === key) || ARCANJO_STATUSES[0];
   }
@@ -11848,8 +11896,32 @@ function ArcanjoPage({
     className: "flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
   }, React.createElement(X, {
     className: "w-3.5 h-3.5"
-  }), "Limpar filtros"), React.createElement("span", {
-    className: "ml-auto text-xs font-semibold text-gray-400 tracking-wide"
+  }), "Limpar filtros"), React.createElement("div", {
+    className: "flex items-center gap-1.5 ml-auto"
+  }, React.createElement(ArrowUpDown, {
+    className: "w-3.5 h-3.5 text-gray-300"
+  }), React.createElement("select", {
+    value: sortBy,
+    onChange: e => setSortBy(e.target.value),
+    title: "Ordenar a lista",
+    className: "py-2 pl-2.5 pr-7 rounded-xl border text-xs font-semibold transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: sortBy === 'antigo' ? {
+      borderColor: accentColor,
+      color: accentColor,
+      background: accentColor + '10',
+      '--tw-ring-color': accentColor + '44'
+    } : {
+      borderColor: '#e5e7eb',
+      color: '#6b7280',
+      background: '#fff',
+      '--tw-ring-color': accentColor + '44'
+    }
+  }, React.createElement("option", {
+    value: "nome"
+  }, "Ordenar: Nome (A-Z)"), React.createElement("option", {
+    value: "antigo"
+  }, "Ordenar: Quem espera h\xE1 mais tempo"))), React.createElement("span", {
+    className: "text-xs font-semibold text-gray-400 tracking-wide"
   }, filtered.length, " ", filtered.length === 1 ? 'pessoa' : 'pessoas'))), React.createElement("div", {
     className: "flex-1 overflow-auto px-8 pb-8"
   }, filtered.length === 0 ? React.createElement("div", {
@@ -11878,7 +11950,9 @@ function ArcanjoPage({
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Coordenador"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
-  }, tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'), tab === 'certidao' && React.createElement("th", {
+  }, tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Cadastrado em"), tab === 'certidao' && React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Tipo"), tab === 'rg' && React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
@@ -11914,7 +11988,16 @@ function ArcanjoPage({
       className: "px-5 py-3 text-gray-600"
     }, r.coordenador || '—'), React.createElement("td", {
       className: "px-5 py-3 text-gray-500 whitespace-nowrap"
-    }, r.dataAgendamento || '—'), tab === 'certidao' && React.createElement("td", {
+    }, r.dataAgendamento || '—'), React.createElement("td", {
+      className: "px-5 py-3 whitespace-nowrap"
+    }, React.createElement("p", {
+      className: "text-gray-500 text-xs"
+    }, fmtCriadoEm(r.createdAt)), r.createdAt && React.createElement("p", {
+      className: "text-[10px] font-semibold mt-0.5",
+      style: {
+        color: sortBy === 'antigo' ? accentColor : '#c4c4d0'
+      }
+    }, fmtHaTempo(r.createdAt))), tab === 'certidao' && React.createElement("td", {
       className: "px-5 py-3"
     }, React.createElement("span", {
       className: "text-[11px] font-semibold px-2 py-1 rounded-full capitalize",
