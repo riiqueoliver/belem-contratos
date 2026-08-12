@@ -8517,7 +8517,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <p className="text-sm mt-1 text-gray-300">Cadastre a primeira pessoa para começar</p>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{background:'#f8fafc'}}>
@@ -15238,7 +15238,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           </aside>
 
           {/* ── CONTEÚDO PRINCIPAL ─────────────────────────────── */}
-          <div className="flex-1 flex flex-col min-h-screen" style={{marginLeft:'64px'}}>
+          <div className="flex-1 flex flex-col min-h-screen min-w-0" style={{marginLeft:'64px'}}>
 
             {/* TOP BAR */}
             <header className="bg-white sticky top-0 z-40 px-6 flex items-center justify-between"
