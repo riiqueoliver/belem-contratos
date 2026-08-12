@@ -8549,13 +8549,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <thead>
                     <tr style={{background:'#f8fafc'}}>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nome / CPF</th>
+                      <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cadastrado em</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Telefone</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Liderança</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Coordenador</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         {tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'}
                       </th>
-                      <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cadastrado em</th>
                       {tab === 'certidao' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo</th>}
                       {tab === 'rg' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Retorno</th>}
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Observação</th>
@@ -8575,10 +8575,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             </button>
                             <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{r.cpf || '—'}</p>
                           </td>
-                          <td className="px-5 py-3 text-gray-500">{r.telefone || '—'}</td>
-                          <td className="px-5 py-3 text-gray-600">{r.lideranca || '—'}</td>
-                          <td className="px-5 py-3 text-gray-600">{r.coordenador || '—'}</td>
-                          <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{r.dataAgendamento || '—'}</td>
                           <td className="px-5 py-3 whitespace-nowrap">
                             <p className="text-gray-500 text-xs">{fmtCriadoEm(r.createdAt)}</p>
                             {r.createdAt && (
@@ -8587,6 +8583,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                               </p>
                             )}
                           </td>
+                          <td className="px-5 py-3 text-gray-500">{r.telefone || '—'}</td>
+                          <td className="px-5 py-3 text-gray-600">{r.lideranca || '—'}</td>
+                          <td className="px-5 py-3 text-gray-600">{r.coordenador || '—'}</td>
+                          <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{r.dataAgendamento || '—'}</td>
                           {tab === 'certidao' && (
                             <td className="px-5 py-3">
                               <span className="text-[11px] font-semibold px-2 py-1 rounded-full capitalize" style={{background:'#ecfeff', color:'#0891b2'}}>

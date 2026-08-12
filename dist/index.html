@@ -11997,15 +11997,15 @@ function ArcanjoPage({
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Nome / CPF"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Cadastrado em"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Telefone"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Lideran\xE7a"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Coordenador"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
-  }, tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'), React.createElement("th", {
-    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
-  }, "Cadastrado em"), tab === 'certidao' && React.createElement("th", {
+  }, tab === 'cras' ? 'Data Atendimento' : 'Data Agendamento'), tab === 'certidao' && React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Tipo"), tab === 'rg' && React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
@@ -12034,14 +12034,6 @@ function ArcanjoPage({
     }, r.nome), React.createElement("p", {
       className: "text-[11px] text-gray-400 mt-0.5 font-mono"
     }, r.cpf || '—')), React.createElement("td", {
-      className: "px-5 py-3 text-gray-500"
-    }, r.telefone || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-600"
-    }, r.lideranca || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-600"
-    }, r.coordenador || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
-    }, r.dataAgendamento || '—'), React.createElement("td", {
       className: "px-5 py-3 whitespace-nowrap"
     }, React.createElement("p", {
       className: "text-gray-500 text-xs"
@@ -12050,7 +12042,15 @@ function ArcanjoPage({
       style: {
         color: sortBy === 'antigo' ? accentColor : '#c4c4d0'
       }
-    }, fmtHaTempo(r.createdAt))), tab === 'certidao' && React.createElement("td", {
+    }, fmtHaTempo(r.createdAt))), React.createElement("td", {
+      className: "px-5 py-3 text-gray-500"
+    }, r.telefone || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, r.lideranca || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, r.coordenador || '—'), React.createElement("td", {
+      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
+    }, r.dataAgendamento || '—'), tab === 'certidao' && React.createElement("td", {
       className: "px-5 py-3"
     }, React.createElement("span", {
       className: "text-[11px] font-semibold px-2 py-1 rounded-full capitalize",
