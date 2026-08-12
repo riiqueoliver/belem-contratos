@@ -11996,8 +11996,12 @@ function ArcanjoPage({
     }, r.lideranca || '—'), React.createElement("td", {
       className: "px-5 py-3 text-gray-600 whitespace-nowrap"
     }, r.coordenador || '—'), React.createElement("td", {
-      className: "px-5 py-3 text-gray-500 whitespace-nowrap"
-    }, r.dataAgendamento || '—'), tab === 'certidao' && React.createElement("td", {
+      className: "px-5 py-3 text-gray-500 max-w-36 obs-cell"
+    }, React.createElement("p", {
+      className: "truncate text-xs"
+    }, r.dataAgendamento || '—'), r.dataAgendamento && React.createElement("div", {
+      className: "obs-tip"
+    }, r.dataAgendamento)), tab === 'certidao' && React.createElement("td", {
       className: "px-5 py-3"
     }, React.createElement("span", {
       className: "text-[11px] font-semibold px-2 py-1 rounded-full capitalize",

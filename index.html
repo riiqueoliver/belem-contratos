@@ -8559,7 +8559,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{r.telefone || '—'}</td>
                           <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{r.lideranca || '—'}</td>
                           <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{r.coordenador || '—'}</td>
-                          <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{r.dataAgendamento || '—'}</td>
+                          <td className="px-5 py-3 text-gray-500 max-w-36 obs-cell">
+                            <p className="truncate text-xs">{r.dataAgendamento || '—'}</p>
+                            {r.dataAgendamento && <div className="obs-tip">{r.dataAgendamento}</div>}
+                          </td>
                           {tab === 'certidao' && (
                             <td className="px-5 py-3">
                               <span className="text-[11px] font-semibold px-2 py-1 rounded-full capitalize" style={{background:'#ecfeff', color:'#0891b2'}}>
