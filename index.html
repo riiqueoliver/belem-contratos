@@ -13416,14 +13416,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     function PainelTvLinhaLista({ item, zebra }) {
       return (
         <div style={{
-          display:'grid', gridTemplateColumns:'100px 1fr 100px', alignItems:'center', gap:12,
-          padding:'6px 12px', background: zebra ? '#FAFBFC' : 'transparent',
+          display:'grid', gridTemplateColumns:'110px 1fr 110px', alignItems:'center', gap:12,
+          padding:'9px 12px', background: zebra ? '#FAFBFC' : 'transparent',
         }}>
-          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:13, fontWeight:600, color:'#475569'}}>{item.contractNumber}</span>
-          <span style={{fontSize:13, color:'#64748B', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:15, fontWeight:600, color:'#475569'}}>{item.contractNumber}</span>
+          <span style={{fontSize:15, color:'#64748B', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
             {item.contractorName || '—'}
           </span>
-          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:12, color:'#94A3B8', textAlign:'right'}}>
+          <span style={{fontFamily:PAINEL_TV_MONO, fontSize:14, color:'#94A3B8', textAlign:'right'}}>
             {item.endDate ? new Date(item.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
           </span>
         </div>

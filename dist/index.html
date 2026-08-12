@@ -18806,22 +18806,22 @@ function PainelTvLinhaLista({
   return React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: '100px 1fr 100px',
+      gridTemplateColumns: '110px 1fr 110px',
       alignItems: 'center',
       gap: 12,
-      padding: '6px 12px',
+      padding: '9px 12px',
       background: zebra ? '#FAFBFC' : 'transparent'
     }
   }, React.createElement("span", {
     style: {
       fontFamily: PAINEL_TV_MONO,
-      fontSize: 13,
+      fontSize: 15,
       fontWeight: 600,
       color: '#475569'
     }
   }, item.contractNumber), React.createElement("span", {
     style: {
-      fontSize: 13,
+      fontSize: 15,
       color: '#64748B',
       minWidth: 0,
       overflow: 'hidden',
@@ -18831,7 +18831,7 @@ function PainelTvLinhaLista({
   }, item.contractorName || '—'), React.createElement("span", {
     style: {
       fontFamily: PAINEL_TV_MONO,
-      fontSize: 12,
+      fontSize: 14,
       color: '#94A3B8',
       textAlign: 'right'
     }
