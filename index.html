@@ -663,6 +663,69 @@
       encerrado:  { label:'Encerrado',  badge:'bg-gray-100 text-gray-600 border-gray-200'          },
       rescindido: { label:'Rescindido', badge:'bg-red-100 text-red-700 border-red-200'             },
     };
+    // Motivos disponíveis ao encerrar um contrato — obrigatório escolher um para tirá-lo dos vigentes
+    const TERMINATION_REASONS = [
+      { key:'vigencia_encerrada',  label:'Vigência encerrada / contrato cumprido integralmente' },
+      { key:'rescisao_amigavel',   label:'Rescisão amigável / distrato' },
+      { key:'rescisao_unilateral', label:'Rescisão unilateral pela administração' },
+      { key:'substituido',         label:'Substituído por novo contrato' },
+      { key:'inexecucao',          label:'Inexecução contratual' },
+      { key:'outro',               label:'Outro motivo' },
+    ];
+    function terminationReasonLabel(key) {
+      return TERMINATION_REASONS.find(r => r.key === key)?.label || key || '—';
+    }
+    // Modal de confirmação para encerrar um contrato, com seleção obrigatória do motivo
+    function EncerrarContratoModal({ open, contractNumber, onClose, onConfirm }) {
+      const [reason, setReason] = useState(TERMINATION_REASONS[0].key);
+      const [note,   setNote]   = useState('');
+      useEffect(() => { if (open) { setReason(TERMINATION_REASONS[0].key); setNote(''); } }, [open]);
+      if (!open) return null;
+      return (
+        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md fade-in" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#fef2f2'}}>
+                <AlertTriangle className="w-4.5 h-4.5" style={{color:'#DC2626'}} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-gray-800">Encerrar Contrato</h3>
+                <p className="text-xs text-gray-400">{contractNumber}</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-gray-500 leading-relaxed">
+                O contrato sai da lista de contratos vigentes e passa a aparecer em <b>Contratos Inativos</b>. Ele não é excluído — todo o histórico é mantido.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Motivo do encerramento</label>
+                <select value={reason} onChange={e => setReason(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 bg-white">
+                  {TERMINATION_REASONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Observação (opcional)</label>
+                <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                          placeholder="Detalhe o motivo, se necessário…"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+              </div>
+            </div>
+            <div className="p-5 border-t border-gray-100 flex gap-3">
+              <button type="button" onClick={onClose}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 border-gray-200 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={() => onConfirm(reason, note)}
+                      className="flex-1 text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90"
+                      style={{background:'#DC2626'}}>
+                Confirmar Encerramento
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     /* ── Mapa de siglas de órgãos/secretarias ── */
     const UNIT_SIGLA_MAP = [
       [/\bsefin\b|finan[cç]as?/i,                         'SEFIN'      ],
@@ -2897,6 +2960,7 @@ Regras:
     ═══════════════════════════════════════════════════════ */
     function ContractsListDrawer({ open, onClose, contracts, contractMeta, onSelect, onEdit, onDelete }) {
       const [search, setSearch] = useState('');
+      const [showInativos, setShowInativos] = useState(false);
 
       const now = new Date(); now.setHours(12,0,0,0);
       const in7  = new Date(now); in7.setDate(now.getDate() + 7);
@@ -2916,7 +2980,7 @@ Regras:
         return Math.round((new Date(endDate+'T12:00:00') - now) / (1000*60*60*24));
       }
 
-      const unique = useMemo(() => {
+      const merged = useMemo(() => {
         const seen = new Set();
         const list = [];
         [...contracts].sort((a,b) => a.contractNumber.localeCompare(b.contractNumber))
@@ -2924,8 +2988,22 @@ Regras:
         Object.keys(contractMeta).sort().forEach(cn => {
           if (!seen.has(cn)) list.push({ contractNumber: cn, _metaOnly: true });
         });
+        return list;
+      }, [contracts, contractMeta]);
+
+      const inactiveCount = useMemo(() =>
+        merged.filter(c => effectiveSituation(contractMeta[c.contractNumber]) === 'encerrado').length,
+        [merged, contractMeta]
+      );
+      const activeCount = merged.length - inactiveCount;
+
+      const unique = useMemo(() => {
+        const bySituation = merged.filter(c => {
+          const isEncerrado = effectiveSituation(contractMeta[c.contractNumber]) === 'encerrado';
+          return showInativos ? isEncerrado : !isEncerrado;
+        });
         const q = search.toLowerCase();
-        const filtered = !q ? list : list.filter(c => {
+        const filtered = !q ? bySituation : bySituation.filter(c => {
           const m = contractMeta[c.contractNumber] || {};
           return c.contractNumber.toLowerCase().includes(q)
             || (m.object||'').toLowerCase().includes(q)
@@ -2935,7 +3013,7 @@ Regras:
         });
         // Ordenar: alertas primeiro (3→2→1→0)
         return [...filtered].sort((a,b) => contractAlertLevel(b.contractNumber) - contractAlertLevel(a.contractNumber));
-      }, [contracts, contractMeta, search]);
+      }, [merged, contractMeta, search, showInativos]);
 
       const alertCount = useMemo(() =>
         unique.filter(c => contractAlertLevel(c.contractNumber) > 0).length,
@@ -2970,17 +3048,29 @@ Regras:
             </div>
 
             {/* Search */}
-            <div className="px-4 py-3 border-b border-gray-200 bg-white">
+            <div className="px-4 py-3 border-b border-gray-200 bg-white space-y-2">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
                        placeholder="Buscar por número, objeto ou contratada…"
                        className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowInativos(false)}
+                        className="flex-1 text-xs font-bold py-2 rounded-xl transition-colors"
+                        style={!showInativos ? {background:BLUE, color:'#fff'} : {background:'#fff', color:'#64748b', border:'1px solid #e5e7eb'}}>
+                  Vigentes ({activeCount})
+                </button>
+                <button onClick={() => setShowInativos(true)}
+                        className="flex-1 text-xs font-bold py-2 rounded-xl transition-colors"
+                        style={showInativos ? {background:'#64748b', color:'#fff'} : {background:'#fff', color:'#64748b', border:'1px solid #e5e7eb'}}>
+                  Contratos Inativos ({inactiveCount})
+                </button>
+              </div>
             </div>
 
             {/* Banner de alertas */}
-            {alertCount > 0 && !search && (
+            {alertCount > 0 && !search && !showInativos && (
               <div className="px-4 pt-3 pb-1">
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
                   <Bell className="w-3.5 h-3.5 text-red-500 flex-shrink-0" style={{animation:'swing 1.4s ease-in-out infinite'}} />
@@ -3036,6 +3126,12 @@ Regras:
 
                       {m.object && <p className={`text-xs leading-snug mb-1 ${lvl > 0 ? ast.sub : 'text-gray-600'}`} style={{overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{m.object}</p>}
                       {m.contractorName && <p className={`text-[11px] flex items-center gap-1 ${lvl > 0 ? ast.sub : 'text-gray-400'}`}><Building2 className="w-3 h-3"/>{m.contractorName}</p>}
+                      {m.situation === 'encerrado' && m.terminationReason && (
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Motivo: {terminationReasonLabel(m.terminationReason)}
+                          {m.terminationDate ? ` · ${new Date(m.terminationDate+'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                        </p>
+                      )}
 
                       <div className="flex gap-2 mt-2 flex-wrap">
                         {c.client && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{c.client}</span>}
@@ -3070,7 +3166,7 @@ Regras:
               {unique.length === 0 && (
                 <div className="text-center py-14 text-gray-400 text-sm">
                   <Clipboard className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  {search ? 'Nenhum contrato encontrado.' : 'Nenhum contrato cadastrado ainda.'}
+                  {search ? 'Nenhum contrato encontrado.' : showInativos ? 'Nenhum contrato inativo.' : 'Nenhum contrato cadastrado ainda.'}
                 </div>
               )}
             </div>
@@ -3101,14 +3197,17 @@ Regras:
           fiscalSubstitute: m.fiscalSubstitute     || '',
           unit:             m.unit                 || '',
           situation:        m.situation            || 'ativo',
+          terminationReason: m.terminationReason    || '',
+          terminationNote:   m.terminationNote      || '',
+          terminationDate:   m.terminationDate      || '',
         };
       };
       const [form, setForm] = useState(() => buildForm());
+      const [showEncerrar, setShowEncerrar] = useState(false);
       useEffect(() => { if (open && contractNumber) setForm(buildForm()); }, [open, contractNumber, contractMeta, contracts]);
 
-      function handleSubmit(e) {
-        e.preventDefault();
-        onSave(contractNumber, {
+      function basePayload() {
+        return {
           object: form.object, modality: form.modality,
           contractorName: form.contractorName, contractorCnpj: form.contractorCnpj,
           globalValue: parseFloat(form.globalValue) || 0,
@@ -3116,7 +3215,30 @@ Regras:
           prazoMeses: form.prazoMeses || 0,
           manager: form.manager, fiscalPrimary: form.fiscalPrimary,
           fiscalSubstitute: form.fiscalSubstitute, unit: form.unit, situation: form.situation,
+        };
+      }
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        onSave(contractNumber, basePayload(), form.processNumber);
+      }
+
+      function handleEncerrar(reason, note) {
+        onSave(contractNumber, {
+          ...basePayload(), situation: 'encerrado',
+          terminationReason: reason, terminationNote: note,
+          terminationDate: new Date().toISOString().slice(0,10),
         }, form.processNumber);
+        setShowEncerrar(false);
+        onClose();
+      }
+
+      function handleReabrir() {
+        onSave(contractNumber, {
+          ...basePayload(), situation: 'ativo',
+          terminationReason: '', terminationNote: '', terminationDate: '',
+        }, form.processNumber);
+        onClose();
       }
 
       const F = ({ label, k, ph, type='text', children }) => (
@@ -3170,11 +3292,30 @@ Regras:
                     </F>
                     <F label="Situação" k="situation">
                       <select value={form.situation} onChange={e => setForm({...form, situation: e.target.value})}
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        {Object.entries(CONTRACT_SITUATION).filter(([k])=>k!=='vencido').map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                              disabled={form.situation === 'encerrado'}
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-400">
+                        {Object.entries(CONTRACT_SITUATION).filter(([k])=>k!=='vencido' && (k!=='encerrado' || form.situation==='encerrado')).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </F>
                   </div>
+                  {form.situation === 'encerrado' ? (
+                    <div className="rounded-xl border p-3 space-y-1.5" style={{borderColor:'#e5e7eb', background:'#f9fafb'}}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-gray-500">Contrato encerrado{form.terminationDate ? ` em ${new Date(form.terminationDate+'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p>
+                        <button type="button" onClick={handleReabrir}
+                                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0">
+                          Reabrir Contrato
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-600">Motivo: {terminationReasonLabel(form.terminationReason)}</p>
+                      {form.terminationNote && <p className="text-xs text-gray-400">{form.terminationNote}</p>}
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setShowEncerrar(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Encerrar Contrato
+                    </button>
+                  )}
                   <F label="Objeto do Contrato" k="object">
                     <textarea value={form.object} onChange={e => setForm({...form, object: e.target.value})}
                               placeholder="Descrição do objeto…" rows={2}
@@ -3243,6 +3384,8 @@ Regras:
               </button>
             </div>
           </div>
+          <EncerrarContratoModal open={showEncerrar} contractNumber={contractNumber}
+                                  onClose={() => setShowEncerrar(false)} onConfirm={handleEncerrar} />
         </>
       );
     }
@@ -4519,6 +4662,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     function ContractsPage({ contracts, contractMeta, onSelect, onNew, onEdit, onDelete, currentUser }) {
       const [search,       setSearch]       = useState('');
       const [statusFilter, setStatusFilter] = useState('all');
+      const [showInativos, setShowInativos] = useState(false);
 
       // Contrato único → summary
       const summaries = useMemo(() => {
@@ -4553,28 +4697,34 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         });
       }, [contracts, contractMeta]);
 
-      const filtered = useMemo(() => summaries.filter(s => {
+      const activeSummaries   = useMemo(() => summaries.filter(s => effectiveSituation(s.meta) !== 'encerrado'), [summaries]);
+      const inactiveSummaries = useMemo(() => summaries.filter(s => effectiveSituation(s.meta) === 'encerrado'), [summaries]);
+
+      const filtered = useMemo(() => {
         const q = search.toLowerCase();
-        const matchQ = !q ||
+        const matchQ = s => !q ||
           s.cn.toLowerCase().includes(q) ||
           (s.meta.contractorName||'').toLowerCase().includes(q) ||
           (s.meta.object||'').toLowerCase().includes(q) ||
           (s.meta.unit||'').toLowerCase().includes(q);
-        const matchS =
-          statusFilter === 'all' ||
-          s.overall === statusFilter ||
-          (statusFilter === 'active' && s.overall !== 'completed');
-        return matchQ && matchS;
-      }), [summaries, search, statusFilter]);
+        if (showInativos) return inactiveSummaries.filter(matchQ);
+        return activeSummaries.filter(s => {
+          const matchS =
+            statusFilter === 'all' ||
+            s.overall === statusFilter ||
+            (statusFilter === 'active' && s.overall !== 'completed');
+          return matchQ(s) && matchS;
+        });
+      }, [activeSummaries, inactiveSummaries, search, statusFilter, showInativos]);
 
       const kpi = useMemo(() => ({
-        total:     summaries.length,
-        active:    summaries.filter(s => s.overall === 'on-time' || s.overall === 'due-today').length,
-        waiting:   summaries.filter(s => s.overall === 'waiting').length,
-        overdue:   summaries.filter(s => s.overall === 'overdue').length,
-        completed: summaries.filter(s => s.overall === 'completed').length,
-        value:     summaries.reduce((s, c) => s + c.globalVal, 0),
-      }), [summaries]);
+        total:     activeSummaries.length,
+        active:    activeSummaries.filter(s => s.overall === 'on-time' || s.overall === 'due-today').length,
+        waiting:   activeSummaries.filter(s => s.overall === 'waiting').length,
+        overdue:   activeSummaries.filter(s => s.overall === 'overdue').length,
+        completed: activeSummaries.filter(s => s.overall === 'completed').length,
+        value:     activeSummaries.reduce((s, c) => s + c.globalVal, 0),
+      }), [activeSummaries]);
 
       const STC = {
         'on-time':   { label:'Em Dia',                color: BLUE,     bg:'#eff6ff', border:'#bfdbfe' },
@@ -4610,21 +4760,37 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </button>
           </div>
 
-          {/* ── KPI strip ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label:'Total',              value:kpi.total,     color: BLUE,     key:'all'       },
-              { label:'Aguardando Pgto.',   value:kpi.waiting,   color:'#b45309', key:'waiting'   },
-              { label:'Em Atraso',          value:kpi.overdue,   color:'#dc2626', key:'overdue'   },
-              { label:'Pagas',              value:kpi.completed, color: GREEN,    key:'completed' },
-            ].map(k => (
-              <div key={k.label} onClick={() => setStatusFilter(k.key)}
-                   className={`bg-white rounded-2xl px-4 py-3 border shadow-sm cursor-pointer hover:shadow-md transition-all ${statusFilter === k.key ? 'border-gray-300' : 'border-gray-100'}`}>
-                <p className="text-2xl font-black leading-none" style={{color: k.color}}>{k.value}</p>
-                <p className="text-xs font-semibold text-gray-400 mt-1">{k.label}</p>
-              </div>
-            ))}
+          {/* ── Vigentes / Inativos ── */}
+          <div className="flex gap-2">
+            <button onClick={() => setShowInativos(false)}
+                    className="flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors"
+                    style={!showInativos ? {background:BLUE, color:'#fff'} : {background:'#fff', color:'#64748b', border:'1px solid #e5e7eb'}}>
+              Vigentes ({activeSummaries.length})
+            </button>
+            <button onClick={() => setShowInativos(true)}
+                    className="flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors"
+                    style={showInativos ? {background:'#64748b', color:'#fff'} : {background:'#fff', color:'#64748b', border:'1px solid #e5e7eb'}}>
+              Contratos Inativos ({inactiveSummaries.length})
+            </button>
           </div>
+
+          {/* ── KPI strip ── */}
+          {!showInativos && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label:'Total',              value:kpi.total,     color: BLUE,     key:'all'       },
+                { label:'Aguardando Pgto.',   value:kpi.waiting,   color:'#b45309', key:'waiting'   },
+                { label:'Em Atraso',          value:kpi.overdue,   color:'#dc2626', key:'overdue'   },
+                { label:'Pagas',              value:kpi.completed, color: GREEN,    key:'completed' },
+              ].map(k => (
+                <div key={k.label} onClick={() => setStatusFilter(k.key)}
+                     className={`bg-white rounded-2xl px-4 py-3 border shadow-sm cursor-pointer hover:shadow-md transition-all ${statusFilter === k.key ? 'border-gray-300' : 'border-gray-100'}`}>
+                  <p className="text-2xl font-black leading-none" style={{color: k.color}}>{k.value}</p>
+                  <p className="text-xs font-semibold text-gray-400 mt-1">{k.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Busca + filtros ── */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
@@ -4635,19 +4801,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
                      style={{'--tw-ring-color': BLUE}} />
             </div>
-            <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-shrink-0">
-              {FILTERS.map(f => (
-                <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                        style={statusFilter===f.key ? {background:BLUE, color:'#fff'} : {color:'#64748b'}}>
-                  {f.label}
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black"
-                        style={statusFilter===f.key ? {background:'rgba(255,255,255,0.2)'} : {background:'#f1f5f9'}}>
-                    {f.count}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {!showInativos && (
+              <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-shrink-0">
+                {FILTERS.map(f => (
+                  <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                          style={statusFilter===f.key ? {background:BLUE, color:'#fff'} : {color:'#64748b'}}>
+                    {f.label}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black"
+                          style={statusFilter===f.key ? {background:'rgba(255,255,255,0.2)'} : {background:'#f1f5f9'}}>
+                      {f.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Grid de cards ── */}
@@ -4660,7 +4828,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {filtered.map(s => {
-                const cfg   = STC[s.overall] || STC['on-time'];
+                const cfg   = showInativos ? { label:'Encerrado', color:'#6b7280', bg:'#f3f4f6', border:'#e5e7eb' } : (STC[s.overall] || STC['on-time']);
                 const sigla = getUnitSigla(s.meta.unit || '') || s.meta.unit || '';
                 const isAdmin = currentUser.role === 'admin';
                 return (
@@ -4715,6 +4883,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       {/* Contratada */}
                       {s.meta.contractorName && (
                         <p className="text-[11px] text-gray-500 truncate mb-3 flex-shrink-0">{s.meta.contractorName}</p>
+                      )}
+
+                      {showInativos && s.meta.terminationReason && (
+                        <p className="text-[11px] text-gray-400 mb-3 flex-shrink-0">
+                          Motivo: {terminationReasonLabel(s.meta.terminationReason)}
+                          {s.meta.terminationDate ? ` · ${new Date(s.meta.terminationDate+'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                        </p>
                       )}
 
                       <div className="h-px bg-gray-100 mb-3 flex-shrink-0" />
@@ -6268,6 +6443,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [editContractPdfFile,    setEditContractPdfFile]    = useState(null);
       const [editContractPdfLoading, setEditContractPdfLoading] = useState(false);
       const [quickPdfUploading,      setQuickPdfUploading]      = useState(false);
+      const [showEncerrar,           setShowEncerrar]           = useState(false);
 
       useEffect(() => { if (!editMode) setEditForm(buildForm()); }, [contractNumber, contractMeta, editMode]);
 
@@ -6278,6 +6454,29 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         .sort((a, b) => a.nfDate.localeCompare(b.nfDate));
       const sitCfg   = CONTRACT_SITUATION[effectiveSituation(meta)] || CONTRACT_SITUATION.ativo;
       const additives = (contractAdditives || {})[contractNumber] || [];
+
+      function handleEncerrar(reason, note) {
+        onSaveEdit(contractNumber, {
+          object: meta.object, modality: meta.modality,
+          contractorName: meta.contractorName, contractorCnpj: meta.contractorCnpj,
+          globalValue: meta.globalValue, startDate: meta.startDate, endDate: meta.endDate,
+          prazoMeses: meta.prazoMeses, manager: meta.manager, fiscalPrimary: meta.fiscalPrimary,
+          fiscalSubstitute: meta.fiscalSubstitute, unit: meta.unit,
+          situation: 'encerrado', terminationReason: reason, terminationNote: note,
+          terminationDate: new Date().toISOString().slice(0,10),
+        });
+        setShowEncerrar(false);
+      }
+      function handleReabrir() {
+        onSaveEdit(contractNumber, {
+          object: meta.object, modality: meta.modality,
+          contractorName: meta.contractorName, contractorCnpj: meta.contractorCnpj,
+          globalValue: meta.globalValue, startDate: meta.startDate, endDate: meta.endDate,
+          prazoMeses: meta.prazoMeses, manager: meta.manager, fiscalPrimary: meta.fiscalPrimary,
+          fiscalSubstitute: meta.fiscalSubstitute, unit: meta.unit,
+          situation: 'ativo', terminationReason: '', terminationNote: '', terminationDate: '',
+        });
+      }
 
       // ── handlers ──
       async function handleSave() {
@@ -6669,6 +6868,17 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
                       <Edit2 className="w-3.5 h-3.5" /> Editar Contrato
                     </button>
+                    {effectiveSituation(meta) === 'encerrado' ? (
+                      <button onClick={handleReabrir} title="Reabrir contrato"
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
+                        Reabrir Contrato
+                      </button>
+                    ) : (
+                      <button onClick={() => setShowEncerrar(true)} title="Encerrar contrato"
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Encerrar Contrato
+                      </button>
+                    )}
                     {currentUser?.role === 'admin' && onDelete && (
                       <button onClick={() => onDelete(contractNumber)}
                               title="Excluir contrato"
@@ -6696,8 +6906,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <span className="text-2xl font-black leading-none" style={{color: BLUE}}>{contractNumber}</span>
                 </div>
                 <div className="w-px h-8 bg-gray-300" />
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <span className={`text-xs font-bold px-3 py-1 rounded-full border ${sitCfg.badge}`}>{sitCfg.label}</span>
+                  {meta.situation === 'encerrado' && meta.terminationReason && (
+                    <span className="text-[11px] text-gray-400" title={meta.terminationNote || ''}>
+                      Motivo: {terminationReasonLabel(meta.terminationReason)}
+                      {meta.terminationDate ? ` · ${new Date(meta.terminationDate+'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                    </span>
+                  )}
                   {meta.modality && (
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">{meta.modality}</span>
                   )}
@@ -6835,9 +7051,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   </F>
                   <F label="Situação" k="situation">
                     <select value={editForm.situation} onChange={e => setEditForm({...editForm, situation: e.target.value})}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      {Object.entries(CONTRACT_SITUATION).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                            disabled={editForm.situation === 'encerrado'}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-400">
+                      {Object.entries(CONTRACT_SITUATION).filter(([k])=>k!=='encerrado' || editForm.situation==='encerrado').map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
+                    {editForm.situation === 'encerrado' && (
+                      <p className="text-[11px] text-gray-400 mt-1">Use "Reabrir Contrato" (fora do modo de edição) para reverter.</p>
+                    )}
                   </F>
                 </div>
                 <F label="Órgão Contratante / Unidade" k="unit" ph="Ex.: Secretaria Municipal de Saúde — SESMA" />
@@ -7995,6 +8215,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
             );
           })()}
+          <EncerrarContratoModal open={showEncerrar} contractNumber={contractNumber}
+                                  onClose={() => setShowEncerrar(false)} onConfirm={handleEncerrar} />
         </>
       );
     }

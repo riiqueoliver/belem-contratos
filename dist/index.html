@@ -1663,6 +1663,101 @@ const CONTRACT_SITUATION = {
     badge: 'bg-red-100 text-red-700 border-red-200'
   }
 };
+const TERMINATION_REASONS = [{
+  key: 'vigencia_encerrada',
+  label: 'Vigência encerrada / contrato cumprido integralmente'
+}, {
+  key: 'rescisao_amigavel',
+  label: 'Rescisão amigável / distrato'
+}, {
+  key: 'rescisao_unilateral',
+  label: 'Rescisão unilateral pela administração'
+}, {
+  key: 'substituido',
+  label: 'Substituído por novo contrato'
+}, {
+  key: 'inexecucao',
+  label: 'Inexecução contratual'
+}, {
+  key: 'outro',
+  label: 'Outro motivo'
+}];
+function terminationReasonLabel(key) {
+  return TERMINATION_REASONS.find(r => r.key === key)?.label || key || '—';
+}
+function EncerrarContratoModal({
+  open,
+  contractNumber,
+  onClose,
+  onConfirm
+}) {
+  const [reason, setReason] = useState(TERMINATION_REASONS[0].key);
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    if (open) {
+      setReason(TERMINATION_REASONS[0].key);
+      setNote('');
+    }
+  }, [open]);
+  if (!open) return null;
+  return React.createElement("div", {
+    className: "fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4",
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-md fade-in",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "px-5 py-4 border-b border-gray-100 flex items-center gap-2.5"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#fef2f2'
+    }
+  }, React.createElement(AlertTriangle, {
+    className: "w-4.5 h-4.5",
+    style: {
+      color: '#DC2626'
+    }
+  })), React.createElement("div", null, React.createElement("h3", {
+    className: "font-bold text-sm text-gray-800"
+  }, "Encerrar Contrato"), React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, contractNumber))), React.createElement("div", {
+    className: "p-5 space-y-4"
+  }, React.createElement("p", {
+    className: "text-xs text-gray-500 leading-relaxed"
+  }, "O contrato sai da lista de contratos vigentes e passa a aparecer em ", React.createElement("b", null, "Contratos Inativos"), ". Ele n\xE3o \xE9 exclu\xEDdo \u2014 todo o hist\xF3rico \xE9 mantido."), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-medium text-gray-600 mb-1.5"
+  }, "Motivo do encerramento"), React.createElement("select", {
+    value: reason,
+    onChange: e => setReason(e.target.value),
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+  }, TERMINATION_REASONS.map(r => React.createElement("option", {
+    key: r.key,
+    value: r.key
+  }, r.label)))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-medium text-gray-600 mb-1.5"
+  }, "Observa\xE7\xE3o (opcional)"), React.createElement("textarea", {
+    value: note,
+    onChange: e => setNote(e.target.value),
+    rows: 2,
+    placeholder: "Detalhe o motivo, se necess\xE1rio\u2026",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+  }))), React.createElement("div", {
+    className: "p-5 border-t border-gray-100 flex gap-3"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 border-gray-200 hover:bg-gray-50"
+  }, "Cancelar"), React.createElement("button", {
+    type: "button",
+    onClick: () => onConfirm(reason, note),
+    className: "flex-1 text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90",
+    style: {
+      background: '#DC2626'
+    }
+  }, "Confirmar Encerramento"))));
+}
 const UNIT_SIGLA_MAP = [[/\bsefin\b|finan[cç]as?/i, 'SEFIN'], [/\bsecom\b|comunica[cç][aã]o/i, 'SECOM'], [/\bsemma\b|meio[\s-]ambiente/i, 'SEMMA'], [/\bsesma\b|sa[uú]de/i, 'SESMA'], [/\bbelemprev\b|previd[eê]ncia/i, 'BELEMPREV'], [/\bsemec\b|educa[cç][aã]o/i, 'SEMEC'], [/\bapmb\b|procurador/i, 'APMB'], [/\bseurb\b|urbanismo/i, 'SEURB'], [/\bsecon\b|controladoria/i, 'SECON'], [/\bsemas\b|assist[eê]ncia social/i, 'SEMAS'], [/\bsegsed\b|seguran[cç]a/i, 'SEGSED'], [/\bsemosp\b|obras/i, 'SEMOSP'], [/\bfunpapa\b/i, 'FUNPAPA'], [/\bcosanpa\b/i, 'COSANPA'], [/\bgabinete\b/i, 'GABINETE']];
 function getUnitSigla(unit) {
   if (!unit) return '';
@@ -4435,6 +4530,7 @@ function ContractsListDrawer({
   onDelete
 }) {
   const [search, setSearch] = useState('');
+  const [showInativos, setShowInativos] = useState(false);
   const now = new Date();
   now.setHours(12, 0, 0, 0);
   const in7 = new Date(now);
@@ -4453,7 +4549,7 @@ function ContractsListDrawer({
   function daysLeft(endDate) {
     return Math.round((new Date(endDate + 'T12:00:00') - now) / (1000 * 60 * 60 * 24));
   }
-  const unique = useMemo(() => {
+  const merged = useMemo(() => {
     const seen = new Set();
     const list = [];
     [...contracts].sort((a, b) => a.contractNumber.localeCompare(b.contractNumber)).forEach(c => {
@@ -4468,13 +4564,22 @@ function ContractsListDrawer({
         _metaOnly: true
       });
     });
+    return list;
+  }, [contracts, contractMeta]);
+  const inactiveCount = useMemo(() => merged.filter(c => effectiveSituation(contractMeta[c.contractNumber]) === 'encerrado').length, [merged, contractMeta]);
+  const activeCount = merged.length - inactiveCount;
+  const unique = useMemo(() => {
+    const bySituation = merged.filter(c => {
+      const isEncerrado = effectiveSituation(contractMeta[c.contractNumber]) === 'encerrado';
+      return showInativos ? isEncerrado : !isEncerrado;
+    });
     const q = search.toLowerCase();
-    const filtered = !q ? list : list.filter(c => {
+    const filtered = !q ? bySituation : bySituation.filter(c => {
       const m = contractMeta[c.contractNumber] || {};
       return c.contractNumber.toLowerCase().includes(q) || (m.object || '').toLowerCase().includes(q) || (m.contractorName || '').toLowerCase().includes(q) || (m.unit || '').toLowerCase().includes(q) || (c.client || '').toLowerCase().includes(q);
     });
     return [...filtered].sort((a, b) => contractAlertLevel(b.contractNumber) - contractAlertLevel(a.contractNumber));
-  }, [contracts, contractMeta, search]);
+  }, [merged, contractMeta, search, showInativos]);
   const alertCount = useMemo(() => unique.filter(c => contractAlertLevel(c.contractNumber) > 0).length, [unique]);
   const ALERT_STYLES = {
     3: {
@@ -4538,7 +4643,7 @@ function ContractsListDrawer({
   }, React.createElement(X, {
     className: "w-5 h-5"
   }))), React.createElement("div", {
-    className: "px-4 py-3 border-b border-gray-200 bg-white"
+    className: "px-4 py-3 border-b border-gray-200 bg-white space-y-2"
   }, React.createElement("div", {
     className: "relative"
   }, React.createElement(Search, {
@@ -4548,7 +4653,31 @@ function ContractsListDrawer({
     onChange: e => setSearch(e.target.value),
     placeholder: "Buscar por n\xFAmero, objeto ou contratada\u2026",
     className: "w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-  }))), alertCount > 0 && !search && React.createElement("div", {
+  })), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: () => setShowInativos(false),
+    className: "flex-1 text-xs font-bold py-2 rounded-xl transition-colors",
+    style: !showInativos ? {
+      background: BLUE,
+      color: '#fff'
+    } : {
+      background: '#fff',
+      color: '#64748b',
+      border: '1px solid #e5e7eb'
+    }
+  }, "Vigentes (", activeCount, ")"), React.createElement("button", {
+    onClick: () => setShowInativos(true),
+    className: "flex-1 text-xs font-bold py-2 rounded-xl transition-colors",
+    style: showInativos ? {
+      background: '#64748b',
+      color: '#fff'
+    } : {
+      background: '#fff',
+      color: '#64748b',
+      border: '1px solid #e5e7eb'
+    }
+  }, "Contratos Inativos (", inactiveCount, ")"))), alertCount > 0 && !search && !showInativos && React.createElement("div", {
     className: "px-4 pt-3 pb-1"
   }, React.createElement("div", {
     className: "flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200"
@@ -4611,7 +4740,9 @@ function ContractsListDrawer({
       className: `text-[11px] flex items-center gap-1 ${lvl > 0 ? ast.sub : 'text-gray-400'}`
     }, React.createElement(Building2, {
       className: "w-3 h-3"
-    }), m.contractorName), React.createElement("div", {
+    }), m.contractorName), m.situation === 'encerrado' && m.terminationReason && React.createElement("p", {
+      className: "text-[11px] text-gray-400 mt-0.5"
+    }, "Motivo: ", terminationReasonLabel(m.terminationReason), m.terminationDate ? ` · ${new Date(m.terminationDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''), React.createElement("div", {
       className: "flex gap-2 mt-2 flex-wrap"
     }, c.client && React.createElement("span", {
       className: "text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium"
@@ -4644,7 +4775,7 @@ function ContractsListDrawer({
     className: "text-center py-14 text-gray-400 text-sm"
   }, React.createElement(Clipboard, {
     className: "w-10 h-10 mx-auto mb-3 opacity-20"
-  }), search ? 'Nenhum contrato encontrado.' : 'Nenhum contrato cadastrado ainda.'))));
+  }), search ? 'Nenhum contrato encontrado.' : showInativos ? 'Nenhum contrato inativo.' : 'Nenhum contrato cadastrado ainda.'))));
 }
 function EditContractDrawer({
   open,
@@ -4671,16 +4802,19 @@ function EditContractDrawer({
       fiscalPrimary: m.fiscalPrimary || '',
       fiscalSubstitute: m.fiscalSubstitute || '',
       unit: m.unit || '',
-      situation: m.situation || 'ativo'
+      situation: m.situation || 'ativo',
+      terminationReason: m.terminationReason || '',
+      terminationNote: m.terminationNote || '',
+      terminationDate: m.terminationDate || ''
     };
   };
   const [form, setForm] = useState(() => buildForm());
+  const [showEncerrar, setShowEncerrar] = useState(false);
   useEffect(() => {
     if (open && contractNumber) setForm(buildForm());
   }, [open, contractNumber, contractMeta, contracts]);
-  function handleSubmit(e) {
-    e.preventDefault();
-    onSave(contractNumber, {
+  function basePayload() {
+    return {
       object: form.object,
       modality: form.modality,
       contractorName: form.contractorName,
@@ -4694,7 +4828,32 @@ function EditContractDrawer({
       fiscalSubstitute: form.fiscalSubstitute,
       unit: form.unit,
       situation: form.situation
+    };
+  }
+  function handleSubmit(e) {
+    e.preventDefault();
+    onSave(contractNumber, basePayload(), form.processNumber);
+  }
+  function handleEncerrar(reason, note) {
+    onSave(contractNumber, {
+      ...basePayload(),
+      situation: 'encerrado',
+      terminationReason: reason,
+      terminationNote: note,
+      terminationDate: new Date().toISOString().slice(0, 10)
     }, form.processNumber);
+    setShowEncerrar(false);
+    onClose();
+  }
+  function handleReabrir() {
+    onSave(contractNumber, {
+      ...basePayload(),
+      situation: 'ativo',
+      terminationReason: '',
+      terminationNote: '',
+      terminationDate: ''
+    }, form.processNumber);
+    onClose();
   }
   const F = ({
     label,
@@ -4797,11 +4956,36 @@ function EditContractDrawer({
       ...form,
       situation: e.target.value
     }),
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-  }, Object.entries(CONTRACT_SITUATION).filter(([k]) => k !== 'vencido').map(([k, v]) => React.createElement("option", {
+    disabled: form.situation === 'encerrado',
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+  }, Object.entries(CONTRACT_SITUATION).filter(([k]) => k !== 'vencido' && (k !== 'encerrado' || form.situation === 'encerrado')).map(([k, v]) => React.createElement("option", {
     key: k,
     value: k
-  }, v.label))))), React.createElement(F, {
+  }, v.label))))), form.situation === 'encerrado' ? React.createElement("div", {
+    className: "rounded-xl border p-3 space-y-1.5",
+    style: {
+      borderColor: '#e5e7eb',
+      background: '#f9fafb'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center justify-between gap-2"
+  }, React.createElement("p", {
+    className: "text-xs font-bold text-gray-500"
+  }, "Contrato encerrado", form.terminationDate ? ` em ${new Date(form.terminationDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''), React.createElement("button", {
+    type: "button",
+    onClick: handleReabrir,
+    className: "text-[11px] font-bold px-2.5 py-1 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0"
+  }, "Reabrir Contrato")), React.createElement("p", {
+    className: "text-xs text-gray-600"
+  }, "Motivo: ", terminationReasonLabel(form.terminationReason)), form.terminationNote && React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, form.terminationNote)) : React.createElement("button", {
+    type: "button",
+    onClick: () => setShowEncerrar(true),
+    className: "flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+  }, React.createElement(AlertTriangle, {
+    className: "w-3.5 h-3.5"
+  }), " Encerrar Contrato"), React.createElement(F, {
     label: "Objeto do Contrato",
     k: "object"
   }, React.createElement("textarea", {
@@ -4928,7 +5112,12 @@ function EditContractDrawer({
     style: {
       background: BLUE
     }
-  }, "Salvar Altera\xE7\xF5es"))));
+  }, "Salvar Altera\xE7\xF5es"))), React.createElement(EncerrarContratoModal, {
+    open: showEncerrar,
+    contractNumber: contractNumber,
+    onClose: () => setShowEncerrar(false),
+    onConfirm: handleEncerrar
+  }));
 }
 function PdfViewer({
   open,
@@ -6432,6 +6621,7 @@ function ContractsPage({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showInativos, setShowInativos] = useState(false);
   const summaries = useMemo(() => {
     const cns = [...new Set([...Object.keys(contractMeta), ...contracts.map(c => c.contractNumber)])];
     return cns.map(cn => {
@@ -6469,20 +6659,25 @@ function ContractsPage({
       };
     });
   }, [contracts, contractMeta]);
-  const filtered = useMemo(() => summaries.filter(s => {
+  const activeSummaries = useMemo(() => summaries.filter(s => effectiveSituation(s.meta) !== 'encerrado'), [summaries]);
+  const inactiveSummaries = useMemo(() => summaries.filter(s => effectiveSituation(s.meta) === 'encerrado'), [summaries]);
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const matchQ = !q || s.cn.toLowerCase().includes(q) || (s.meta.contractorName || '').toLowerCase().includes(q) || (s.meta.object || '').toLowerCase().includes(q) || (s.meta.unit || '').toLowerCase().includes(q);
-    const matchS = statusFilter === 'all' || s.overall === statusFilter || statusFilter === 'active' && s.overall !== 'completed';
-    return matchQ && matchS;
-  }), [summaries, search, statusFilter]);
+    const matchQ = s => !q || s.cn.toLowerCase().includes(q) || (s.meta.contractorName || '').toLowerCase().includes(q) || (s.meta.object || '').toLowerCase().includes(q) || (s.meta.unit || '').toLowerCase().includes(q);
+    if (showInativos) return inactiveSummaries.filter(matchQ);
+    return activeSummaries.filter(s => {
+      const matchS = statusFilter === 'all' || s.overall === statusFilter || statusFilter === 'active' && s.overall !== 'completed';
+      return matchQ(s) && matchS;
+    });
+  }, [activeSummaries, inactiveSummaries, search, statusFilter, showInativos]);
   const kpi = useMemo(() => ({
-    total: summaries.length,
-    active: summaries.filter(s => s.overall === 'on-time' || s.overall === 'due-today').length,
-    waiting: summaries.filter(s => s.overall === 'waiting').length,
-    overdue: summaries.filter(s => s.overall === 'overdue').length,
-    completed: summaries.filter(s => s.overall === 'completed').length,
-    value: summaries.reduce((s, c) => s + c.globalVal, 0)
-  }), [summaries]);
+    total: activeSummaries.length,
+    active: activeSummaries.filter(s => s.overall === 'on-time' || s.overall === 'due-today').length,
+    waiting: activeSummaries.filter(s => s.overall === 'waiting').length,
+    overdue: activeSummaries.filter(s => s.overall === 'overdue').length,
+    completed: activeSummaries.filter(s => s.overall === 'completed').length,
+    value: activeSummaries.reduce((s, c) => s + c.globalVal, 0)
+  }), [activeSummaries]);
   const STC = {
     'on-time': {
       label: 'Em Dia',
@@ -6556,6 +6751,30 @@ function ContractsPage({
   }, React.createElement(Plus, {
     className: "w-4 h-4"
   }), " Novo Contrato")), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: () => setShowInativos(false),
+    className: "flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors",
+    style: !showInativos ? {
+      background: BLUE,
+      color: '#fff'
+    } : {
+      background: '#fff',
+      color: '#64748b',
+      border: '1px solid #e5e7eb'
+    }
+  }, "Vigentes (", activeSummaries.length, ")"), React.createElement("button", {
+    onClick: () => setShowInativos(true),
+    className: "flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors",
+    style: showInativos ? {
+      background: '#64748b',
+      color: '#fff'
+    } : {
+      background: '#fff',
+      color: '#64748b',
+      border: '1px solid #e5e7eb'
+    }
+  }, "Contratos Inativos (", inactiveSummaries.length, ")")), !showInativos && React.createElement("div", {
     className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
   }, [{
     label: 'Total',
@@ -6602,7 +6821,7 @@ function ContractsPage({
     style: {
       '--tw-ring-color': BLUE
     }
-  })), React.createElement("div", {
+  })), !showInativos && React.createElement("div", {
     className: "flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-shrink-0"
   }, FILTERS.map(f => React.createElement("button", {
     key: f.key,
@@ -6632,7 +6851,12 @@ function ContractsPage({
   }, "Tente ajustar o filtro ou a busca.")) : React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
   }, filtered.map(s => {
-    const cfg = STC[s.overall] || STC['on-time'];
+    const cfg = showInativos ? {
+      label: 'Encerrado',
+      color: '#6b7280',
+      bg: '#f3f4f6',
+      border: '#e5e7eb'
+    } : STC[s.overall] || STC['on-time'];
     const sigla = getUnitSigla(s.meta.unit || '') || s.meta.unit || '';
     const isAdmin = currentUser.role === 'admin';
     return React.createElement("div", {
@@ -6703,7 +6927,9 @@ function ContractsPage({
       }
     }, s.meta.object), s.meta.contractorName && React.createElement("p", {
       className: "text-[11px] text-gray-500 truncate mb-3 flex-shrink-0"
-    }, s.meta.contractorName), React.createElement("div", {
+    }, s.meta.contractorName), showInativos && s.meta.terminationReason && React.createElement("p", {
+      className: "text-[11px] text-gray-400 mb-3 flex-shrink-0"
+    }, "Motivo: ", terminationReasonLabel(s.meta.terminationReason), s.meta.terminationDate ? ` · ${new Date(s.meta.terminationDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''), React.createElement("div", {
       className: "h-px bg-gray-100 mb-3 flex-shrink-0"
     }), React.createElement("div", {
       className: "grid grid-cols-3 gap-2 mb-3 flex-shrink-0"
@@ -9050,6 +9276,7 @@ function ContractDetailView({
   const [editContractPdfFile, setEditContractPdfFile] = useState(null);
   const [editContractPdfLoading, setEditContractPdfLoading] = useState(false);
   const [quickPdfUploading, setQuickPdfUploading] = useState(false);
+  const [showEncerrar, setShowEncerrar] = useState(false);
   useEffect(() => {
     if (!editMode) setEditForm(buildForm());
   }, [contractNumber, contractMeta, editMode]);
@@ -9057,6 +9284,47 @@ function ContractDetailView({
   const installments = contracts.filter(c => c.contractNumber === contractNumber).sort((a, b) => a.nfDate.localeCompare(b.nfDate));
   const sitCfg = CONTRACT_SITUATION[effectiveSituation(meta)] || CONTRACT_SITUATION.ativo;
   const additives = (contractAdditives || {})[contractNumber] || [];
+  function handleEncerrar(reason, note) {
+    onSaveEdit(contractNumber, {
+      object: meta.object,
+      modality: meta.modality,
+      contractorName: meta.contractorName,
+      contractorCnpj: meta.contractorCnpj,
+      globalValue: meta.globalValue,
+      startDate: meta.startDate,
+      endDate: meta.endDate,
+      prazoMeses: meta.prazoMeses,
+      manager: meta.manager,
+      fiscalPrimary: meta.fiscalPrimary,
+      fiscalSubstitute: meta.fiscalSubstitute,
+      unit: meta.unit,
+      situation: 'encerrado',
+      terminationReason: reason,
+      terminationNote: note,
+      terminationDate: new Date().toISOString().slice(0, 10)
+    });
+    setShowEncerrar(false);
+  }
+  function handleReabrir() {
+    onSaveEdit(contractNumber, {
+      object: meta.object,
+      modality: meta.modality,
+      contractorName: meta.contractorName,
+      contractorCnpj: meta.contractorCnpj,
+      globalValue: meta.globalValue,
+      startDate: meta.startDate,
+      endDate: meta.endDate,
+      prazoMeses: meta.prazoMeses,
+      manager: meta.manager,
+      fiscalPrimary: meta.fiscalPrimary,
+      fiscalSubstitute: meta.fiscalSubstitute,
+      unit: meta.unit,
+      situation: 'ativo',
+      terminationReason: '',
+      terminationNote: '',
+      terminationDate: ''
+    });
+  }
   async function handleSave() {
     if (editContractPdfFile) {
       setEditContractPdfLoading(true);
@@ -9495,7 +9763,17 @@ function ContractDetailView({
     className: "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
   }, React.createElement(Edit2, {
     className: "w-3.5 h-3.5"
-  }), " Editar Contrato"), currentUser?.role === 'admin' && onDelete && React.createElement("button", {
+  }), " Editar Contrato"), effectiveSituation(meta) === 'encerrado' ? React.createElement("button", {
+    onClick: handleReabrir,
+    title: "Reabrir contrato",
+    className: "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+  }, "Reabrir Contrato") : React.createElement("button", {
+    onClick: () => setShowEncerrar(true),
+    title: "Encerrar contrato",
+    className: "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+  }, React.createElement(AlertTriangle, {
+    className: "w-3.5 h-3.5"
+  }), " Encerrar Contrato"), currentUser?.role === 'admin' && onDelete && React.createElement("button", {
     onClick: () => onDelete(contractNumber),
     title: "Excluir contrato",
     className: "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
@@ -9521,10 +9799,13 @@ function ContractDetailView({
   }, contractNumber)), React.createElement("div", {
     className: "w-px h-8 bg-gray-300"
   }), React.createElement("div", {
-    className: "flex flex-wrap gap-2"
+    className: "flex flex-wrap gap-2 items-center"
   }, React.createElement("span", {
     className: `text-xs font-bold px-3 py-1 rounded-full border ${sitCfg.badge}`
-  }, sitCfg.label), meta.modality && React.createElement("span", {
+  }, sitCfg.label), meta.situation === 'encerrado' && meta.terminationReason && React.createElement("span", {
+    className: "text-[11px] text-gray-400",
+    title: meta.terminationNote || ''
+  }, "Motivo: ", terminationReasonLabel(meta.terminationReason), meta.terminationDate ? ` · ${new Date(meta.terminationDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''), meta.modality && React.createElement("span", {
     className: "text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100"
   }, meta.modality), meta.contractType === 'parceria' && React.createElement("span", {
     className: "flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border",
@@ -9743,11 +10024,14 @@ function ContractDetailView({
       ...editForm,
       situation: e.target.value
     }),
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-  }, Object.entries(CONTRACT_SITUATION).map(([k, v]) => React.createElement("option", {
+    disabled: editForm.situation === 'encerrado',
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+  }, Object.entries(CONTRACT_SITUATION).filter(([k]) => k !== 'encerrado' || editForm.situation === 'encerrado').map(([k, v]) => React.createElement("option", {
     key: k,
     value: k
-  }, v.label))))), React.createElement(F, {
+  }, v.label))), editForm.situation === 'encerrado' && React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-1"
+  }, "Use \"Reabrir Contrato\" (fora do modo de edi\xE7\xE3o) para reverter."))), React.createElement(F, {
     label: "\xD3rg\xE3o Contratante / Unidade",
     k: "unit",
     ph: "Ex.: Secretaria Municipal de Sa\xFAde \u2014 SESMA"
@@ -11062,7 +11346,12 @@ function ContractDetailView({
       nomeBD: nBD,
       nomeParc: nPar
     }));
-  })());
+  })(), React.createElement(EncerrarContratoModal, {
+    open: showEncerrar,
+    contractNumber: contractNumber,
+    onClose: () => setShowEncerrar(false),
+    onConfirm: handleEncerrar
+  }));
 }
 function DashKpiCard({
   icon,
