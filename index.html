@@ -8321,7 +8321,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     /* Campo de liderança com autocomplete — sugere nomes já cadastrados (clicando
        ou digitando o início) e ainda permite digitar um nome novo livremente.
        Evita duplicidade por grafias diferentes do mesmo nome (ex.: "wagner" x "Wagner"). */
-    function ArcanjoLiderancaField({ value, onChange, options, accent }) {
+    function ArcanjoLiderancaField({ value, onChange, options, accent, placeholder = 'Nome da liderança' }) {
       const [open, setOpen]           = React.useState(false);
       const [highlight, setHighlight] = React.useState(-1);
       const wrapRef = React.useRef(null);
@@ -8356,7 +8356,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       return (
         <div ref={wrapRef} className="relative">
           <input value={value} onChange={e => { onChange(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onKeyDown={onKeyDown}
-            placeholder="Nome da liderança" autoComplete="off"
+            placeholder={placeholder} autoComplete="off"
             className="w-full border border-gray-100 rounded-xl pl-3 pr-8 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all" />
           <button type="button" tabIndex={-1} onClick={() => setOpen(o => !o)}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600">
@@ -8365,7 +8365,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           {open && (
             <div className="absolute z-30 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1 arc-pop-in" style={{animationDuration:'.18s'}}>
               {filtered.length === 0 && !isNew && (
-                <p className="px-3 py-2.5 text-xs text-gray-400">Nenhuma liderança cadastrada ainda</p>
+                <p className="px-3 py-2.5 text-xs text-gray-400">Nenhuma opção cadastrada ainda</p>
               )}
               {filtered.map((o, i) => (
                 <button key={o} type="button" onMouseDown={e => e.preventDefault()} onClick={() => pick(o)}
@@ -8386,15 +8386,17 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    function ArcanjoModal({ tab, editing, onSubmit, onClose, liderancaOptions = [] }) {
+    function ArcanjoModal({ tab, editing, onSubmit, onClose, liderancaOptions = [], responsavelOptions = [] }) {
       const tabInfo = ARCANJO_TABS.find(t => t.key === tab);
-      const blank = { nome:'', nomeMae:'', cpf:'', endereco:'', lideranca:'', coordenador:'', telefone:'', observacao:'', dataAgendamento:'', status:'pendente', retorno:'', subtipo:'nascimento' };
+      const blank = { nome:'', nomeMae:'', cpf:'', endereco:'', lideranca:'', coordenador:'', telefone:'', observacao:'', dataAgendamento:'', status:'pendente', retorno:'', subtipo:'nascimento', responsavel:'', dataNascimento:'', cep:'', numeroCasa:'', bairro:'' };
       const [form, setForm] = React.useState(editing ? {
         nome: editing.nome || '', nomeMae: editing.nomeMae || '', cpf: editing.cpf || '', endereco: editing.endereco || '',
         lideranca: editing.lideranca || '', coordenador: editing.coordenador || '',
         telefone: editing.telefone || '', observacao: editing.observacao || '',
         dataAgendamento: editing.dataAgendamento || '', status: editing.status || 'pendente',
         retorno: editing.retorno || '', subtipo: editing.subtipo || 'nascimento',
+        responsavel: editing.responsavel || '', dataNascimento: editing.dataNascimento || '',
+        cep: editing.cep || '', numeroCasa: editing.numeroCasa || '', bairro: editing.bairro || '',
       } : blank);
       const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
       const accent = tabInfo.accent;
@@ -8443,6 +8445,20 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <label className={lc}>Endereço</label>
                 <input value={form.endereco} onChange={e => set('endereco', e.target.value)} placeholder="Endereço completo" className={ic} />
               </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className={lc}>CEP</label>
+                  <input value={form.cep} onChange={e => set('cep', e.target.value)} placeholder="00000-000" className={ic} />
+                </div>
+                <div>
+                  <label className={lc}>Nº Casa</label>
+                  <input value={form.numeroCasa} onChange={e => set('numeroCasa', e.target.value)} placeholder="Nº" className={ic} />
+                </div>
+                <div>
+                  <label className={lc}>Bairro</label>
+                  <input value={form.bairro} onChange={e => set('bairro', e.target.value)} placeholder="Bairro" className={ic} />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lc}>Liderança</label>
@@ -8479,6 +8495,18 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <input value={form.retorno} onChange={e => set('retorno', e.target.value)} placeholder="Informações de retorno" className={ic} />
                 </div>
               )}
+              {(tab === 'rg' || tab === 'certidao') && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={lc}>Data de Nascimento</label>
+                    <input value={form.dataNascimento} onChange={e => set('dataNascimento', e.target.value)} placeholder="dd/mm/aaaa" className={ic} />
+                  </div>
+                  <div>
+                    <label className={lc}>Responsável pelo Encaminhamento</label>
+                    <ArcanjoLiderancaField value={form.responsavel} onChange={v => set('responsavel', v)} options={responsavelOptions} accent={accent} placeholder="Nome do responsável" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className={lc}>Observação</label>
                 <textarea value={form.observacao} onChange={e => set('observacao', e.target.value)} placeholder="Observações adicionais..." rows={3}
@@ -8513,10 +8541,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         { label: 'Nome Completo', value: record.nome },
         tab === 'cras' ? { label: 'Nome da Mãe', value: record.nomeMae } : null,
         { label: 'CPF', value: record.cpf },
+        (tab === 'rg' || tab === 'certidao') ? { label: 'Data de Nascimento', value: record.dataNascimento } : null,
         { label: 'Endereço', value: record.endereco },
+        { label: 'CEP', value: record.cep },
+        { label: 'Nº Casa', value: record.numeroCasa },
+        { label: 'Bairro', value: record.bairro },
         { label: 'Telefone', value: record.telefone },
         { label: 'Liderança', value: record.lideranca },
         { label: 'Coordenador', value: record.coordenador },
+        (tab === 'rg' || tab === 'certidao') ? { label: 'Responsável', value: record.responsavel } : null,
         { label: tab === 'cras' ? 'Data do Atendimento' : 'Data do Agendamento', value: record.dataAgendamento },
         tab === 'certidao' ? { label: 'Tipo de Certidão', value: record.subtipo } : null,
         tab === 'rg' ? { label: 'Retorno', value: record.retorno } : null,
@@ -8583,6 +8616,193 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
+    // Modal para escolher o responsável (Cyris, Cleber ou um novo nome) antes de exportar a planilha
+    function ExportarResponsavelModal({ options, exporting, onClose, onConfirm }) {
+      const [nome, setNome]           = React.useState(options[0] || 'Cyris');
+      const [novo, setNovo]           = React.useState('');
+      const [usandoNovo, setUsandoNovo] = React.useState(false);
+      const escolhido = (usandoNovo ? novo : nome).trim();
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}} onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#059669'}}>
+                <Download className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-800 text-sm">Exportar planilha por responsável</h2>
+                <p className="text-xs text-gray-400">Pendentes de 2ª Via RG e 2ª Via Certidão</p>
+              </div>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Responsável</label>
+                {!usandoNovo ? (
+                  <select value={nome}
+                    onChange={e => { if (e.target.value === '__novo__') setUsandoNovo(true); else setNome(e.target.value); }}
+                    className="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all">
+                    {options.map(o => <option key={o} value={o}>{o}</option>)}
+                    <option value="__novo__">+ Adicionar novo nome…</option>
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input autoFocus value={novo} onChange={e => setNovo(e.target.value)} placeholder="Nome do responsável"
+                      className="flex-1 border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all" />
+                    <button type="button" onClick={() => { setUsandoNovo(false); setNovo(''); }}
+                      className="px-3 rounded-xl border border-gray-200 text-xs font-semibold text-gray-500 hover:bg-gray-50">Cancelar</button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                A planilha reúne todas as pessoas <b>pendentes</b> de 2ª Via de RG ou Certidão encaminhadas para esse responsável.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button type="button" disabled={!escolhido || exporting} onClick={() => onConfirm(escolhido)}
+                className="px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+                style={{background:'#059669'}}>
+                {exporting ? 'Gerando…' : 'Exportar Excel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Gera a planilha de pendentes (RG + Certidão) de um responsável específico.
+    // Considera tanto o campo estruturado "responsavel" quanto, para cadastros
+    // antigos que ainda não têm esse campo, o nome citado na observação.
+    async function exportarPendentesPorResponsavel(records, nome, addToast) {
+      const alvo = (records || []).filter(r => {
+        if (r.tipo !== 'rg' && r.tipo !== 'certidao') return false;
+        if (r.status !== 'pendente') return false;
+        const alvoNome = nome.trim().toLowerCase();
+        const respOk = (r.responsavel || '').trim().toLowerCase() === alvoNome;
+        const obsOk  = (r.observacao || '').toLowerCase().includes(alvoNome);
+        return respOk || obsOk;
+      });
+
+      if (alvo.length === 0) {
+        addToast(`Nenhum pendente encontrado para "${nome}".`);
+        return;
+      }
+
+      addToast('Gerando planilha…');
+      try {
+        if (!window.ExcelJS) {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+            s.onload = res; s.onerror = rej;
+            document.head.appendChild(s);
+          });
+        }
+        const ExcelJS = window.ExcelJS;
+        const wb = new ExcelJS.Workbook();
+        wb.creator = "Instituto Arcanjo's";
+        wb.created = new Date();
+
+        let logoId = null;
+        try {
+          const resp = await fetch('arcanjo-logo.jpg');
+          const buf = await resp.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let b = '';
+          for (let i = 0; i < bytes.byteLength; i++) b += String.fromCharCode(bytes[i]);
+          logoId = wb.addImage({ base64: btoa(b), extension: 'jpeg' });
+        } catch(e) { /* logo opcional */ }
+
+        const COLS = [
+          { header: 'Nome',          width: 32 },
+          { header: 'CPF',           width: 16 },
+          { header: 'D/N',           width: 13 },
+          { header: 'CEP',           width: 13 },
+          { header: 'Nº Casa',       width: 10 },
+          { header: 'Bairro',        width: 20 },
+          { header: 'Telefone',      width: 16 },
+          { header: 'Solicitação',   width: 18 },
+          { header: 'Cadastrado em', width: 14 },
+        ];
+
+        const ws = wb.addWorksheet('Pendentes');
+        ws.getRow(1).height = 55;
+        ws.getRow(2).height = 14;
+        ws.getRow(3).height = 22;
+
+        if (logoId !== null) {
+          ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 65, height: 65 } });
+        }
+
+        ws.mergeCells('B1:I1');
+        const tc = ws.getCell('B1');
+        tc.value = `Instituto Arcanjo's  —  Pendências de RG/Certidão · ${nome}`;
+        tc.font = { bold: true, size: 15, color: { argb: 'FF7B61C7' } };
+        tc.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        ws.mergeCells('B2:I2');
+        const sc = ws.getCell('B2');
+        const dt = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        sc.value = `Emitido em ${dt}  ·  ${alvo.length} pessoa${alvo.length !== 1 ? 's' : ''} pendente${alvo.length !== 1 ? 's' : ''}`;
+        sc.font = { size: 9, color: { argb: 'FF9CA3AF' } };
+        sc.alignment = { vertical: 'middle' };
+
+        ws.getColumn(1).width = 10;
+        COLS.forEach((c, i) => { ws.getColumn(i + 2).width = c.width; });
+
+        const hRow = ws.getRow(3);
+        COLS.forEach((c, i) => {
+          const cell = hRow.getCell(i + 2);
+          cell.value = c.header;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
+          cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        const ordenados = [...alvo].sort((a, b) => {
+          const da = toJsDate(a.createdAt), db_ = toJsDate(b.createdAt);
+          if (da && db_) return da - db_;
+          if (da) return -1;
+          if (db_) return 1;
+          return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+        });
+
+        ordenados.forEach((r, idx) => {
+          const row = ws.getRow(idx + 4);
+          const solicitacao = r.tipo === 'certidao'
+            ? `Certidão${r.subtipo ? ' - ' + r.subtipo.charAt(0).toUpperCase() + r.subtipo.slice(1) : ''}`
+            : 'RG';
+          const d = toJsDate(r.createdAt);
+          const criadoTxt = d ? d.toLocaleDateString('pt-BR') : '';
+          const vals = [r.nome||'', r.cpf||'', r.dataNascimento||'', r.cep||'', r.numeroCasa||'', r.bairro||'', r.telefone||'', solicitacao, criadoTxt];
+          vals.forEach((v, ci) => {
+            const cell = row.getCell(ci + 2);
+            cell.value = v;
+            cell.font = { size: 10 };
+            cell.alignment = { vertical: 'middle', horizontal: (ci === 7 || ci === 8) ? 'center' : 'left' };
+            if (idx % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+          });
+          row.height = 18;
+        });
+
+        ws.autoFilter = 'B3:J3';
+        ws.views = [{ state: 'frozen', ySplit: 3 }];
+
+        const buf = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pendentes-${nome.toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        addToast('Planilha exportada com sucesso!');
+      } catch(e) {
+        addToast('Erro ao exportar: ' + (e.message || 'falha'));
+      }
+    }
+
     function ArcanjoPage({ records, onAdd, onUpdate, onDelete, addToast, currentUser }) {
       const [tab, setTab] = React.useState('cras');
       const [showModal, setShowModal] = React.useState(false);
@@ -8591,13 +8811,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [search,            setSearch]            = React.useState('');
       const [filterLideranca,   setFilterLideranca]   = React.useState('');
       const [filterCoordenador, setFilterCoordenador] = React.useState('');
+      const [filterResponsavel, setFilterResponsavel] = React.useState('');
       const [statusMenu,        setStatusMenu]        = React.useState(null);
       const [activeIndicator,   setActiveIndicator]   = React.useState(null);
       // Ordem de exibição: por nome, ou por cadastro — para sequenciar atendimento por quem espera há mais tempo
       const [sortBy,            setSortBy]            = React.useState('nome');
+      const [showExportModal,   setShowExportModal]   = React.useState(false);
+      const [exporting,         setExporting]         = React.useState(false);
 
       React.useEffect(() => {
-        setSearch(''); setFilterLideranca(''); setFilterCoordenador(''); setActiveIndicator(null);
+        setSearch(''); setFilterLideranca(''); setFilterCoordenador(''); setActiveIndicator(null); setFilterResponsavel('');
       }, [tab]);
 
       React.useEffect(() => {
@@ -8626,6 +8849,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         return [...new Set(vals)].sort();
       }, [tabRecords]);
 
+      // Responsáveis pelo encaminhamento (RG / Certidão) — sempre inclui Cyris e Cleber como opções fixas
+      const responsavelOpts = React.useMemo(() => {
+        const vals = records.filter(r => r.tipo === 'rg' || r.tipo === 'certidao')
+          .map(r => (r.responsavel || '').trim()).filter(Boolean);
+        return [...new Set(['Cyris', 'Cleber', ...vals])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      }, [records]);
+
       const filtered = tabRecords.filter(r => {
         if (search && !r.nome?.toLowerCase().includes(search.toLowerCase()) &&
             !r.cpf?.includes(search) &&
@@ -8633,6 +8863,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
         if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
+        if (filterResponsavel && (r.responsavel || '').trim() !== filterResponsavel) return false;
         if (activeIndicator === 'atendidos'   && r.status !== 'atendido' && r.status !== 'concluido') return false;
         if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
         if (activeIndicator === 'pendente'    && r.status !== 'pendente') return false;
@@ -8751,14 +8982,24 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             })()}
 
             {/* Tabs */}
-            <div className="flex gap-1 p-1 rounded-2xl w-fit mb-6" style={{background:'#ede9fe'}}>
-              {ARCANJO_TABS.map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className="px-5 py-2 rounded-xl text-sm font-semibold transition-all"
-                  style={tab === t.key ? {background: t.accent, color:'#fff', boxShadow:'0 2px 10px rgba(0,0,0,.15)'} : {color:'#94a3b8'}}>
-                  {t.label}
+            <div className="flex items-center gap-3 mb-6 flex-wrap">
+              <div className="flex gap-1 p-1 rounded-2xl w-fit" style={{background:'#ede9fe'}}>
+                {ARCANJO_TABS.map(t => (
+                  <button key={t.key} onClick={() => setTab(t.key)}
+                    className="px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+                    style={tab === t.key ? {background: t.accent, color:'#fff', boxShadow:'0 2px 10px rgba(0,0,0,.15)'} : {color:'#94a3b8'}}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {(tab === 'rg' || tab === 'certidao') && (
+                <button onClick={() => setShowExportModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all hover:opacity-90"
+                  style={{borderColor:'#d1fae5', color:'#059669', background:'#f0fdf4'}}>
+                  <Download className="w-3.5 h-3.5" />
+                  Exportar planilha por responsável
                 </button>
-              ))}
+              )}
             </div>
 
             {/* Search + Filters + count */}
@@ -8788,8 +9029,19 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 {coordenadorOpts.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
 
-              {(filterLideranca || filterCoordenador) && (
-                <button onClick={() => { setFilterLideranca(''); setFilterCoordenador(''); }}
+              {(tab === 'rg' || tab === 'certidao') && (
+                <select value={filterResponsavel} onChange={e => setFilterResponsavel(e.target.value)}
+                  className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+                  style={filterResponsavel
+                    ? {borderColor: accentColor, color: accentColor, background: accentColor + '10', '--tw-ring-color': accentColor + '44'}
+                    : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff', '--tw-ring-color': accentColor + '44'}}>
+                  <option value="">Todos os Responsáveis</option>
+                  {responsavelOpts.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+
+              {(filterLideranca || filterCoordenador || filterResponsavel) && (
+                <button onClick={() => { setFilterLideranca(''); setFilterCoordenador(''); setFilterResponsavel(''); }}
                   className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
                   <X className="w-3.5 h-3.5" />
                   Limpar filtros
@@ -8838,6 +9090,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       </th>
                       {tab === 'certidao' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo</th>}
                       {tab === 'rg' && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Retorno</th>}
+                      {(tab === 'rg' || tab === 'certidao') && <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Responsável</th>}
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Observação</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
                       <th className="px-5 py-3 w-16"></th>
@@ -8878,6 +9131,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             </td>
                           )}
                           {tab === 'rg' && <td className="px-5 py-3 text-gray-500 max-w-36"><p className="truncate text-xs">{r.retorno || '—'}</p></td>}
+                          {(tab === 'rg' || tab === 'certidao') && (
+                            <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{r.responsavel || '—'}</td>
+                          )}
                           <td className="px-5 py-3 max-w-44 obs-cell">
                             <p className="truncate text-xs text-gray-500">{r.observacao || '—'}</p>
                             {r.observacao && <div className="obs-tip">{r.observacao}</div>}
@@ -8945,6 +9201,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               onSubmit={handleSubmit}
               onClose={() => { setShowModal(false); setEditing(null); }}
               liderancaOptions={allLiderancaOpts}
+              responsavelOptions={responsavelOpts}
             />
           )}
 
@@ -8954,6 +9211,23 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               tab={tab}
               onClose={() => setViewing(null)}
               onEdit={() => { setEditing(viewing); setViewing(null); setShowModal(true); }}
+            />
+          )}
+
+          {showExportModal && (
+            <ExportarResponsavelModal
+              options={responsavelOpts}
+              exporting={exporting}
+              onClose={() => setShowExportModal(false)}
+              onConfirm={async (nome) => {
+                setExporting(true);
+                try {
+                  await exportarPendentesPorResponsavel(records, nome, addToast);
+                  setShowExportModal(false);
+                } finally {
+                  setExporting(false);
+                }
+              }}
             />
           )}
         </div>
