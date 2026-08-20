@@ -9564,14 +9564,19 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     ═══════════════════════════════════════════════════════ */
     const CAMPANHA_COLOR = '#4338ca';
 
-    function CampanhaModal({ editing, onSubmit, onClose }) {
-      const blank = { nome:'', cpf:'', orgao:'', temVeiculo:false, placa:'', adesivou:false, evento:'', presente:false };
+    function CampanhaModal({ editing, eventos = [], onSubmit, onClose }) {
+      const blank = { nome:'', cpf:'', orgao:'', temVeiculo:false, placa:'', adesivou:false, presencas:{} };
       const [form, setForm] = React.useState(editing ? {
         nome: editing.nome || '', cpf: editing.cpf || '', orgao: editing.orgao || '',
         temVeiculo: !!editing.temVeiculo, placa: editing.placa || '', adesivou: !!editing.adesivou,
-        evento: editing.evento || '', presente: !!editing.presente,
+        presencas: { ...(editing.presencas || {}) },
       } : blank);
       const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+      const togglePresenca = (eventoId) => setForm(f => {
+        const presencas = { ...f.presencas };
+        if (presencas[eventoId]) delete presencas[eventoId]; else presencas[eventoId] = true;
+        return { ...f, presencas };
+      });
       const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
       const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
 
@@ -9631,14 +9636,22 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               )}
 
               <div>
-                <label className={lc}>Evento</label>
-                <input value={form.evento} onChange={e => set('evento', e.target.value)} placeholder="Nome do evento" className={ic} />
+                <label className={lc}>Presença em Eventos</label>
+                {eventos.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Nenhum evento cadastrado ainda. Use o botão "+ Eventos" na tela anterior.</p>
+                ) : (
+                  <div className="rounded-xl border border-gray-100 divide-y divide-gray-50 max-h-52 overflow-y-auto">
+                    {eventos.map(ev => (
+                      <label key={ev.id} className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-2.5 hover:bg-gray-50">
+                        <input type="checkbox" checked={!!form.presencas[ev.id]} onChange={() => togglePresenca(ev.id)}
+                          className="w-4 h-4 rounded flex-shrink-0" style={{accentColor: CAMPANHA_COLOR}} />
+                        <span className="text-sm text-gray-700 flex-1">{ev.nome}</span>
+                        <span className="text-[11px] text-gray-400 font-mono flex-shrink-0">{ev.data ? new Date(ev.data+'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
-              <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
-                <input type="checkbox" checked={form.presente} onChange={e => set('presente', e.target.checked)}
-                  className="w-4 h-4 rounded" style={{accentColor: CAMPANHA_COLOR}} />
-                <span className="text-sm font-semibold text-gray-700">Presente no evento</span>
-              </label>
             </form>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
@@ -9651,7 +9664,87 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    async function exportarCampanhaExcel(pessoas, addToast) {
+    // Lista os eventos cadastrados e permite adicionar um novo (nome + data) ou excluir
+    function CampanhaEventosModal({ eventos, onAdd, onDelete, onClose, addToast }) {
+      const [nome, setNome] = React.useState('');
+      const [data, setData] = React.useState('');
+      const [saving, setSaving] = React.useState(false);
+      const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+
+      async function handleAdd(e) {
+        e.preventDefault();
+        if (!nome.trim()) return;
+        setSaving(true);
+        try {
+          await onAdd({ nome: nome.trim(), data });
+          addToast('Evento cadastrado com sucesso!');
+          setNome(''); setData('');
+        } catch(err) {
+          addToast('Erro ao cadastrar evento: ' + (err.message || 'falha'));
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      const ordenados = [...eventos].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}} onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background: CAMPANHA_COLOR}}>
+                  <Calendar className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="font-bold text-gray-800 text-sm">Eventos</h2>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"><X className="w-4 h-4" /></button>
+            </div>
+
+            <form onSubmit={handleAdd} className="px-6 py-4 border-b border-gray-100 flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Nome do Evento</label>
+                <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Comício Centro" className={ic} />
+              </div>
+              <div className="w-36">
+                <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Data</label>
+                <input type="date" value={data} onChange={e => setData(e.target.value)} className={ic} />
+              </div>
+              <button type="submit" disabled={!nome.trim() || saving}
+                className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 flex-shrink-0"
+                style={{background: CAMPANHA_COLOR}} title="Adicionar evento">
+                <Plus className="w-4 h-4" />
+              </button>
+            </form>
+
+            <div className="overflow-y-auto flex-1 px-3 py-2">
+              {ordenados.length === 0 ? (
+                <p className="text-center text-xs text-gray-400 py-8">Nenhum evento cadastrado ainda.</p>
+              ) : (
+                ordenados.map(ev => (
+                  <div key={ev.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">{ev.nome}</p>
+                      <p className="text-[11px] text-gray-400 font-mono">{ev.data ? new Date(ev.data+'T12:00:00').toLocaleDateString('pt-BR') : 'sem data'}</p>
+                    </div>
+                    <button onClick={() => onDelete(ev.id)} title="Excluir evento"
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button type="button" onClick={onClose} className="w-full py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Fechar</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    async function exportarCampanhaExcel(pessoas, eventos, addToast) {
       if (!pessoas || pessoas.length === 0) { addToast('Nenhuma pessoa cadastrada para exportar.'); return; }
       addToast('Gerando planilha…');
       try {
@@ -9669,15 +9762,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         wb.created = new Date();
 
         const COLS = [
-          { header: 'Nome',          width: 32 },
-          { header: 'CPF',           width: 16 },
-          { header: 'Órgão',         width: 26 },
-          { header: 'Tem Veículo',   width: 13 },
-          { header: 'Placa',         width: 12 },
-          { header: 'Adesivou',      width: 12 },
-          { header: 'Evento',        width: 22 },
-          { header: 'Presente',      width: 12 },
-          { header: 'Cadastrado em', width: 14 },
+          { header: 'Nome',            width: 32 },
+          { header: 'CPF',             width: 16 },
+          { header: 'Órgão',           width: 26 },
+          { header: 'Tem Veículo',     width: 13 },
+          { header: 'Placa',           width: 12 },
+          { header: 'Adesivou',        width: 12 },
+          { header: 'Eventos Presente',width: 36 },
+          { header: 'Cadastrado em',   width: 14 },
         ];
 
         const ws = wb.addWorksheet('Campanha');
@@ -9693,27 +9785,34 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
+        const eventosPorId = {};
+        (eventos || []).forEach(ev => { eventosPorId[ev.id] = ev.nome; });
+
         pessoas.forEach((p, idx) => {
           const row = ws.getRow(idx + 2);
           const d = toJsDate(p.createdAt);
+          const nomesEventos = Object.keys(p.presencas || {})
+            .filter(id => p.presencas[id] && eventosPorId[id])
+            .map(id => eventosPorId[id])
+            .join(', ');
           const vals = [
             p.nome || '', p.cpf || '', p.orgao || '',
             p.temVeiculo ? 'Sim' : 'Não', p.temVeiculo ? (p.placa || '') : '',
             p.temVeiculo && p.adesivou ? 'Sim' : 'Não',
-            p.evento || '', p.presente ? 'Sim' : 'Não',
+            nomesEventos,
             d ? d.toLocaleDateString('pt-BR') : '',
           ];
           vals.forEach((v, ci) => {
             const cell = row.getCell(ci + 1);
             cell.value = v;
             cell.font = { size: 10 };
-            cell.alignment = { vertical: 'middle', horizontal: ci >= 3 ? 'center' : 'left' };
+            cell.alignment = { vertical: 'middle', horizontal: (ci >= 3 && ci !== 6) ? 'center' : 'left' };
             if (idx % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
           });
           row.height = 18;
         });
 
-        ws.autoFilter = 'A1:I1';
+        ws.autoFilter = 'A1:H1';
         ws.views = [{ state: 'frozen', ySplit: 1 }];
 
         const buf = await wb.xlsx.writeBuffer();
@@ -9730,14 +9829,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
     }
 
-    function CampanhaPage({ pessoas, onAdd, onUpdate, onDelete, addToast }) {
-      const [search,        setSearch]        = React.useState('');
-      const [filterOrgao,   setFilterOrgao]   = React.useState('');
-      const [filterVeiculo, setFilterVeiculo] = React.useState('');
-      const [filterAdesivo, setFilterAdesivo] = React.useState('');
-      const [filterPresente,setFilterPresente]= React.useState('');
-      const [showModal,     setShowModal]     = React.useState(false);
-      const [editing,       setEditing]       = React.useState(null);
+    function CampanhaPage({ pessoas, eventos, onAdd, onUpdate, onDelete, onAddEvento, onDeleteEvento, addToast }) {
+      const [search,          setSearch]          = React.useState('');
+      const [filterOrgao,     setFilterOrgao]     = React.useState('');
+      const [filterVeiculo,   setFilterVeiculo]   = React.useState('');
+      const [filterAdesivo,   setFilterAdesivo]   = React.useState('');
+      const [filterEvento,    setFilterEvento]    = React.useState('');
+      const [filterPresenca,  setFilterPresenca]  = React.useState('');
+      const [showModal,       setShowModal]       = React.useState(false);
+      const [editing,         setEditing]         = React.useState(null);
+      const [showEventosModal,setShowEventosModal]= React.useState(false);
 
       const orgaoOpts = React.useMemo(() => {
         const vals = pessoas.map(p => (p.orgao || '').trim()).filter(Boolean);
@@ -9751,8 +9852,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         if (filterVeiculo === 'nao' && p.temVeiculo) return false;
         if (filterAdesivo === 'sim' && !(p.temVeiculo && p.adesivou)) return false;
         if (filterAdesivo === 'nao' && (p.temVeiculo && p.adesivou)) return false;
-        if (filterPresente === 'sim' && !p.presente) return false;
-        if (filterPresente === 'nao' && p.presente) return false;
+        if (filterEvento) {
+          const esteve = !!(p.presencas && p.presencas[filterEvento]);
+          if (filterPresenca === 'nao' ? esteve : !esteve) return false;
+        }
         return true;
       });
 
@@ -9760,8 +9863,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         total:     pessoas.length,
         veiculo:   pessoas.filter(p => p.temVeiculo).length,
         adesivado: pessoas.filter(p => p.temVeiculo && p.adesivou).length,
-        presente:  pessoas.filter(p => p.presente).length,
-      }), [pessoas]);
+        eventos:   eventos.length,
+      }), [pessoas, eventos]);
 
       async function handleSubmit(data) {
         try {
@@ -9773,7 +9876,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         }
       }
 
-      const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterPresente;
+      const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterEvento;
 
       return (
         <div className="fade-in space-y-5">
@@ -9788,10 +9891,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => exportarCampanhaExcel(filtered, addToast)}
+              <button onClick={() => exportarCampanhaExcel(filtered, eventos, addToast)}
                 className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
                 style={{borderColor:'#d1fae5', color:'#059669', background:'#f0fdf4'}}>
                 <Download className="w-3.5 h-3.5" /> Exportar Excel
+              </button>
+              <button onClick={() => setShowEventosModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
+                style={{borderColor:'#e0e7ff', color: CAMPANHA_COLOR, background:'#eef2ff'}}>
+                <Calendar className="w-3.5 h-3.5" /> + Eventos
               </button>
               <button onClick={() => { setEditing(null); setShowModal(true); }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
@@ -9803,10 +9911,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label:'Total cadastradas', value: stats.total,     color: CAMPANHA_COLOR },
-              { label:'Com veículo',       value: stats.veiculo,   color:'#0284c7' },
-              { label:'Adesivados',        value: stats.adesivado, color:'#059669' },
-              { label:'Presentes',         value: stats.presente,  color:'#dc2626' },
+              { label:'Total cadastradas',   value: stats.total,     color: CAMPANHA_COLOR },
+              { label:'Com veículo',         value: stats.veiculo,   color:'#0284c7' },
+              { label:'Adesivados',          value: stats.adesivado, color:'#059669' },
+              { label:'Eventos cadastrados', value: stats.eventos,   color:'#dc2626' },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm">
                 <p className="text-2xl font-black leading-none" style={{color: k.color}}>{k.value}</p>
@@ -9848,17 +9956,24 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <option value="sim">Adesivou</option>
               <option value="nao">Não adesivou</option>
             </select>
-            <select value={filterPresente} onChange={e => setFilterPresente(e.target.value)}
+            <select value={filterEvento} onChange={e => { setFilterEvento(e.target.value); if (!e.target.value) setFilterPresenca(''); }}
               className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-              style={filterPresente
+              style={filterEvento
                 ? {borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}
                 : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff'}}>
-              <option value="">Presença: Todos</option>
-              <option value="sim">Presente</option>
-              <option value="nao">Ausente</option>
+              <option value="">Evento: Todos</option>
+              {eventos.map(ev => <option key={ev.id} value={ev.id}>{ev.nome}</option>)}
             </select>
+            {filterEvento && (
+              <select value={filterPresenca || 'sim'} onChange={e => setFilterPresenca(e.target.value)}
+                className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+                style={{borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}}>
+                <option value="sim">Presentes</option>
+                <option value="nao">Ausentes</option>
+              </select>
+            )}
             {hasFilters && (
-              <button onClick={() => { setFilterOrgao(''); setFilterVeiculo(''); setFilterAdesivo(''); setFilterPresente(''); }}
+              <button onClick={() => { setFilterOrgao(''); setFilterVeiculo(''); setFilterAdesivo(''); setFilterEvento(''); setFilterPresenca(''); }}
                 className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
                 <X className="w-3.5 h-3.5" /> Limpar filtros
               </button>
@@ -9882,13 +9997,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nome / CPF</th>
                     <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Órgão</th>
                     <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Veículo</th>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Evento</th>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Presença</th>
+                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Eventos</th>
                     <th className="px-5 py-3 w-20"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p, idx) => (
+                  {filtered.map((p, idx) => {
+                    const qtdPresencas = Object.values(p.presencas || {}).filter(Boolean).length;
+                    return (
                     <tr key={p.id} className={`border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-indigo-50/20' : ''}`}
                       onMouseEnter={e=>e.currentTarget.style.background='#f5f3ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
                       <td className="px-5 py-3">
@@ -9904,11 +10020,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           </div>
                         ) : <span className="text-gray-300 text-xs">—</span>}
                       </td>
-                      <td className="px-5 py-3 text-gray-600 max-w-40"><p className="truncate">{p.evento || '—'}</p></td>
                       <td className="px-5 py-3">
-                        {p.presente
-                          ? <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#dcfce7', color:'#15803d'}}>Presente</span>
-                          : <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#f3f4f6', color:'#6b7280'}}>Ausente</span>}
+                        {eventos.length === 0 ? <span className="text-gray-300 text-xs">—</span> : filterEvento ? (
+                          p.presencas && p.presencas[filterEvento]
+                            ? <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#dcfce7', color:'#15803d'}}>Presente</span>
+                            : <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#f3f4f6', color:'#6b7280'}}>Ausente</span>
+                        ) : (
+                          <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background: qtdPresencas > 0 ? '#dcfce7' : '#f3f4f6', color: qtdPresencas > 0 ? '#15803d' : '#6b7280'}}>
+                            {qtdPresencas} / {eventos.length}
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-1">
@@ -9923,14 +10044,17 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
           )}
 
           {showModal && (
-            <CampanhaModal editing={editing} onSubmit={handleSubmit} onClose={() => { setShowModal(false); setEditing(null); }} />
+            <CampanhaModal editing={editing} eventos={eventos} onSubmit={handleSubmit} onClose={() => { setShowModal(false); setEditing(null); }} />
+          )}
+          {showEventosModal && (
+            <CampanhaEventosModal eventos={eventos} onAdd={onAddEvento} onDelete={onDeleteEvento} addToast={addToast} onClose={() => setShowEventosModal(false)} />
           )}
         </div>
       );
@@ -14739,6 +14863,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       const [gdocs,                setGdocs]                = useState([]);
       // Módulo privado de campanha — visível só para o usuário henriquecorreia no sistema principal
       const [campanhaPessoas,      setCampanhaPessoas]      = useState([]);
+      const [campanhaEventos,      setCampanhaEventos]      = useState([]);
       const [showCampanhaPage,     setShowCampanhaPage]     = useState(false);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
       // Fecha o menu + ao clicar fora
@@ -14905,11 +15030,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       // Módulo privado de campanha — só assina o Firestore quando é o próprio henriquecorreia
       // logado no sistema principal; nenhum outro usuário ou o GCSP chega a buscar esses dados.
       useEffect(() => {
-        if (SYS.id !== 'main' || currentUser?.username !== 'henriquecorreia') { setCampanhaPessoas([]); return; }
-        const unsub = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
+        if (SYS.id !== 'main' || currentUser?.username !== 'henriquecorreia') { setCampanhaPessoas([]); setCampanhaEventos([]); return; }
+        const unsubP = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
           setCampanhaPessoas(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
-        return () => unsub();
+        const unsubE = db.collection(COL('campanha_eventos')).orderBy('data', 'desc').onSnapshot(snap => {
+          setCampanhaEventos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        });
+        return () => { unsubP(); unsubE(); };
       }, [currentUser]);
 
       const uniqueContractCount = useMemo(() => {
@@ -15907,6 +16035,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       }
       async function handleDeleteCampanha(id) {
         await db.collection(COL('campanha_pessoas')).doc(id).delete();
+      }
+      async function handleAddCampanhaEvento(data) {
+        await db.collection(COL('campanha_eventos')).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      }
+      async function handleDeleteCampanhaEvento(id) {
+        await db.collection(COL('campanha_eventos')).doc(id).delete();
       }
 
       async function handleExportArcanjo() {
@@ -17012,9 +17146,12 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               /* ── MÓDULO PRIVADO DE CAMPANHA (apenas henriquecorreia) ── */
               <CampanhaPage
                 pessoas={campanhaPessoas}
+                eventos={campanhaEventos}
                 onAdd={handleAddCampanha}
                 onUpdate={handleUpdateCampanha}
                 onDelete={handleDeleteCampanha}
+                onAddEvento={handleAddCampanhaEvento}
+                onDeleteEvento={handleDeleteCampanhaEvento}
                 addToast={addToast}
               />
             ) : (

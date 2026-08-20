@@ -13445,6 +13445,7 @@ function ArcanjoGerencial({
 const CAMPANHA_COLOR = '#4338ca';
 function CampanhaModal({
   editing,
+  eventos = [],
   onSubmit,
   onClose
 }) {
@@ -13455,8 +13456,7 @@ function CampanhaModal({
     temVeiculo: false,
     placa: '',
     adesivou: false,
-    evento: '',
-    presente: false
+    presencas: {}
   };
   const [form, setForm] = React.useState(editing ? {
     nome: editing.nome || '',
@@ -13465,13 +13465,24 @@ function CampanhaModal({
     temVeiculo: !!editing.temVeiculo,
     placa: editing.placa || '',
     adesivou: !!editing.adesivou,
-    evento: editing.evento || '',
-    presente: !!editing.presente
+    presencas: {
+      ...(editing.presencas || {})
+    }
   } : blank);
   const set = (k, v) => setForm(f => ({
     ...f,
     [k]: v
   }));
+  const togglePresenca = eventoId => setForm(f => {
+    const presencas = {
+      ...f.presencas
+    };
+    if (presencas[eventoId]) delete presencas[eventoId];else presencas[eventoId] = true;
+    return {
+      ...f,
+      presencas
+    };
+  });
   const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
   const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
   return React.createElement("div", {
@@ -13577,24 +13588,26 @@ function CampanhaModal({
     className: "text-sm font-semibold text-gray-700"
   }, "Adesivou o ve\xEDculo"))), React.createElement("div", null, React.createElement("label", {
     className: lc
-  }, "Evento"), React.createElement("input", {
-    value: form.evento,
-    onChange: e => set('evento', e.target.value),
-    placeholder: "Nome do evento",
-    className: ic
-  })), React.createElement("label", {
-    className: "flex items-center gap-2.5 cursor-pointer select-none py-1"
+  }, "Presen\xE7a em Eventos"), eventos.length === 0 ? React.createElement("p", {
+    className: "text-xs text-gray-400 italic"
+  }, "Nenhum evento cadastrado ainda. Use o bot\xE3o \"+ Eventos\" na tela anterior.") : React.createElement("div", {
+    className: "rounded-xl border border-gray-100 divide-y divide-gray-50 max-h-52 overflow-y-auto"
+  }, eventos.map(ev => React.createElement("label", {
+    key: ev.id,
+    className: "flex items-center gap-2.5 cursor-pointer select-none px-3 py-2.5 hover:bg-gray-50"
   }, React.createElement("input", {
     type: "checkbox",
-    checked: form.presente,
-    onChange: e => set('presente', e.target.checked),
-    className: "w-4 h-4 rounded",
+    checked: !!form.presencas[ev.id],
+    onChange: () => togglePresenca(ev.id),
+    className: "w-4 h-4 rounded flex-shrink-0",
     style: {
       accentColor: CAMPANHA_COLOR
     }
   }), React.createElement("span", {
-    className: "text-sm font-semibold text-gray-700"
-  }, "Presente no evento"))), React.createElement("div", {
+    className: "text-sm text-gray-700 flex-1"
+  }, ev.nome), React.createElement("span", {
+    className: "text-[11px] text-gray-400 font-mono flex-shrink-0"
+  }, ev.data ? new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR') : '')))))), React.createElement("div", {
     className: "flex justify-end gap-3 px-6 py-4 border-t border-gray-100"
   }, React.createElement("button", {
     type: "button",
@@ -13609,7 +13622,120 @@ function CampanhaModal({
     }
   }, editing ? 'Salvar Alterações' : 'Cadastrar'))));
 }
-async function exportarCampanhaExcel(pessoas, addToast) {
+function CampanhaEventosModal({
+  eventos,
+  onAdd,
+  onDelete,
+  onClose,
+  addToast
+}) {
+  const [nome, setNome] = React.useState('');
+  const [data, setData] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+  async function handleAdd(e) {
+    e.preventDefault();
+    if (!nome.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd({
+        nome: nome.trim(),
+        data
+      });
+      addToast('Evento cadastrado com sucesso!');
+      setNome('');
+      setData('');
+    } catch (err) {
+      addToast('Erro ao cadastrar evento: ' + (err.message || 'falha'));
+    } finally {
+      setSaving(false);
+    }
+  }
+  const ordenados = [...eventos].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    },
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: CAMPANHA_COLOR
+    }
+  }, React.createElement(Calendar, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Eventos")), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("form", {
+    onSubmit: handleAdd,
+    className: "px-6 py-4 border-b border-gray-100 flex gap-2 items-end"
+  }, React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("label", {
+    className: "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider"
+  }, "Nome do Evento"), React.createElement("input", {
+    value: nome,
+    onChange: e => setNome(e.target.value),
+    placeholder: "Ex.: Com\xEDcio Centro",
+    className: ic
+  })), React.createElement("div", {
+    className: "w-36"
+  }, React.createElement("label", {
+    className: "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider"
+  }, "Data"), React.createElement("input", {
+    type: "date",
+    value: data,
+    onChange: e => setData(e.target.value),
+    className: ic
+  })), React.createElement("button", {
+    type: "submit",
+    disabled: !nome.trim() || saving,
+    className: "p-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 flex-shrink-0",
+    style: {
+      background: CAMPANHA_COLOR
+    },
+    title: "Adicionar evento"
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "overflow-y-auto flex-1 px-3 py-2"
+  }, ordenados.length === 0 ? React.createElement("p", {
+    className: "text-center text-xs text-gray-400 py-8"
+  }, "Nenhum evento cadastrado ainda.") : ordenados.map(ev => React.createElement("div", {
+    key: ev.id,
+    className: "flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+  }, React.createElement("div", null, React.createElement("p", {
+    className: "text-sm font-semibold text-gray-700"
+  }, ev.nome), React.createElement("p", {
+    className: "text-[11px] text-gray-400 font-mono"
+  }, ev.data ? new Date(ev.data + 'T12:00:00').toLocaleDateString('pt-BR') : 'sem data')), React.createElement("button", {
+    onClick: () => onDelete(ev.id),
+    title: "Excluir evento",
+    className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  }))))), React.createElement("div", {
+    className: "px-6 py-4 border-t border-gray-100"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "w-full py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+  }, "Fechar"))));
+}
+async function exportarCampanhaExcel(pessoas, eventos, addToast) {
   if (!pessoas || pessoas.length === 0) {
     addToast('Nenhuma pessoa cadastrada para exportar.');
     return;
@@ -13648,11 +13774,8 @@ async function exportarCampanhaExcel(pessoas, addToast) {
       header: 'Adesivou',
       width: 12
     }, {
-      header: 'Evento',
-      width: 22
-    }, {
-      header: 'Presente',
-      width: 12
+      header: 'Eventos Presente',
+      width: 36
     }, {
       header: 'Cadastrado em',
       width: 14
@@ -13685,10 +13808,15 @@ async function exportarCampanhaExcel(pessoas, addToast) {
         horizontal: 'center'
       };
     });
+    const eventosPorId = {};
+    (eventos || []).forEach(ev => {
+      eventosPorId[ev.id] = ev.nome;
+    });
     pessoas.forEach((p, idx) => {
       const row = ws.getRow(idx + 2);
       const d = toJsDate(p.createdAt);
-      const vals = [p.nome || '', p.cpf || '', p.orgao || '', p.temVeiculo ? 'Sim' : 'Não', p.temVeiculo ? p.placa || '' : '', p.temVeiculo && p.adesivou ? 'Sim' : 'Não', p.evento || '', p.presente ? 'Sim' : 'Não', d ? d.toLocaleDateString('pt-BR') : ''];
+      const nomesEventos = Object.keys(p.presencas || {}).filter(id => p.presencas[id] && eventosPorId[id]).map(id => eventosPorId[id]).join(', ');
+      const vals = [p.nome || '', p.cpf || '', p.orgao || '', p.temVeiculo ? 'Sim' : 'Não', p.temVeiculo ? p.placa || '' : '', p.temVeiculo && p.adesivou ? 'Sim' : 'Não', nomesEventos, d ? d.toLocaleDateString('pt-BR') : ''];
       vals.forEach((v, ci) => {
         const cell = row.getCell(ci + 1);
         cell.value = v;
@@ -13697,7 +13825,7 @@ async function exportarCampanhaExcel(pessoas, addToast) {
         };
         cell.alignment = {
           vertical: 'middle',
-          horizontal: ci >= 3 ? 'center' : 'left'
+          horizontal: ci >= 3 && ci !== 6 ? 'center' : 'left'
         };
         if (idx % 2 === 0) cell.fill = {
           type: 'pattern',
@@ -13709,7 +13837,7 @@ async function exportarCampanhaExcel(pessoas, addToast) {
       });
       row.height = 18;
     });
-    ws.autoFilter = 'A1:I1';
+    ws.autoFilter = 'A1:H1';
     ws.views = [{
       state: 'frozen',
       ySplit: 1
@@ -13731,18 +13859,23 @@ async function exportarCampanhaExcel(pessoas, addToast) {
 }
 function CampanhaPage({
   pessoas,
+  eventos,
   onAdd,
   onUpdate,
   onDelete,
+  onAddEvento,
+  onDeleteEvento,
   addToast
 }) {
   const [search, setSearch] = React.useState('');
   const [filterOrgao, setFilterOrgao] = React.useState('');
   const [filterVeiculo, setFilterVeiculo] = React.useState('');
   const [filterAdesivo, setFilterAdesivo] = React.useState('');
-  const [filterPresente, setFilterPresente] = React.useState('');
+  const [filterEvento, setFilterEvento] = React.useState('');
+  const [filterPresenca, setFilterPresenca] = React.useState('');
   const [showModal, setShowModal] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
+  const [showEventosModal, setShowEventosModal] = React.useState(false);
   const orgaoOpts = React.useMemo(() => {
     const vals = pessoas.map(p => (p.orgao || '').trim()).filter(Boolean);
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -13754,16 +13887,18 @@ function CampanhaPage({
     if (filterVeiculo === 'nao' && p.temVeiculo) return false;
     if (filterAdesivo === 'sim' && !(p.temVeiculo && p.adesivou)) return false;
     if (filterAdesivo === 'nao' && p.temVeiculo && p.adesivou) return false;
-    if (filterPresente === 'sim' && !p.presente) return false;
-    if (filterPresente === 'nao' && p.presente) return false;
+    if (filterEvento) {
+      const esteve = !!(p.presencas && p.presencas[filterEvento]);
+      if (filterPresenca === 'nao' ? esteve : !esteve) return false;
+    }
     return true;
   });
   const stats = React.useMemo(() => ({
     total: pessoas.length,
     veiculo: pessoas.filter(p => p.temVeiculo).length,
     adesivado: pessoas.filter(p => p.temVeiculo && p.adesivou).length,
-    presente: pessoas.filter(p => p.presente).length
-  }), [pessoas]);
+    eventos: eventos.length
+  }), [pessoas, eventos]);
   async function handleSubmit(data) {
     try {
       if (editing) {
@@ -13779,7 +13914,7 @@ function CampanhaPage({
       addToast('Erro ao salvar: ' + (e.message || 'Falha no banco de dados'));
     }
   }
-  const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterPresente;
+  const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterEvento;
   return React.createElement("div", {
     className: "fade-in space-y-5"
   }, React.createElement("div", {
@@ -13803,7 +13938,7 @@ function CampanhaPage({
   }, "Cadastro privado de pessoas \xB7 vis\xEDvel apenas para voc\xEA"))), React.createElement("div", {
     className: "flex items-center gap-2"
   }, React.createElement("button", {
-    onClick: () => exportarCampanhaExcel(filtered, addToast),
+    onClick: () => exportarCampanhaExcel(filtered, eventos, addToast),
     className: "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90",
     style: {
       borderColor: '#d1fae5',
@@ -13813,6 +13948,16 @@ function CampanhaPage({
   }, React.createElement(Download, {
     className: "w-3.5 h-3.5"
   }), " Exportar Excel"), React.createElement("button", {
+    onClick: () => setShowEventosModal(true),
+    className: "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90",
+    style: {
+      borderColor: '#e0e7ff',
+      color: CAMPANHA_COLOR,
+      background: '#eef2ff'
+    }
+  }, React.createElement(Calendar, {
+    className: "w-3.5 h-3.5"
+  }), " + Eventos"), React.createElement("button", {
     onClick: () => {
       setEditing(null);
       setShowModal(true);
@@ -13838,8 +13983,8 @@ function CampanhaPage({
     value: stats.adesivado,
     color: '#059669'
   }, {
-    label: 'Presentes',
-    value: stats.presente,
+    label: 'Eventos cadastrados',
+    value: stats.eventos,
     color: '#dc2626'
   }].map(k => React.createElement("div", {
     key: k.label,
@@ -13923,10 +14068,13 @@ function CampanhaPage({
   }, "Adesivou"), React.createElement("option", {
     value: "nao"
   }, "N\xE3o adesivou")), React.createElement("select", {
-    value: filterPresente,
-    onChange: e => setFilterPresente(e.target.value),
+    value: filterEvento,
+    onChange: e => {
+      setFilterEvento(e.target.value);
+      if (!e.target.value) setFilterPresenca('');
+    },
     className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
-    style: filterPresente ? {
+    style: filterEvento ? {
       borderColor: CAMPANHA_COLOR,
       color: CAMPANHA_COLOR,
       background: CAMPANHA_COLOR + '10'
@@ -13937,16 +14085,29 @@ function CampanhaPage({
     }
   }, React.createElement("option", {
     value: ""
-  }, "Presen\xE7a: Todos"), React.createElement("option", {
+  }, "Evento: Todos"), eventos.map(ev => React.createElement("option", {
+    key: ev.id,
+    value: ev.id
+  }, ev.nome))), filterEvento && React.createElement("select", {
+    value: filterPresenca || 'sim',
+    onChange: e => setFilterPresenca(e.target.value),
+    className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: {
+      borderColor: CAMPANHA_COLOR,
+      color: CAMPANHA_COLOR,
+      background: CAMPANHA_COLOR + '10'
+    }
+  }, React.createElement("option", {
     value: "sim"
-  }, "Presente"), React.createElement("option", {
+  }, "Presentes"), React.createElement("option", {
     value: "nao"
-  }, "Ausente")), hasFilters && React.createElement("button", {
+  }, "Ausentes")), hasFilters && React.createElement("button", {
     onClick: () => {
       setFilterOrgao('');
       setFilterVeiculo('');
       setFilterAdesivo('');
-      setFilterPresente('');
+      setFilterEvento('');
+      setFilterPresenca('');
     },
     className: "flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
   }, React.createElement(X, {
@@ -13977,81 +14138,93 @@ function CampanhaPage({
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
   }, "Ve\xEDculo"), React.createElement("th", {
     className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
-  }, "Evento"), React.createElement("th", {
-    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
-  }, "Presen\xE7a"), React.createElement("th", {
+  }, "Eventos"), React.createElement("th", {
     className: "px-5 py-3 w-20"
-  }))), React.createElement("tbody", null, filtered.map((p, idx) => React.createElement("tr", {
-    key: p.id,
-    className: `border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-indigo-50/20' : ''}`,
-    onMouseEnter: e => e.currentTarget.style.background = '#f5f3ff',
-    onMouseLeave: e => e.currentTarget.style.background = ''
-  }, React.createElement("td", {
-    className: "px-5 py-3"
-  }, React.createElement("p", {
-    className: "font-semibold text-gray-800 leading-tight"
-  }, p.nome), React.createElement("p", {
-    className: "text-[11px] text-gray-400 mt-0.5 font-mono"
-  }, p.cpf || '—')), React.createElement("td", {
-    className: "px-5 py-3 text-gray-600"
-  }, p.orgao || '—'), React.createElement("td", {
-    className: "px-5 py-3"
-  }, p.temVeiculo ? React.createElement("div", null, React.createElement("span", {
-    className: "text-[11px] font-bold px-2 py-1 rounded-full",
-    style: {
-      background: '#e0f2fe',
-      color: '#0284c7'
-    }
-  }, p.placa || 'Sem placa'), p.adesivou && React.createElement("span", {
-    className: "text-[11px] font-bold px-2 py-1 rounded-full ml-1",
-    style: {
-      background: '#dcfce7',
-      color: '#15803d'
-    }
-  }, "Adesivado")) : React.createElement("span", {
-    className: "text-gray-300 text-xs"
-  }, "\u2014")), React.createElement("td", {
-    className: "px-5 py-3 text-gray-600 max-w-40"
-  }, React.createElement("p", {
-    className: "truncate"
-  }, p.evento || '—')), React.createElement("td", {
-    className: "px-5 py-3"
-  }, p.presente ? React.createElement("span", {
-    className: "text-[11px] font-bold px-2 py-1 rounded-full",
-    style: {
-      background: '#dcfce7',
-      color: '#15803d'
-    }
-  }, "Presente") : React.createElement("span", {
-    className: "text-[11px] font-bold px-2 py-1 rounded-full",
-    style: {
-      background: '#f3f4f6',
-      color: '#6b7280'
-    }
-  }, "Ausente")), React.createElement("td", {
-    className: "px-5 py-3"
-  }, React.createElement("div", {
-    className: "flex items-center gap-1"
-  }, React.createElement("button", {
-    onClick: () => {
-      setEditing(p);
-      setShowModal(true);
-    },
-    className: "p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-  }, React.createElement(Edit2, {
-    className: "w-3.5 h-3.5"
-  })), React.createElement("button", {
-    onClick: () => onDelete(p.id),
-    className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-  }, React.createElement(Trash2, {
-    className: "w-3.5 h-3.5"
-  }))))))))), showModal && React.createElement(CampanhaModal, {
+  }))), React.createElement("tbody", null, filtered.map((p, idx) => {
+    const qtdPresencas = Object.values(p.presencas || {}).filter(Boolean).length;
+    return React.createElement("tr", {
+      key: p.id,
+      className: `border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-indigo-50/20' : ''}`,
+      onMouseEnter: e => e.currentTarget.style.background = '#f5f3ff',
+      onMouseLeave: e => e.currentTarget.style.background = ''
+    }, React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("p", {
+      className: "font-semibold text-gray-800 leading-tight"
+    }, p.nome), React.createElement("p", {
+      className: "text-[11px] text-gray-400 mt-0.5 font-mono"
+    }, p.cpf || '—')), React.createElement("td", {
+      className: "px-5 py-3 text-gray-600"
+    }, p.orgao || '—'), React.createElement("td", {
+      className: "px-5 py-3"
+    }, p.temVeiculo ? React.createElement("div", null, React.createElement("span", {
+      className: "text-[11px] font-bold px-2 py-1 rounded-full",
+      style: {
+        background: '#e0f2fe',
+        color: '#0284c7'
+      }
+    }, p.placa || 'Sem placa'), p.adesivou && React.createElement("span", {
+      className: "text-[11px] font-bold px-2 py-1 rounded-full ml-1",
+      style: {
+        background: '#dcfce7',
+        color: '#15803d'
+      }
+    }, "Adesivado")) : React.createElement("span", {
+      className: "text-gray-300 text-xs"
+    }, "\u2014")), React.createElement("td", {
+      className: "px-5 py-3"
+    }, eventos.length === 0 ? React.createElement("span", {
+      className: "text-gray-300 text-xs"
+    }, "\u2014") : filterEvento ? p.presencas && p.presencas[filterEvento] ? React.createElement("span", {
+      className: "text-[11px] font-bold px-2 py-1 rounded-full",
+      style: {
+        background: '#dcfce7',
+        color: '#15803d'
+      }
+    }, "Presente") : React.createElement("span", {
+      className: "text-[11px] font-bold px-2 py-1 rounded-full",
+      style: {
+        background: '#f3f4f6',
+        color: '#6b7280'
+      }
+    }, "Ausente") : React.createElement("span", {
+      className: "text-[11px] font-bold px-2 py-1 rounded-full",
+      style: {
+        background: qtdPresencas > 0 ? '#dcfce7' : '#f3f4f6',
+        color: qtdPresencas > 0 ? '#15803d' : '#6b7280'
+      }
+    }, qtdPresencas, " / ", eventos.length)), React.createElement("td", {
+      className: "px-5 py-3"
+    }, React.createElement("div", {
+      className: "flex items-center gap-1"
+    }, React.createElement("button", {
+      onClick: () => {
+        setEditing(p);
+        setShowModal(true);
+      },
+      className: "p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+    }, React.createElement(Edit2, {
+      className: "w-3.5 h-3.5"
+    })), React.createElement("button", {
+      onClick: () => onDelete(p.id),
+      className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+    }, React.createElement(Trash2, {
+      className: "w-3.5 h-3.5"
+    })))));
+  })))), showModal && React.createElement(CampanhaModal, {
     editing: editing,
+    eventos: eventos,
     onSubmit: handleSubmit,
     onClose: () => {
       setShowModal(false);
       setEditing(null);
     }
+  }), showEventosModal && React.createElement(CampanhaEventosModal, {
+    eventos: eventos,
+    onAdd: onAddEvento,
+    onDelete: onDeleteEvento,
+    addToast: addToast,
+    onClose: () => setShowEventosModal(false)
   }));
 }
 const CRON_TRIBUTOS_PADRAO = [{
@@ -20843,6 +21016,7 @@ function App() {
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [campanhaPessoas, setCampanhaPessoas] = useState([]);
+  const [campanhaEventos, setCampanhaEventos] = useState([]);
   const [showCampanhaPage, setShowCampanhaPage] = useState(false);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
   useEffect(() => {
@@ -21049,15 +21223,25 @@ function App() {
   useEffect(() => {
     if (SYS.id !== 'main' || currentUser?.username !== 'henriquecorreia') {
       setCampanhaPessoas([]);
+      setCampanhaEventos([]);
       return;
     }
-    const unsub = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
+    const unsubP = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
       setCampanhaPessoas(snap.docs.map(d => ({
         ...d.data(),
         id: d.id
       })));
     });
-    return () => unsub();
+    const unsubE = db.collection(COL('campanha_eventos')).orderBy('data', 'desc').onSnapshot(snap => {
+      setCampanhaEventos(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
+    return () => {
+      unsubP();
+      unsubE();
+    };
   }, [currentUser]);
   const uniqueContractCount = useMemo(() => {
     const fromContracts = contracts.map(c => c.contractNumber);
@@ -22222,6 +22406,15 @@ function App() {
   }
   async function handleDeleteCampanha(id) {
     await db.collection(COL('campanha_pessoas')).doc(id).delete();
+  }
+  async function handleAddCampanhaEvento(data) {
+    await db.collection(COL('campanha_eventos')).add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  async function handleDeleteCampanhaEvento(id) {
+    await db.collection(COL('campanha_eventos')).doc(id).delete();
   }
   async function handleExportArcanjo() {
     addToast('Gerando planilha…');
@@ -23845,9 +24038,12 @@ function App() {
     })
   }) : showCampanhaPage && SYS.id === 'main' && currentUser.username === 'henriquecorreia' ? React.createElement(CampanhaPage, {
     pessoas: campanhaPessoas,
+    eventos: campanhaEventos,
     onAdd: handleAddCampanha,
     onUpdate: handleUpdateCampanha,
     onDelete: handleDeleteCampanha,
+    onAddEvento: handleAddCampanhaEvento,
+    onDeleteEvento: handleDeleteCampanhaEvento,
     addToast: addToast
   }) : React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("div", {
     className: "flex items-center justify-between mb-3 flex-wrap gap-2"
