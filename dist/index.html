@@ -1386,6 +1386,15 @@ const PieChart = ({
 }), React.createElement("path", {
   d: "M22 12A10 10 0 0 0 12 2v10z"
 }));
+const Megaphone = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("path", {
+  d: "m3 11 18-5v12L3 14v-3z"
+}), React.createElement("path", {
+  d: "M11.6 16.8a3 3 0 1 1-5.8-1.6"
+}));
 function addCalendarDays(dateStr, days) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + days);
@@ -13926,7 +13935,7 @@ function CampanhaPage({
     style: {
       background: CAMPANHA_COLOR
     }
-  }, React.createElement(Users, {
+  }, React.createElement(Megaphone, {
     className: "w-5 h-5 text-white"
   })), React.createElement("div", null, React.createElement("h1", {
     className: "text-lg font-extrabold tracking-tight",
@@ -14116,7 +14125,7 @@ function CampanhaPage({
     className: "text-xs font-semibold text-gray-400 tracking-wide ml-auto"
   }, filtered.length, " ", filtered.length === 1 ? 'pessoa' : 'pessoas')), filtered.length === 0 ? React.createElement("div", {
     className: "bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm"
-  }, React.createElement(Users, {
+  }, React.createElement(Megaphone, {
     className: "w-10 h-10 mx-auto mb-3 text-gray-200"
   }), React.createElement("p", {
     className: "text-gray-400 text-sm font-medium"
@@ -23053,7 +23062,7 @@ function App() {
       setShowCertidoesPage(true);
     }
   }), SYS.id === 'main' && currentUser.username === 'henriquecorreia' && React.createElement(SidebarBtn, {
-    icon: Users,
+    icon: Megaphone,
     label: "Campanha",
     active: showCampanhaPage,
     onClick: () => {

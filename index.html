@@ -414,6 +414,7 @@
     const ArcanjoIcon     = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/></SVG>;
     const BarChart2       = ({className}) => <SVG className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></SVG>;
     const PieChart        = ({className}) => <SVG className={className}><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></SVG>;
+    const Megaphone       = ({className}) => <SVG className={className}><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></SVG>;
 
     /* ═══════════════════════════════════════════════════════
        BUSINESS LOGIC
@@ -9883,7 +9884,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background: CAMPANHA_COLOR}}>
-                <Users className="w-5 h-5 text-white" />
+                <Megaphone className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h1 className="text-lg font-extrabold tracking-tight" style={{color: CAMPANHA_COLOR}}>Campanha</h1>
@@ -9985,7 +9986,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
           {filtered.length === 0 ? (
             <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
-              <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+              <Megaphone className="w-10 h-10 mx-auto mb-3 text-gray-200" />
               <p className="text-gray-400 text-sm font-medium">Nenhuma pessoa encontrada.</p>
               <p className="text-gray-300 text-xs mt-1">Cadastre a primeira pessoa para começar.</p>
             </div>
@@ -16430,7 +16431,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               )}
 
               {SYS.id === 'main' && currentUser.username === 'henriquecorreia' && (
-                <SidebarBtn icon={Users} label="Campanha"
+                <SidebarBtn icon={Megaphone} label="Campanha"
                   active={showCampanhaPage}
                   onClick={() => { setShowCampanhaPage(true); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
