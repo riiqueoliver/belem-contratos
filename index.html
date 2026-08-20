@@ -8617,7 +8617,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     // Modal para escolher o responsável (Cyris, Cleber ou um novo nome) antes de exportar a planilha
-    function ExportarResponsavelModal({ options, exporting, onClose, onConfirm }) {
+    function ExportarResponsavelModal({ options, exporting, tabLabel, onClose, onConfirm }) {
       const [nome, setNome]           = React.useState(options[0] || 'Cyris');
       const [novo, setNovo]           = React.useState('');
       const [usandoNovo, setUsandoNovo] = React.useState(false);
@@ -8632,7 +8632,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </div>
               <div>
                 <h2 className="font-bold text-gray-800 text-sm">Exportar planilha por responsável</h2>
-                <p className="text-xs text-gray-400">Pendentes de 2ª Via RG e 2ª Via Certidão</p>
+                <p className="text-xs text-gray-400">Pendentes de {tabLabel}</p>
               </div>
             </div>
             <div className="px-6 py-5 space-y-4">
@@ -8655,7 +8655,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 )}
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">
-                A planilha reúne todas as pessoas <b>pendentes</b> de 2ª Via de RG ou Certidão encaminhadas para esse responsável.
+                A planilha reúne todas as pessoas <b>pendentes</b> de <b>{tabLabel}</b> encaminhadas para esse responsável.
               </p>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
@@ -8674,9 +8674,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     // Gera a planilha de pendentes (RG + Certidão) de um responsável específico.
     // Considera tanto o campo estruturado "responsavel" quanto, para cadastros
     // antigos que ainda não têm esse campo, o nome citado na observação.
-    async function exportarPendentesPorResponsavel(records, nome, addToast) {
+    async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
+      const tipoLabel = tipo === 'certidao' ? '2ª Via de Certidão' : '2ª Via de RG';
       const alvo = (records || []).filter(r => {
-        if (r.tipo !== 'rg' && r.tipo !== 'certidao') return false;
+        if (r.tipo !== tipo) return false;
         if (r.status !== 'pendente') return false;
         const alvoNome = nome.trim().toLowerCase();
         const respOk = (r.responsavel || '').trim().toLowerCase() === alvoNome;
@@ -8685,7 +8686,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       });
 
       if (alvo.length === 0) {
-        addToast(`Nenhum pendente encontrado para "${nome}".`);
+        addToast(`Nenhum pendente de ${tipoLabel} encontrado para "${nome}".`);
         return;
       }
 
@@ -8737,7 +8738,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
         ws.mergeCells('B1:I1');
         const tc = ws.getCell('B1');
-        tc.value = `Instituto Arcanjo's  —  Pendências de RG/Certidão · ${nome}`;
+        tc.value = `Instituto Arcanjo's  —  Pendências de ${tipoLabel} · ${nome}`;
         tc.font = { bold: true, size: 15, color: { argb: 'FF7B61C7' } };
         tc.alignment = { vertical: 'middle', horizontal: 'left' };
 
@@ -8794,7 +8795,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `pendentes-${nome.toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.download = `pendentes-${tipo}-${nome.toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}.xlsx`;
         a.click();
         URL.revokeObjectURL(url);
         addToast('Planilha exportada com sucesso!');
@@ -9218,11 +9219,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             <ExportarResponsavelModal
               options={responsavelOpts}
               exporting={exporting}
+              tabLabel={tabInfo.label}
               onClose={() => setShowExportModal(false)}
               onConfirm={async (nome) => {
                 setExporting(true);
                 try {
-                  await exportarPendentesPorResponsavel(records, nome, addToast);
+                  await exportarPendentesPorResponsavel(records, nome, tab, addToast);
                   setShowExportModal(false);
                 } finally {
                   setExporting(false);
