@@ -8489,12 +8489,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   </select>
                 </div>
               )}
-              {tab === 'rg' && (
-                <div>
-                  <label className={lc}>Retorno</label>
-                  <input value={form.retorno} onChange={e => set('retorno', e.target.value)} placeholder="Informações de retorno" className={ic} />
-                </div>
-              )}
               {(tab === 'rg' || tab === 'certidao') && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -8864,7 +8858,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
         if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
-        if (filterResponsavel && (r.responsavel || '').trim() !== filterResponsavel) return false;
+        if (filterResponsavel) {
+          const alvoResp = filterResponsavel.trim().toLowerCase();
+          const respOk = (r.responsavel || '').trim().toLowerCase() === alvoResp;
+          const obsOk  = (r.observacao || '').toLowerCase().includes(alvoResp);
+          if (!respOk && !obsOk) return false;
+        }
         if (activeIndicator === 'atendidos'   && r.status !== 'atendido' && r.status !== 'concluido') return false;
         if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
         if (activeIndicator === 'pendente'    && r.status !== 'pendente') return false;

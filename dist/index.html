@@ -11823,14 +11823,7 @@ function ArcanjoModal({
     value: "obito"
   }, "\xD3bito"), React.createElement("option", {
     value: "casamento"
-  }, "Casamento"))), tab === 'rg' && React.createElement("div", null, React.createElement("label", {
-    className: lc
-  }, "Retorno"), React.createElement("input", {
-    value: form.retorno,
-    onChange: e => set('retorno', e.target.value),
-    placeholder: "Informa\xE7\xF5es de retorno",
-    className: ic
-  })), (tab === 'rg' || tab === 'certidao') && React.createElement("div", {
+  }, "Casamento"))), (tab === 'rg' || tab === 'certidao') && React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: lc
@@ -12361,7 +12354,12 @@ function ArcanjoPage({
     if (search && !r.nome?.toLowerCase().includes(search.toLowerCase()) && !r.cpf?.includes(search) && !r.lideranca?.toLowerCase().includes(search.toLowerCase()) && !r.coordenador?.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterLideranca && (r.lideranca || '').trim() !== filterLideranca) return false;
     if (filterCoordenador && (r.coordenador || '').trim() !== filterCoordenador) return false;
-    if (filterResponsavel && (r.responsavel || '').trim() !== filterResponsavel) return false;
+    if (filterResponsavel) {
+      const alvoResp = filterResponsavel.trim().toLowerCase();
+      const respOk = (r.responsavel || '').trim().toLowerCase() === alvoResp;
+      const obsOk = (r.observacao || '').toLowerCase().includes(alvoResp);
+      if (!respOk && !obsOk) return false;
+    }
     if (activeIndicator === 'atendidos' && r.status !== 'atendido' && r.status !== 'concluido') return false;
     if (activeIndicator === 'encaminhado' && r.status !== 'encaminhado') return false;
     if (activeIndicator === 'pendente' && r.status !== 'pendente') return false;
