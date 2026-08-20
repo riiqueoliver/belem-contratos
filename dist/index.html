@@ -13442,6 +13442,618 @@ function ArcanjoGerencial({
     colorFn: i => lilacPalette[i % lilacPalette.length]
   }))));
 }
+const CAMPANHA_COLOR = '#4338ca';
+function CampanhaModal({
+  editing,
+  onSubmit,
+  onClose
+}) {
+  const blank = {
+    nome: '',
+    cpf: '',
+    orgao: '',
+    temVeiculo: false,
+    placa: '',
+    adesivou: false,
+    evento: '',
+    presente: false
+  };
+  const [form, setForm] = React.useState(editing ? {
+    nome: editing.nome || '',
+    cpf: editing.cpf || '',
+    orgao: editing.orgao || '',
+    temVeiculo: !!editing.temVeiculo,
+    placa: editing.placa || '',
+    adesivou: !!editing.adesivou,
+    evento: editing.evento || '',
+    presente: !!editing.presente
+  } : blank);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+  const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: CAMPANHA_COLOR
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, editing ? 'Editar Pessoa' : 'Cadastrar Pessoa')), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("form", {
+    id: "campanha-form",
+    onSubmit: e => {
+      e.preventDefault();
+      if (!form.nome.trim()) return;
+      onSubmit(form);
+    },
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome Completo *"), React.createElement("input", {
+    value: form.nome,
+    onChange: e => set('nome', e.target.value),
+    required: true,
+    placeholder: "Nome completo",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "CPF"), React.createElement("input", {
+    value: form.cpf,
+    onChange: e => {
+      const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+      const m = v.length <= 3 ? v : v.length <= 6 ? v.slice(0, 3) + '.' + v.slice(3) : v.length <= 9 ? v.slice(0, 3) + '.' + v.slice(3, 6) + '.' + v.slice(6) : v.slice(0, 3) + '.' + v.slice(3, 6) + '.' + v.slice(6, 9) + '-' + v.slice(9);
+      set('cpf', m);
+    },
+    placeholder: "000.000.000-00",
+    maxLength: 14,
+    inputMode: "numeric",
+    className: ic
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "\xD3rg\xE3o que Trabalha"), React.createElement("input", {
+    value: form.orgao,
+    onChange: e => set('orgao', e.target.value),
+    placeholder: "\xD3rg\xE3o / secretaria",
+    className: ic
+  })), React.createElement("label", {
+    className: "flex items-center gap-2.5 cursor-pointer select-none py-1"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: form.temVeiculo,
+    onChange: e => set('temVeiculo', e.target.checked),
+    className: "w-4 h-4 rounded",
+    style: {
+      accentColor: CAMPANHA_COLOR
+    }
+  }), React.createElement("span", {
+    className: "text-sm font-semibold text-gray-700"
+  }, "Tem ve\xEDculo")), form.temVeiculo && React.createElement("div", {
+    className: "rounded-xl border p-4 space-y-3",
+    style: {
+      borderColor: '#e0e7ff',
+      background: '#eef2ff'
+    }
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Placa do Ve\xEDculo"), React.createElement("input", {
+    value: form.placa,
+    onChange: e => set('placa', e.target.value.toUpperCase()),
+    placeholder: "ABC-1234",
+    maxLength: 8,
+    className: ic
+  })), React.createElement("label", {
+    className: "flex items-center gap-2.5 cursor-pointer select-none"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: form.adesivou,
+    onChange: e => set('adesivou', e.target.checked),
+    className: "w-4 h-4 rounded",
+    style: {
+      accentColor: CAMPANHA_COLOR
+    }
+  }), React.createElement("span", {
+    className: "text-sm font-semibold text-gray-700"
+  }, "Adesivou o ve\xEDculo"))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Evento"), React.createElement("input", {
+    value: form.evento,
+    onChange: e => set('evento', e.target.value),
+    placeholder: "Nome do evento",
+    className: ic
+  })), React.createElement("label", {
+    className: "flex items-center gap-2.5 cursor-pointer select-none py-1"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: form.presente,
+    onChange: e => set('presente', e.target.checked),
+    className: "w-4 h-4 rounded",
+    style: {
+      accentColor: CAMPANHA_COLOR
+    }
+  }), React.createElement("span", {
+    className: "text-sm font-semibold text-gray-700"
+  }, "Presente no evento"))), React.createElement("div", {
+    className: "flex justify-end gap-3 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+  }, "Cancelar"), React.createElement("button", {
+    type: "submit",
+    form: "campanha-form",
+    className: "px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95",
+    style: {
+      background: CAMPANHA_COLOR
+    }
+  }, editing ? 'Salvar Alterações' : 'Cadastrar'))));
+}
+async function exportarCampanhaExcel(pessoas, addToast) {
+  if (!pessoas || pessoas.length === 0) {
+    addToast('Nenhuma pessoa cadastrada para exportar.');
+    return;
+  }
+  addToast('Gerando planilha…');
+  try {
+    if (!window.ExcelJS) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+        s.onload = res;
+        s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const ExcelJS = window.ExcelJS;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Belém Digital';
+    wb.created = new Date();
+    const COLS = [{
+      header: 'Nome',
+      width: 32
+    }, {
+      header: 'CPF',
+      width: 16
+    }, {
+      header: 'Órgão',
+      width: 26
+    }, {
+      header: 'Tem Veículo',
+      width: 13
+    }, {
+      header: 'Placa',
+      width: 12
+    }, {
+      header: 'Adesivou',
+      width: 12
+    }, {
+      header: 'Evento',
+      width: 22
+    }, {
+      header: 'Presente',
+      width: 12
+    }, {
+      header: 'Cadastrado em',
+      width: 14
+    }];
+    const ws = wb.addWorksheet('Campanha');
+    ws.getRow(1).height = 22;
+    COLS.forEach((c, i) => {
+      ws.getColumn(i + 1).width = c.width;
+    });
+    const hRow = ws.getRow(1);
+    COLS.forEach((c, i) => {
+      const cell = hRow.getCell(i + 1);
+      cell.value = c.header;
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: {
+          argb: 'FF4338CA'
+        }
+      };
+      cell.font = {
+        bold: true,
+        size: 10,
+        color: {
+          argb: 'FFFFFFFF'
+        }
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center'
+      };
+    });
+    pessoas.forEach((p, idx) => {
+      const row = ws.getRow(idx + 2);
+      const d = toJsDate(p.createdAt);
+      const vals = [p.nome || '', p.cpf || '', p.orgao || '', p.temVeiculo ? 'Sim' : 'Não', p.temVeiculo ? p.placa || '' : '', p.temVeiculo && p.adesivou ? 'Sim' : 'Não', p.evento || '', p.presente ? 'Sim' : 'Não', d ? d.toLocaleDateString('pt-BR') : ''];
+      vals.forEach((v, ci) => {
+        const cell = row.getCell(ci + 1);
+        cell.value = v;
+        cell.font = {
+          size: 10
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: ci >= 3 ? 'center' : 'left'
+        };
+        if (idx % 2 === 0) cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: {
+            argb: 'FFEEF2FF'
+          }
+        };
+      });
+      row.height = 18;
+    });
+    ws.autoFilter = 'A1:I1';
+    ws.views = [{
+      state: 'frozen',
+      ySplit: 1
+    }];
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campanha-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast('Planilha exportada com sucesso!');
+  } catch (e) {
+    addToast('Erro ao exportar: ' + (e.message || 'falha'));
+  }
+}
+function CampanhaPage({
+  pessoas,
+  onAdd,
+  onUpdate,
+  onDelete,
+  addToast
+}) {
+  const [search, setSearch] = React.useState('');
+  const [filterOrgao, setFilterOrgao] = React.useState('');
+  const [filterVeiculo, setFilterVeiculo] = React.useState('');
+  const [filterAdesivo, setFilterAdesivo] = React.useState('');
+  const [filterPresente, setFilterPresente] = React.useState('');
+  const [showModal, setShowModal] = React.useState(false);
+  const [editing, setEditing] = React.useState(null);
+  const orgaoOpts = React.useMemo(() => {
+    const vals = pessoas.map(p => (p.orgao || '').trim()).filter(Boolean);
+    return [...new Set(vals)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [pessoas]);
+  const filtered = pessoas.filter(p => {
+    if (search && !p.nome?.toLowerCase().includes(search.toLowerCase()) && !p.cpf?.includes(search)) return false;
+    if (filterOrgao && (p.orgao || '').trim() !== filterOrgao) return false;
+    if (filterVeiculo === 'sim' && !p.temVeiculo) return false;
+    if (filterVeiculo === 'nao' && p.temVeiculo) return false;
+    if (filterAdesivo === 'sim' && !(p.temVeiculo && p.adesivou)) return false;
+    if (filterAdesivo === 'nao' && p.temVeiculo && p.adesivou) return false;
+    if (filterPresente === 'sim' && !p.presente) return false;
+    if (filterPresente === 'nao' && p.presente) return false;
+    return true;
+  });
+  const stats = React.useMemo(() => ({
+    total: pessoas.length,
+    veiculo: pessoas.filter(p => p.temVeiculo).length,
+    adesivado: pessoas.filter(p => p.temVeiculo && p.adesivou).length,
+    presente: pessoas.filter(p => p.presente).length
+  }), [pessoas]);
+  async function handleSubmit(data) {
+    try {
+      if (editing) {
+        await onUpdate(editing.id, data);
+        addToast('Registro atualizado com sucesso!');
+      } else {
+        await onAdd(data);
+        addToast('Pessoa cadastrada com sucesso!');
+      }
+      setShowModal(false);
+      setEditing(null);
+    } catch (e) {
+      addToast('Erro ao salvar: ' + (e.message || 'Falha no banco de dados'));
+    }
+  }
+  const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterPresente;
+  return React.createElement("div", {
+    className: "fade-in space-y-5"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between flex-wrap gap-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: CAMPANHA_COLOR
+    }
+  }, React.createElement(Users, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-lg font-extrabold tracking-tight",
+    style: {
+      color: CAMPANHA_COLOR
+    }
+  }, "Campanha"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 font-medium"
+  }, "Cadastro privado de pessoas \xB7 vis\xEDvel apenas para voc\xEA"))), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("button", {
+    onClick: () => exportarCampanhaExcel(filtered, addToast),
+    className: "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90",
+    style: {
+      borderColor: '#d1fae5',
+      color: '#059669',
+      background: '#f0fdf4'
+    }
+  }, React.createElement(Download, {
+    className: "w-3.5 h-3.5"
+  }), " Exportar Excel"), React.createElement("button", {
+    onClick: () => {
+      setEditing(null);
+      setShowModal(true);
+    },
+    className: "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95",
+    style: {
+      background: CAMPANHA_COLOR
+    }
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }), " Cadastrar Pessoa"))), React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+  }, [{
+    label: 'Total cadastradas',
+    value: stats.total,
+    color: CAMPANHA_COLOR
+  }, {
+    label: 'Com veículo',
+    value: stats.veiculo,
+    color: '#0284c7'
+  }, {
+    label: 'Adesivados',
+    value: stats.adesivado,
+    color: '#059669'
+  }, {
+    label: 'Presentes',
+    value: stats.presente,
+    color: '#dc2626'
+  }].map(k => React.createElement("div", {
+    key: k.label,
+    className: "bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm"
+  }, React.createElement("p", {
+    className: "text-2xl font-black leading-none",
+    style: {
+      color: k.color
+    }
+  }, k.value), React.createElement("p", {
+    className: "text-xs font-semibold text-gray-400 mt-1"
+  }, k.label)))), React.createElement("div", {
+    className: "flex items-center gap-3 flex-wrap"
+  }, React.createElement("div", {
+    className: "relative"
+  }, React.createElement(Search, {
+    className: "w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+  }), React.createElement("input", {
+    type: "text",
+    placeholder: "Buscar por nome, CPF\u2026",
+    value: search,
+    onChange: e => setSearch(e.target.value),
+    className: "pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 w-64 transition-all",
+    style: {
+      '--tw-ring-color': CAMPANHA_COLOR + '44'
+    }
+  })), React.createElement("select", {
+    value: filterOrgao,
+    onChange: e => setFilterOrgao(e.target.value),
+    className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: filterOrgao ? {
+      borderColor: CAMPANHA_COLOR,
+      color: CAMPANHA_COLOR,
+      background: CAMPANHA_COLOR + '10'
+    } : {
+      borderColor: '#e5e7eb',
+      color: '#9ca3af',
+      background: '#fff'
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "Todos os \xD3rg\xE3os"), orgaoOpts.map(o => React.createElement("option", {
+    key: o,
+    value: o
+  }, o))), React.createElement("select", {
+    value: filterVeiculo,
+    onChange: e => setFilterVeiculo(e.target.value),
+    className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: filterVeiculo ? {
+      borderColor: CAMPANHA_COLOR,
+      color: CAMPANHA_COLOR,
+      background: CAMPANHA_COLOR + '10'
+    } : {
+      borderColor: '#e5e7eb',
+      color: '#9ca3af',
+      background: '#fff'
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "Ve\xEDculo: Todos"), React.createElement("option", {
+    value: "sim"
+  }, "Tem ve\xEDculo"), React.createElement("option", {
+    value: "nao"
+  }, "Sem ve\xEDculo")), React.createElement("select", {
+    value: filterAdesivo,
+    onChange: e => setFilterAdesivo(e.target.value),
+    className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: filterAdesivo ? {
+      borderColor: CAMPANHA_COLOR,
+      color: CAMPANHA_COLOR,
+      background: CAMPANHA_COLOR + '10'
+    } : {
+      borderColor: '#e5e7eb',
+      color: '#9ca3af',
+      background: '#fff'
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "Adesivo: Todos"), React.createElement("option", {
+    value: "sim"
+  }, "Adesivou"), React.createElement("option", {
+    value: "nao"
+  }, "N\xE3o adesivou")), React.createElement("select", {
+    value: filterPresente,
+    onChange: e => setFilterPresente(e.target.value),
+    className: "py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer",
+    style: filterPresente ? {
+      borderColor: CAMPANHA_COLOR,
+      color: CAMPANHA_COLOR,
+      background: CAMPANHA_COLOR + '10'
+    } : {
+      borderColor: '#e5e7eb',
+      color: '#9ca3af',
+      background: '#fff'
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "Presen\xE7a: Todos"), React.createElement("option", {
+    value: "sim"
+  }, "Presente"), React.createElement("option", {
+    value: "nao"
+  }, "Ausente")), hasFilters && React.createElement("button", {
+    onClick: () => {
+      setFilterOrgao('');
+      setFilterVeiculo('');
+      setFilterAdesivo('');
+      setFilterPresente('');
+    },
+    className: "flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5"
+  }), " Limpar filtros"), React.createElement("span", {
+    className: "text-xs font-semibold text-gray-400 tracking-wide ml-auto"
+  }, filtered.length, " ", filtered.length === 1 ? 'pessoa' : 'pessoas')), filtered.length === 0 ? React.createElement("div", {
+    className: "bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm"
+  }, React.createElement(Users, {
+    className: "w-10 h-10 mx-auto mb-3 text-gray-200"
+  }), React.createElement("p", {
+    className: "text-gray-400 text-sm font-medium"
+  }, "Nenhuma pessoa encontrada."), React.createElement("p", {
+    className: "text-gray-300 text-xs mt-1"
+  }, "Cadastre a primeira pessoa para come\xE7ar.")) : React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    style: {
+      background: '#f8fafc'
+    }
+  }, React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Nome / CPF"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "\xD3rg\xE3o"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Ve\xEDculo"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Evento"), React.createElement("th", {
+    className: "px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest"
+  }, "Presen\xE7a"), React.createElement("th", {
+    className: "px-5 py-3 w-20"
+  }))), React.createElement("tbody", null, filtered.map((p, idx) => React.createElement("tr", {
+    key: p.id,
+    className: `border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-indigo-50/20' : ''}`,
+    onMouseEnter: e => e.currentTarget.style.background = '#f5f3ff',
+    onMouseLeave: e => e.currentTarget.style.background = ''
+  }, React.createElement("td", {
+    className: "px-5 py-3"
+  }, React.createElement("p", {
+    className: "font-semibold text-gray-800 leading-tight"
+  }, p.nome), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5 font-mono"
+  }, p.cpf || '—')), React.createElement("td", {
+    className: "px-5 py-3 text-gray-600"
+  }, p.orgao || '—'), React.createElement("td", {
+    className: "px-5 py-3"
+  }, p.temVeiculo ? React.createElement("div", null, React.createElement("span", {
+    className: "text-[11px] font-bold px-2 py-1 rounded-full",
+    style: {
+      background: '#e0f2fe',
+      color: '#0284c7'
+    }
+  }, p.placa || 'Sem placa'), p.adesivou && React.createElement("span", {
+    className: "text-[11px] font-bold px-2 py-1 rounded-full ml-1",
+    style: {
+      background: '#dcfce7',
+      color: '#15803d'
+    }
+  }, "Adesivado")) : React.createElement("span", {
+    className: "text-gray-300 text-xs"
+  }, "\u2014")), React.createElement("td", {
+    className: "px-5 py-3 text-gray-600 max-w-40"
+  }, React.createElement("p", {
+    className: "truncate"
+  }, p.evento || '—')), React.createElement("td", {
+    className: "px-5 py-3"
+  }, p.presente ? React.createElement("span", {
+    className: "text-[11px] font-bold px-2 py-1 rounded-full",
+    style: {
+      background: '#dcfce7',
+      color: '#15803d'
+    }
+  }, "Presente") : React.createElement("span", {
+    className: "text-[11px] font-bold px-2 py-1 rounded-full",
+    style: {
+      background: '#f3f4f6',
+      color: '#6b7280'
+    }
+  }, "Ausente")), React.createElement("td", {
+    className: "px-5 py-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-1"
+  }, React.createElement("button", {
+    onClick: () => {
+      setEditing(p);
+      setShowModal(true);
+    },
+    className: "p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+  }, React.createElement(Edit2, {
+    className: "w-3.5 h-3.5"
+  })), React.createElement("button", {
+    onClick: () => onDelete(p.id),
+    className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  }))))))))), showModal && React.createElement(CampanhaModal, {
+    editing: editing,
+    onSubmit: handleSubmit,
+    onClose: () => {
+      setShowModal(false);
+      setEditing(null);
+    }
+  }));
+}
 const CRON_TRIBUTOS_PADRAO = [{
   nome: 'IR/IRPJ',
   aliquota: 4.80
@@ -20230,6 +20842,8 @@ function App() {
   const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [gdocs, setGdocs] = useState([]);
+  const [campanhaPessoas, setCampanhaPessoas] = useState([]);
+  const [showCampanhaPage, setShowCampanhaPage] = useState(false);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
   useEffect(() => {
     if (!showPlusMenu) return;
@@ -20432,6 +21046,19 @@ function App() {
       unsubCfg();
     };
   }, []);
+  useEffect(() => {
+    if (SYS.id !== 'main' || currentUser?.username !== 'henriquecorreia') {
+      setCampanhaPessoas([]);
+      return;
+    }
+    const unsub = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setCampanhaPessoas(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
+    return () => unsub();
+  }, [currentUser]);
   const uniqueContractCount = useMemo(() => {
     const fromContracts = contracts.map(c => c.contractNumber);
     const fromMeta = Object.keys(contractMeta);
@@ -20772,6 +21399,7 @@ function App() {
     setShowPropEmissao(false);
     setShowLeadsPage(false);
     setShowProposalBI(false);
+    setShowCampanhaPage(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
     } else {
@@ -21583,6 +22211,18 @@ function App() {
   async function handleDeleteArcanjoRecord(id) {
     await db.collection(COL('arcanjo_social')).doc(id).delete();
   }
+  async function handleAddCampanha(data) {
+    await db.collection(COL('campanha_pessoas')).add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  async function handleUpdateCampanha(id, data) {
+    await db.collection(COL('campanha_pessoas')).doc(id).update(data);
+  }
+  async function handleDeleteCampanha(id) {
+    await db.collection(COL('campanha_pessoas')).doc(id).delete();
+  }
   async function handleExportArcanjo() {
     addToast('Gerando planilha…');
     try {
@@ -22218,6 +22858,27 @@ function App() {
       setShowForm(false);
       setShowAdmin(false);
       setShowCertidoesPage(true);
+    }
+  }), SYS.id === 'main' && currentUser.username === 'henriquecorreia' && React.createElement(SidebarBtn, {
+    icon: Users,
+    label: "Campanha",
+    active: showCampanhaPage,
+    onClick: () => {
+      setShowCampanhaPage(true);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
+      setShowPropEmissao(false);
+      setShowLeadsPage(false);
+      setShowGdocPage(false);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowProposalBI(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
     }
   }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && React.createElement(SidebarBtn, {
     icon: Layers,
@@ -23182,6 +23843,12 @@ function App() {
     onDelete: cn => handleDeleteContract(cn, () => {
       setActiveContractNumber(null);
     })
+  }) : showCampanhaPage && SYS.id === 'main' && currentUser.username === 'henriquecorreia' ? React.createElement(CampanhaPage, {
+    pessoas: campanhaPessoas,
+    onAdd: handleAddCampanha,
+    onUpdate: handleUpdateCampanha,
+    onDelete: handleDeleteCampanha,
+    addToast: addToast
   }) : React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("div", {
     className: "flex items-center justify-between mb-3 flex-wrap gap-2"
   }, React.createElement("div", {
