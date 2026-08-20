@@ -295,6 +295,7 @@ const SYSTEMS = {
 const SYS_ID = typeof window !== 'undefined' && /^\/gcsp(\/|$)/i.test(window.location.pathname || '') ? 'gcsp' : 'main';
 const SYS = SYSTEMS[SYS_ID];
 const COL = name => SYS.prefix + name;
+const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
 const GCSP_MODULES = [{
   key: 'contratos',
   label: 'Contratos'
@@ -21083,6 +21084,7 @@ function App() {
       if (u) {
         setCurrentUser(u);
         if (ARCANJO_ONLY.has(u.username)) setShowArcanjoPage(true);
+        if (IS_CAMPANHA_ROUTE && SYS.id === 'main' && u.username === 'henriquecorreia') setShowCampanhaPage(true);
       }
     }
   }, [users, sessionId]);
@@ -21425,6 +21427,7 @@ function App() {
     localStorage.setItem(SYS.sessionKey, String(user.id));
     setCurrentUser(user);
     if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
+    if (IS_CAMPANHA_ROUTE && SYS.id === 'main' && user.username === 'henriquecorreia') setShowCampanhaPage(true);
   }
   function handleLogout() {
     const goArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
