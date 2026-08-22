@@ -13618,6 +13618,23 @@ function ArcanjoIncluirPessoasModal({
       return next;
     });
   }
+  const todosVisiveisSelecionados = disponiveis.length > 0 && disponiveis.every(p => selecionados.has(p.id));
+  function selecionarTodos() {
+    setSelecionados(sel => {
+      const idsVisiveis = disponiveis.map(p => p.id);
+      const next = new Set(sel);
+      if (todosVisiveisSelecionados) {
+        idsVisiveis.forEach(id => next.delete(id));
+        return next;
+      }
+      for (const id of idsVisiveis) {
+        if (next.has(id)) continue;
+        if (evento.capacidade != null && (evento.participantes || []).length + next.size >= evento.capacidade) break;
+        next.add(id);
+      }
+      return next;
+    });
+  }
   function confirmar() {
     const novos = pessoas.filter(p => selecionados.has(p.id)).map(p => ({
       pessoaId: p.id,
@@ -13684,7 +13701,24 @@ function ArcanjoIncluirPessoasModal({
     className: "overflow-y-auto flex-1 px-6 py-3 space-y-1"
   }, disponiveis.length === 0 && React.createElement("p", {
     className: "text-center text-xs text-gray-400 py-10"
-  }, "Nenhuma pessoa dispon\xEDvel para incluir."), disponiveis.slice(0, 300).map(p => {
+  }, "Nenhuma pessoa dispon\xEDvel para incluir."), disponiveis.length > 0 && React.createElement("button", {
+    type: "button",
+    onClick: selecionarTodos,
+    className: "sticky top-0 z-10 bg-white w-full flex items-center gap-3 px-3 py-2 mb-1 rounded-xl text-left border-b border-gray-50 hover:bg-gray-50 transition-colors"
+  }, React.createElement("div", {
+    className: "w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosVisiveisSelecionados ? '' : 'border-gray-200'),
+    style: todosVisiveisSelecionados ? {
+      background: ARCANJO_COLOR,
+      borderColor: ARCANJO_COLOR
+    } : undefined
+  }, todosVisiveisSelecionados && React.createElement(CheckCircle, {
+    className: "w-3.5 h-3.5 text-white"
+  })), React.createElement("p", {
+    className: "text-xs font-bold",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, todosVisiveisSelecionados ? 'Desmarcar todos' : `Selecionar todos (${disponiveis.length})`)), disponiveis.slice(0, 300).map(p => {
     const checked = selecionados.has(p.id);
     const disabled = !checked && lotado;
     return React.createElement("button", {
