@@ -22671,6 +22671,9 @@ function App() {
     year: 'numeric'
   });
   const firstName = (currentUser.name || currentUser.username).split(' ')[0];
+  const emArcanjo = showArcanjoPage || showArcanjoGerencial || ARCANJO_ONLY.has(currentUser.username);
+  const horaAgora = new Date().getHours();
+  const saudacao = !emArcanjo ? 'Olá' : horaAgora < 12 ? 'Bom dia' : horaAgora < 18 ? 'Boa tarde' : 'Boa noite';
   const userInitials = (currentUser.name || currentUser.username).split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
   function SidebarBtn({
     icon: Icon,
@@ -23191,7 +23194,7 @@ function App() {
     style: {
       color: BLUE
     }
-  }, "Ol\xE1, ", firstName, "!"), React.createElement("p", {
+  }, saudacao, ", ", firstName, "!"), React.createElement("p", {
     className: "text-[10px] text-gray-400 leading-tight capitalize"
   }, today)), SYS.id === 'gcsp' && React.createElement("span", {
     className: "text-[10px] font-black px-2.5 py-1 rounded-lg text-white whitespace-nowrap",

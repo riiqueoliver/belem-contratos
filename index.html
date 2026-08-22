@@ -16201,6 +16201,13 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
       const today = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
       const firstName = (currentUser.name || currentUser.username).split(' ')[0];
+      // Saudação por horário — só no módulo Arcanjo's; os demais sistemas seguem com "Olá"
+      const emArcanjo = showArcanjoPage || showArcanjoGerencial || ARCANJO_ONLY.has(currentUser.username);
+      const horaAgora = new Date().getHours();
+      const saudacao  = !emArcanjo      ? 'Olá'
+                      : horaAgora < 12  ? 'Bom dia'
+                      : horaAgora < 18  ? 'Boa tarde'
+                      :                   'Boa noite';
       const userInitials = (currentUser.name || currentUser.username).split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
 
       // ── Sidebar button component ──────────────────────────────
@@ -16500,7 +16507,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               <div className="flex items-center gap-3">
                 <div>
                   <p className="text-sm font-bold leading-tight" style={{color: BLUE}}>
-                    Olá, {firstName}!
+                    {saudacao}, {firstName}!
                   </p>
                   <p className="text-[10px] text-gray-400 leading-tight capitalize">{today}</p>
                 </div>
