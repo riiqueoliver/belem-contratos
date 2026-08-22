@@ -11543,12 +11543,15 @@ const ARCANJO_VISITA_STATUS = {
   bg: '#fee2e2'
 };
 const ARCANJO_ALL_STATUSES = [...ARCANJO_STATUSES, ARCANJO_VISITA_STATUS];
+const ARCANJO_BAIRROS = ["40 Horas", "Agua Boa - Outeiro", "Aguas Brancas", "Aguas Lindas", "Aguas Negras", "Agulha", "Ananindeua", "Atalaia", "Aura - Ananindeua", "Barreiro", "Batista Campos", "Beija Flor - Marituba", "Benevides", "Bengui", "Brasilia Outeiro", "Cabanagem", "Campina", "Campina de Icoaraci", "Campo Verde", "Canudos", "Cassiano - Santo Antonio do Taua", "Castanheira", "CDP", "Centro", "Centro Ananindeua", "Cidade Nova", "Cidade Nova 4 - Ananindeua", "Cidade Nova 6 - Ananindeua", "Cidade Nova 8", "Cidade Velha", "Combu", "Condor", "Coqueiro", "Cremacao", "Cruzeiro", "Curio Utinga", "Curucamba", "Decouville - Marituba", "Distrito Industrial", "Estrada do Outeiro", "Estrada Velha", "Fama", "Farol - Mosqueiro", "Fatima", "Fe Em Deus", "Guama", "Guanabara", "Guanabara Ananindeua", "Icoaraci", "Icui - Ananindeua", "Icui Guajara", "Independente - Benevides", "Itaiteua", "Jaderlandia - Ananindeua", "Jibioa Branca - Ananindeua", "Jurunas", "Levilandia - Ananindeua", "Maguari - Ananindeua", "Mangueirao", "Maracacuera", "Maracangalha", "Marambaia", "Marco", "Marituba", "Moacir Gerundi - Benevides", "Montese", "Mosqueiro", "Nazare", "Nova Marituba - Marituba", "Nova Vida", "Novo Horizonte - Marituba", "Outeiro", "Paar", "Paracuri", "Paracuri I", "Paracuri II", "Park Vitoria", "Parque Floresta", "Parque Guajara", "Parque Verde", "Pedreira", "Pedreirinha - Marituba", "Ponta Grossa", "Ponta Grossa Icoaraci", "Pratinha", "Pratinha I", "Pratinha II", "Quinta dos Paricas", "Reduto", "Ribeirinha - Combu", "Ribeirinha - Ilha Murutucum", "Sacramenta", "Santa Lucia - Marituba", "Sao Bras", "Sao Clemente", "Sao Francisco - Marituba", "Sao Francisco - Mosqueiro", "Sao Joao do Outeiro", "Sao Jose Marituba", "Sao Pedro - Marituba", "Sem Bairro", "Sideral", "Soledade", "Souza", "Tapana", "Telegrafo", "Tenone", "Terra Firme", "Toma Fuma", "Uma", "Umarizal", "Una", "Uriboca - Marituba", "Uruperi Brasilia", "Val de Cans", "Vila - Mosqueiro", "Vila Sinha", "Zona Rural"];
+const ARCANJO_BAIRROS_EVENTO = ARCANJO_BAIRROS.filter(b => b !== 'Sem Bairro');
 function ArcanjoLiderancaField({
   value,
   onChange,
   options,
   accent,
-  placeholder = 'Nome da liderança'
+  placeholder = 'Nome da liderança',
+  newLabel = 'novo nome'
 }) {
   const [open, setOpen] = React.useState(false);
   const [highlight, setHighlight] = React.useState(-1);
@@ -11638,7 +11641,7 @@ function ArcanjoLiderancaField({
     className: "w-3 h-3 flex-shrink-0"
   }), React.createElement("span", null, "Cadastrar \"", React.createElement("span", {
     className: "font-semibold text-gray-600"
-  }, value.trim()), "\" como novo nome"))));
+  }, value.trim()), "\" como ", newLabel))));
 }
 function ArcanjoModal({
   tab,
@@ -11784,11 +11787,13 @@ function ArcanjoModal({
     className: ic
   })), React.createElement("div", null, React.createElement("label", {
     className: lc
-  }, "Bairro"), React.createElement("input", {
+  }, "Bairro"), React.createElement(ArcanjoLiderancaField, {
     value: form.bairro,
-    onChange: e => set('bairro', e.target.value),
+    onChange: v => set('bairro', v),
+    options: ARCANJO_BAIRROS,
+    accent: accent,
     placeholder: "Bairro",
-    className: ic
+    newLabel: "novo bairro"
   }))), React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
@@ -13451,6 +13456,548 @@ function ArcanjoGerencial({
     data: byLideranca,
     colorFn: i => lilacPalette[i % lilacPalette.length]
   }))));
+}
+const ARCANJO_ACOES_TABS = [{
+  key: 'pessoas',
+  label: 'Pessoas'
+}, {
+  key: 'eventos',
+  label: 'Eventos'
+}];
+function ArcanjoEventoModal({
+  onSubmit,
+  onClose
+}) {
+  const [form, setForm] = React.useState({
+    nome: '',
+    bairro: '',
+    local: '',
+    capacidade: '',
+    data: ''
+  });
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
+  const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
+  function submit(e) {
+    e.preventDefault();
+    if (!form.nome.trim() || !form.bairro || !form.data) return;
+    onSubmit({
+      nome: form.nome.trim(),
+      bairro: form.bairro,
+      local: form.local.trim(),
+      capacidade: form.capacidade ? Number(form.capacidade) : null,
+      data: form.data
+    });
+  }
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, React.createElement(Calendar, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Novo Evento")), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("form", {
+    id: "arcanjo-evento-form",
+    onSubmit: submit,
+    className: "overflow-y-auto flex-1 px-6 py-5 space-y-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Nome do evento"), React.createElement("input", {
+    value: form.nome,
+    onChange: e => set('nome', e.target.value),
+    placeholder: "Ex.: Mutir\xE3o de Documentos",
+    className: ic,
+    autoFocus: true
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Bairro / Local"), React.createElement("select", {
+    value: form.bairro,
+    onChange: e => set('bairro', e.target.value),
+    className: ic
+  }, React.createElement("option", {
+    value: ""
+  }, "Selecione o bairro..."), ARCANJO_BAIRROS_EVENTO.map(b => React.createElement("option", {
+    key: b,
+    value: b
+  }, b)))), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Ponto de refer\xEAncia (opcional)"), React.createElement("input", {
+    value: form.local,
+    onChange: e => set('local', e.target.value),
+    placeholder: "Ex.: Igreja Matriz, Quadra da comunidade...",
+    className: ic
+  })), React.createElement("div", {
+    className: "grid grid-cols-2 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Capacidade"), React.createElement("input", {
+    type: "number",
+    min: "1",
+    value: form.capacidade,
+    onChange: e => set('capacidade', e.target.value),
+    placeholder: "N\xBA de pessoas",
+    className: ic
+  })), React.createElement("div", null, React.createElement("label", {
+    className: lc
+  }, "Data"), React.createElement("input", {
+    type: "date",
+    value: form.data,
+    onChange: e => set('data', e.target.value),
+    className: ic
+  })))), React.createElement("div", {
+    className: "px-6 py-4 border-t border-gray-100 flex justify-end gap-3"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+  }, "Cancelar"), React.createElement("button", {
+    type: "submit",
+    form: "arcanjo-evento-form",
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-colors",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, "Criar Evento"))));
+}
+function ArcanjoIncluirPessoasModal({
+  evento,
+  pessoas,
+  onAdd,
+  onClose
+}) {
+  const [busca, setBusca] = React.useState('');
+  const [selecionados, setSelecionados] = React.useState(() => new Set());
+  const jaIncluidos = React.useMemo(() => new Set((evento.participantes || []).map(p => p.pessoaId)), [evento.participantes]);
+  const disponiveis = React.useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return pessoas.filter(p => p.bairro === evento.bairro && !jaIncluidos.has(p.id) && (!q || p.nome.toLowerCase().includes(q) || (p.telefone || '').includes(q)));
+  }, [pessoas, evento.bairro, jaIncluidos, busca]);
+  const vagas = evento.capacidade != null ? Math.max(0, evento.capacidade - (evento.participantes || []).length - selecionados.size) : null;
+  const lotado = evento.capacidade != null && (evento.participantes || []).length + selecionados.size >= evento.capacidade;
+  function toggle(id) {
+    setSelecionados(sel => {
+      const next = new Set(sel);
+      if (next.has(id)) {
+        next.delete(id);
+        return next;
+      }
+      if (evento.capacidade != null && (evento.participantes || []).length + next.size >= evento.capacidade) return next;
+      next.add(id);
+      return next;
+    });
+  }
+  function confirmar() {
+    const novos = pessoas.filter(p => selecionados.has(p.id)).map(p => ({
+      pessoaId: p.id,
+      nome: p.nome,
+      telefone: p.telefone || ''
+    }));
+    if (novos.length) onAdd(novos);
+    onClose();
+  }
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[88vh] flex flex-col"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Incluir Pessoas \u2014 ", evento.nome), React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Bairro: ", evento.bairro, " \xB7 ", disponiveis.length, " pessoa(s) dispon\xEDvel(is)")), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "px-6 pt-4"
+  }, React.createElement("div", {
+    className: "relative"
+  }, React.createElement(Search, {
+    className: "w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2"
+  }), React.createElement("input", {
+    value: busca,
+    onChange: e => setBusca(e.target.value),
+    placeholder: "Buscar por nome ou telefone...",
+    className: "w-full border border-gray-100 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+  }))), React.createElement("div", {
+    className: "overflow-y-auto flex-1 px-6 py-3 space-y-1"
+  }, disponiveis.length === 0 && React.createElement("p", {
+    className: "text-center text-xs text-gray-400 py-10"
+  }, "Nenhuma pessoa dispon\xEDvel para incluir."), disponiveis.slice(0, 300).map(p => {
+    const checked = selecionados.has(p.id);
+    const disabled = !checked && lotado;
+    return React.createElement("button", {
+      key: p.id,
+      type: "button",
+      onClick: () => toggle(p.id),
+      disabled: disabled,
+      className: "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors " + (checked ? '' : disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'),
+      style: checked ? {
+        background: '#f5f3ff'
+      } : undefined
+    }, React.createElement("div", {
+      className: "w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (checked ? '' : 'border-gray-200'),
+      style: checked ? {
+        background: ARCANJO_COLOR,
+        borderColor: ARCANJO_COLOR
+      } : undefined
+    }, checked && React.createElement(CheckCircle, {
+      className: "w-3.5 h-3.5 text-white"
+    })), React.createElement("div", {
+      className: "min-w-0 flex-1"
+    }, React.createElement("p", {
+      className: "text-sm font-semibold text-gray-700 truncate"
+    }, p.nome), React.createElement("p", {
+      className: "text-xs text-gray-400"
+    }, p.telefone || 'sem telefone')));
+  })), React.createElement("div", {
+    className: "px-6 py-4 border-t border-gray-100 flex items-center justify-between"
+  }, React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, selecionados.size, " selecionado(s)", vagas != null ? ` · ${vagas} vaga(s) restante(s)` : ''), React.createElement("div", {
+    className: "flex gap-3"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+  }, "Cancelar"), React.createElement("button", {
+    type: "button",
+    onClick: confirmar,
+    disabled: selecionados.size === 0,
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, "Adicionar ", selecionados.size > 0 ? `(${selecionados.size})` : '')))));
+}
+function ArcanjoEventoCard({
+  evento,
+  onIncluir,
+  onDelete,
+  onRemoverParticipante
+}) {
+  const [expandido, setExpandido] = React.useState(false);
+  const participantes = evento.participantes || [];
+  const pct = evento.capacidade ? Math.min(100, Math.round(participantes.length / evento.capacidade * 100)) : null;
+  const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) : '';
+  return React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+  }, React.createElement("div", {
+    className: "p-5"
+  }, React.createElement("div", {
+    className: "flex items-start justify-between gap-3"
+  }, React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h3", {
+    className: "font-bold text-gray-800 text-sm truncate"
+  }, evento.nome), React.createElement("p", {
+    className: "text-xs text-gray-400 mt-0.5"
+  }, evento.bairro, evento.local ? ` · ${evento.local}` : '')), React.createElement("button", {
+    onClick: () => onDelete(evento.id),
+    className: "p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  }))), React.createElement("div", {
+    className: "flex items-center gap-2 mt-3 text-xs text-gray-400"
+  }, React.createElement(Calendar, {
+    className: "w-3.5 h-3.5"
+  }), React.createElement("span", null, dataFmt || 'sem data')), React.createElement("div", {
+    className: "mt-3"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between text-xs mb-1.5"
+  }, React.createElement("button", {
+    onClick: () => setExpandido(e => !e),
+    className: "font-bold flex items-center gap-1",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, participantes.length, evento.capacidade ? ` / ${evento.capacidade}` : '', " pessoa(s)", expandido ? React.createElement(ChevronUp, {
+    className: "w-3 h-3"
+  }) : React.createElement(ChevronDown, {
+    className: "w-3 h-3"
+  })), pct != null && React.createElement("span", {
+    className: "text-gray-400"
+  }, pct, "%")), pct != null && React.createElement("div", {
+    className: "h-1.5 rounded-full bg-gray-100 overflow-hidden"
+  }, React.createElement("div", {
+    className: "h-full rounded-full transition-all",
+    style: {
+      width: `${pct}%`,
+      background: pct >= 100 ? '#dc2626' : ARCANJO_COLOR
+    }
+  }))), expandido && participantes.length > 0 && React.createElement("div", {
+    className: "mt-3 space-y-1 max-h-48 overflow-y-auto pr-1"
+  }, participantes.map(p => React.createElement("div", {
+    key: p.pessoaId,
+    className: "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50"
+  }, React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("p", {
+    className: "text-xs font-semibold text-gray-700 truncate"
+  }, p.nome), React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, p.telefone || 'sem telefone')), React.createElement("button", {
+    onClick: () => onRemoverParticipante(p.pessoaId),
+    className: "p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+  }, React.createElement(X, {
+    className: "w-3 h-3"
+  }))))), React.createElement("button", {
+    onClick: () => onIncluir(evento),
+    className: "mt-4 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border transition-colors",
+    style: {
+      color: ARCANJO_COLOR,
+      borderColor: '#ddd6fe',
+      background: '#f5f3ff'
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-3.5 h-3.5"
+  }), " Incluir Pessoas")));
+}
+function ArcanjoAcoesPage({
+  pessoas,
+  eventos,
+  onAddEvento,
+  onUpdateEvento,
+  onDeleteEvento,
+  onUpdatePessoaBairro
+}) {
+  const [tab, setTab] = React.useState('pessoas');
+  const [busca, setBusca] = React.useState('');
+  const [filtroBairro, setFiltroBairro] = React.useState('');
+  const [pagina, setPagina] = React.useState(0);
+  const [showEventoModal, setShowEventoModal] = React.useState(false);
+  const [incluindoEm, setIncluindoEm] = React.useState(null);
+  const [editandoBairroDe, setEditandoBairroDe] = React.useState(null);
+  const POR_PAGINA = 50;
+  const filtrados = React.useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return pessoas.filter(p => (!filtroBairro || p.bairro === filtroBairro) && (!q || p.nome.toLowerCase().includes(q) || (p.telefone || '').includes(q)));
+  }, [pessoas, busca, filtroBairro]);
+  React.useEffect(() => {
+    setPagina(0);
+  }, [busca, filtroBairro]);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const pagAtual = Math.min(pagina, totalPaginas - 1);
+  const visiveis = filtrados.slice(pagAtual * POR_PAGINA, pagAtual * POR_PAGINA + POR_PAGINA);
+  const contagemPorBairro = React.useMemo(() => {
+    const m = new Map();
+    pessoas.forEach(p => m.set(p.bairro, (m.get(p.bairro) || 0) + 1));
+    return m;
+  }, [pessoas]);
+  const eventosOrdenados = React.useMemo(() => [...eventos].sort((a, b) => (b.data || '').localeCompare(a.data || '')), [eventos]);
+  return React.createElement("div", {
+    className: "flex-1 flex flex-col min-h-screen bg-gray-50"
+  }, React.createElement("div", {
+    className: "bg-white border-b border-gray-100 px-6 pt-6 pb-0"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 mb-5"
+  }, React.createElement("div", {
+    className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, React.createElement(Calendar, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-lg font-extrabold tracking-tight",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, "A\xE7\xF5es"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 font-medium"
+  }, "Instituto Arcanjo's \xB7 Base de pessoas por bairro e organiza\xE7\xE3o de eventos"))), React.createElement("div", {
+    className: "flex gap-1"
+  }, ARCANJO_ACOES_TABS.map(t => React.createElement("button", {
+    key: t.key,
+    onClick: () => setTab(t.key),
+    className: "px-4 py-2.5 text-sm font-bold border-b-2 transition-colors " + (tab === t.key ? '' : 'border-transparent text-gray-400 hover:text-gray-600'),
+    style: tab === t.key ? {
+      color: ARCANJO_COLOR,
+      borderColor: ARCANJO_COLOR
+    } : undefined
+  }, t.label, t.key === 'eventos' && eventos.length > 0 ? ` (${eventos.length})` : '')))), React.createElement("div", {
+    className: "flex-1 overflow-y-auto p-6"
+  }, tab === 'pessoas' ? React.createElement("div", {
+    className: "max-w-5xl mx-auto space-y-4"
+  }, React.createElement("div", {
+    className: "flex flex-col sm:flex-row gap-3"
+  }, React.createElement("div", {
+    className: "relative flex-1"
+  }, React.createElement(Search, {
+    className: "w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2"
+  }), React.createElement("input", {
+    value: busca,
+    onChange: e => setBusca(e.target.value),
+    placeholder: "Buscar por nome ou telefone...",
+    className: "w-full border border-gray-100 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 transition-all"
+  })), React.createElement("select", {
+    value: filtroBairro,
+    onChange: e => setFiltroBairro(e.target.value),
+    className: "border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 transition-all sm:w-64"
+  }, React.createElement("option", {
+    value: ""
+  }, "Todos os bairros (", pessoas.length, ")"), ARCANJO_BAIRROS.filter(b => contagemPorBairro.has(b)).map(b => React.createElement("option", {
+    key: b,
+    value: b
+  }, b, " (", contagemPorBairro.get(b), ")")))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+  }, React.createElement("div", {
+    className: "px-5 py-3 border-b border-gray-100 flex items-center justify-between"
+  }, React.createElement("p", {
+    className: "text-xs font-bold text-gray-400 uppercase tracking-wider"
+  }, filtrados.length, " pessoa(s)"), totalPaginas > 1 && React.createElement("div", {
+    className: "flex items-center gap-2 text-xs text-gray-400"
+  }, React.createElement("button", {
+    onClick: () => setPagina(p => Math.max(0, p - 1)),
+    disabled: pagAtual === 0,
+    className: "p-1 rounded-lg hover:bg-gray-50 disabled:opacity-30"
+  }, React.createElement(ChevronLeft, {
+    className: "w-4 h-4"
+  })), React.createElement("span", null, "P\xE1gina ", pagAtual + 1, " de ", totalPaginas), React.createElement("button", {
+    onClick: () => setPagina(p => Math.min(totalPaginas - 1, p + 1)),
+    disabled: pagAtual >= totalPaginas - 1,
+    className: "p-1 rounded-lg hover:bg-gray-50 disabled:opacity-30"
+  }, React.createElement(ChevronRight, {
+    className: "w-4 h-4"
+  })))), React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    className: "text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50"
+  }, React.createElement("th", {
+    className: "px-5 py-2.5"
+  }, "Nome"), React.createElement("th", {
+    className: "px-5 py-2.5"
+  }, "Telefone"), React.createElement("th", {
+    className: "px-5 py-2.5"
+  }, "Bairro"), React.createElement("th", {
+    className: "px-5 py-2.5"
+  }))), React.createElement("tbody", null, visiveis.map(p => React.createElement("tr", {
+    key: p.id,
+    className: "border-b border-gray-50 last:border-0 hover:bg-gray-50/50"
+  }, React.createElement("td", {
+    className: "px-5 py-2.5 font-semibold text-gray-700"
+  }, p.nome), React.createElement("td", {
+    className: "px-5 py-2.5 text-gray-500"
+  }, p.telefone || '—'), React.createElement("td", {
+    className: "px-5 py-2.5 text-gray-500"
+  }, p.bairro), React.createElement("td", {
+    className: "px-5 py-2.5 text-right"
+  }, React.createElement("button", {
+    onClick: () => setEditandoBairroDe(p),
+    className: "p-1.5 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors",
+    title: "Corrigir bairro"
+  }, React.createElement(Edit2, {
+    className: "w-3.5 h-3.5"
+  }))))), visiveis.length === 0 && React.createElement("tr", null, React.createElement("td", {
+    colSpan: 4,
+    className: "px-5 py-10 text-center text-xs text-gray-400"
+  }, "Nenhuma pessoa encontrada.")))))) : React.createElement("div", {
+    className: "max-w-5xl mx-auto space-y-4"
+  }, React.createElement("div", {
+    className: "flex justify-end"
+  }, React.createElement("button", {
+    onClick: () => setShowEventoModal(true),
+    className: "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }), " Novo Evento")), eventosOrdenados.length === 0 ? React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm py-16 text-center"
+  }, React.createElement(Calendar, {
+    className: "w-12 h-12 mx-auto mb-3 opacity-20"
+  }), React.createElement("p", {
+    className: "text-sm text-gray-400"
+  }, "Nenhum evento cadastrado ainda.")) : React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+  }, eventosOrdenados.map(ev => React.createElement(ArcanjoEventoCard, {
+    key: ev.id,
+    evento: ev,
+    onIncluir: setIncluindoEm,
+    onDelete: onDeleteEvento,
+    onRemoverParticipante: pessoaId => onUpdateEvento(ev.id, {
+      participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId)
+    })
+  }))))), showEventoModal && React.createElement(ArcanjoEventoModal, {
+    onSubmit: data => {
+      onAddEvento(data);
+      setShowEventoModal(false);
+    },
+    onClose: () => setShowEventoModal(false)
+  }), incluindoEm && React.createElement(ArcanjoIncluirPessoasModal, {
+    evento: incluindoEm,
+    pessoas: pessoas,
+    onAdd: novos => onUpdateEvento(incluindoEm.id, {
+      participantes: [...(incluindoEm.participantes || []), ...novos]
+    }),
+    onClose: () => setIncluindoEm(null)
+  }), editandoBairroDe && React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+  }, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm mb-1"
+  }, "Corrigir bairro"), React.createElement("p", {
+    className: "text-xs text-gray-400 mb-4"
+  }, editandoBairroDe.nome), React.createElement(ArcanjoLiderancaField, {
+    value: editandoBairroDe.bairro,
+    onChange: v => setEditandoBairroDe(p => ({
+      ...p,
+      bairro: v
+    })),
+    options: ARCANJO_BAIRROS,
+    accent: ARCANJO_COLOR,
+    placeholder: "Bairro",
+    newLabel: "novo bairro"
+  }), React.createElement("div", {
+    className: "flex justify-end gap-3 mt-5"
+  }, React.createElement("button", {
+    onClick: () => setEditandoBairroDe(null),
+    className: "px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+  }, "Cancelar"), React.createElement("button", {
+    onClick: () => {
+      onUpdatePessoaBairro(editandoBairroDe.id, editandoBairroDe.bairro);
+      setEditandoBairroDe(null);
+    },
+    className: "px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-colors",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, "Salvar")))));
 }
 const CAMPANHA_COLOR = '#4338ca';
 function CampanhaModal({
@@ -21007,6 +21554,7 @@ function App() {
   const [showGdocPage, setShowGdocPage] = useState(false);
   const [showArcanjoPage, setShowArcanjoPage] = useState(false);
   const [showArcanjoGerencial, setShowArcanjoGerencial] = useState(false);
+  const [showArcanjoAcoes, setShowArcanjoAcoes] = useState(false);
   const [showProposalBI, setShowProposalBI] = useState(false);
   const [showCronogramaPage, setShowCronogramaPage] = useState(false);
   const [cronogramas, setCronogramas] = useState([]);
@@ -21024,6 +21572,8 @@ function App() {
   const [gcspModules, setGcspModules] = useState({});
   const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
+  const [arcanjoPessoas, setArcanjoPessoas] = useState([]);
+  const [arcanjoEventos, setArcanjoEventos] = useState([]);
   const [gdocs, setGdocs] = useState([]);
   const [campanhaPessoas, setCampanhaPessoas] = useState([]);
   const [campanhaEventos, setCampanhaEventos] = useState([]);
@@ -21165,6 +21715,18 @@ function App() {
         id: d.id
       })));
     });
+    const unsubArcanjoPessoas = db.collection(COL('arcanjo_pessoas')).onSnapshot(snap => {
+      setArcanjoPessoas(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
+    const unsubArcanjoEventos = db.collection(COL('arcanjo_eventos')).orderBy('createdAt', 'desc').onSnapshot(snap => {
+      setArcanjoEventos(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    });
     const unsubCron = db.collection(COL('cronogramas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
       setCronogramas(snap.docs.map(d => ({
         ...d.data(),
@@ -21222,6 +21784,8 @@ function App() {
       unsubs.forEach(u => u());
       unsubGdocs();
       unsubArcanjo();
+      unsubArcanjoPessoas();
+      unsubArcanjoEventos();
       unsubCron();
       unsubCert();
       unsubOrg();
@@ -21430,13 +21994,13 @@ function App() {
     if (IS_CAMPANHA_ROUTE && SYS.id === 'main' && user.username === 'henriquecorreia') setShowCampanhaPage(true);
   }
   function handleLogout() {
-    const goArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
+    const goArcanjo = showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || currentUser && ARCANJO_ONLY.has(currentUser.username);
     localStorage.removeItem(SYS.sessionKey);
     setCurrentUser(null);
     if (goArcanjo) window.location.replace('/moduloarcanjo');
   }
   useEffect(() => {
-    const isArcanjo = showArcanjoPage || showArcanjoGerencial || currentUser && ARCANJO_ONLY.has(currentUser.username);
+    const isArcanjo = showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || currentUser && ARCANJO_ONLY.has(currentUser.username);
     document.title = isArcanjo ? 'Sistema Arcanjo - Neotrix' : SYS.title;
     if (SYS.id === 'gcsp' && !isArcanjo) {
       let link = document.querySelector("link[rel='icon']");
@@ -21448,7 +22012,7 @@ function App() {
       link.type = 'image/png';
       link.href = 'gcsp-symbol.png';
     }
-  }, [showArcanjoPage, showArcanjoGerencial, currentUser]);
+  }, [showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, currentUser]);
   useEffect(() => {
     if (!currentUser) return;
     const TIMEOUT_MS = 15 * 60 * 1000;
@@ -22407,6 +22971,24 @@ function App() {
   async function handleDeleteArcanjoRecord(id) {
     await db.collection(COL('arcanjo_social')).doc(id).delete();
   }
+  async function handleUpdateArcanjoPessoaBairro(id, bairro) {
+    await db.collection(COL('arcanjo_pessoas')).doc(id).update({
+      bairro
+    });
+  }
+  async function handleAddArcanjoEvento(data) {
+    await db.collection(COL('arcanjo_eventos')).add({
+      ...data,
+      participantes: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  async function handleUpdateArcanjoEvento(id, data) {
+    await db.collection(COL('arcanjo_eventos')).doc(id).update(data);
+  }
+  async function handleDeleteArcanjoEvento(id) {
+    await db.collection(COL('arcanjo_eventos')).doc(id).delete();
+  }
   async function handleAddCampanha(data) {
     await db.collection(COL('campanha_pessoas')).add({
       ...data,
@@ -22671,7 +23253,7 @@ function App() {
     year: 'numeric'
   });
   const firstName = (currentUser.name || currentUser.username).split(' ')[0];
-  const emArcanjo = showArcanjoPage || showArcanjoGerencial || ARCANJO_ONLY.has(currentUser.username);
+  const emArcanjo = showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || ARCANJO_ONLY.has(currentUser.username);
   const horaAgora = new Date().getHours();
   const saudacao = !emArcanjo ? 'Olá' : horaAgora < 12 ? 'Bom dia' : horaAgora < 18 ? 'Boa tarde' : 'Boa noite';
   const userInitials = (currentUser.name || currentUser.username).split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
@@ -22928,6 +23510,7 @@ function App() {
     icon: Clipboard,
     label: `Contratos (${uniqueContractCount})`,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowContractsPage(true);
       setShowInstallmentsPage(false);
       setShowProposalsPage(false);
@@ -22950,6 +23533,7 @@ function App() {
     label: "Parcelas",
     active: showInstallmentsPage,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowInstallmentsPage(true);
       setShowContractsPage(false);
       setShowProposalsPage(false);
@@ -22970,6 +23554,7 @@ function App() {
     label: "Propostas",
     active: showProposalsPage,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowProposalsPage(true);
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
@@ -22990,6 +23575,7 @@ function App() {
     label: "Cronograma Financeiro",
     active: showCronogramaPage,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowProposalBI(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -23008,6 +23594,7 @@ function App() {
     active: showLeadsPage,
     badge: leads.filter(l => l.status === 'novo').length,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowProposalBI(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -23029,6 +23616,7 @@ function App() {
     label: "Emitir Proposta",
     active: showPropEmissao,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowProposalBI(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -23051,6 +23639,7 @@ function App() {
     active: showCertidoesPage,
     badge: certidoes.filter(c => ['expired', 'expiring'].includes(certStatus(c))).length,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowProposalBI(false);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -23072,6 +23661,7 @@ function App() {
     label: "Campanha",
     active: showCampanhaPage,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowCampanhaPage(true);
       setShowArcanjoPage(false);
       setShowArcanjoGerencial(false);
@@ -23094,6 +23684,7 @@ function App() {
     active: showGdocPage,
     badge: gdocs.length > 0 ? 0 : 0,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowGdocPage(true);
       setShowProposalsPage(false);
       setShowInstallmentsPage(false);
@@ -23114,6 +23705,7 @@ function App() {
     label: "Arcanjo's",
     active: showArcanjoPage,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowArcanjoPage(true);
       setShowArcanjoGerencial(false);
       setShowCronogramaPage(false);
@@ -23133,6 +23725,7 @@ function App() {
     label: "Painel Gerencial",
     active: showArcanjoGerencial,
     onClick: () => {
+      setShowArcanjoAcoes(false);
       setShowArcanjoGerencial(true);
       setShowArcanjoPage(false);
       setShowGdocPage(false);
@@ -23140,6 +23733,28 @@ function App() {
       setShowInstallmentsPage(false);
       setShowContractsPage(false);
       setShowCronogramaPage(false);
+      setActiveContractNumber(null);
+      setShowForm(false);
+      setShowAdmin(false);
+    }
+  }), ARCANJO_USERS.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Calendar,
+    label: "A\xE7\xF5es",
+    active: showArcanjoAcoes,
+    onClick: () => {
+      setShowArcanjoAcoes(true);
+      setShowArcanjoPage(false);
+      setShowArcanjoGerencial(false);
+      setShowGdocPage(false);
+      setShowProposalsPage(false);
+      setShowInstallmentsPage(false);
+      setShowContractsPage(false);
+      setShowCronogramaPage(false);
+      setShowCertidoesPage(false);
+      setShowPropEmissao(false);
+      setShowLeadsPage(false);
+      setShowProposalBI(false);
+      setShowCampanhaPage(false);
       setActiveContractNumber(null);
       setShowForm(false);
       setShowAdmin(false);
@@ -23247,7 +23862,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -23954,6 +24569,13 @@ function App() {
     currentUser: currentUser
   }) : showArcanjoGerencial ? React.createElement(ArcanjoGerencial, {
     records: arcanjoRecords
+  }) : showArcanjoAcoes ? React.createElement(ArcanjoAcoesPage, {
+    pessoas: arcanjoPessoas,
+    eventos: arcanjoEventos,
+    onAddEvento: handleAddArcanjoEvento,
+    onUpdateEvento: handleUpdateArcanjoEvento,
+    onDeleteEvento: handleDeleteArcanjoEvento,
+    onUpdatePessoaBairro: handleUpdateArcanjoPessoaBairro
   }) : showProposalBI ? React.createElement(ProposalBIPage, {
     proposals: proposals,
     onBack: () => {
@@ -25003,7 +25625,7 @@ function App() {
     }
   }, "Gerenciar contratos ", React.createElement(ChevronRight, {
     className: "w-3 h-3"
-  }))))))), showArcanjoPage || showArcanjoGerencial ? React.createElement("div", {
+  }))))))), showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes ? React.createElement("div", {
     className: "text-center text-[10px] text-gray-400 pb-4"
   }, React.createElement("p", null, "Desenvolvido por ", React.createElement("span", {
     className: "font-semibold text-gray-500"
