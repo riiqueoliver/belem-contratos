@@ -9713,13 +9713,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         });
       }
 
-      const todosVisiveisSelecionados = disponiveis.length > 0 && disponiveis.every(p => selecionados.has(p.id));
+      // "Algum selecionado" (não "todos") comanda o botão — quando a capacidade limita a
+      // seleção, nem todos os disponíveis entram, mas o clique seguinte ainda precisa desmarcar.
+      const algumVisivelSelecionado = disponiveis.some(p => selecionados.has(p.id));
 
       function selecionarTodos() {
         setSelecionados(sel => {
           const idsVisiveis = disponiveis.map(p => p.id);
           const next = new Set(sel);
-          if (todosVisiveisSelecionados) {
+          if (algumVisivelSelecionado) {
             idsVisiveis.forEach(id => next.delete(id));
             return next;
           }
@@ -9780,12 +9782,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {disponiveis.length > 0 && (
                 <button type="button" onClick={selecionarTodos}
                   className="sticky top-0 z-10 bg-white w-full flex items-center gap-3 px-3 py-2 mb-1 rounded-xl text-left border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <div className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosVisiveisSelecionados ? '' : 'border-gray-200')}
-                    style={todosVisiveisSelecionados ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
-                    {todosVisiveisSelecionados && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                  <div className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (algumVisivelSelecionado ? '' : 'border-gray-200')}
+                    style={algumVisivelSelecionado ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
+                    {algumVisivelSelecionado && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                   </div>
                   <p className="text-xs font-bold" style={{color: ARCANJO_COLOR}}>
-                    {todosVisiveisSelecionados ? 'Desmarcar todos' : `Selecionar todos (${disponiveis.length})`}
+                    {algumVisivelSelecionado ? 'Desmarcar todos' : `Selecionar todos (${disponiveis.length})`}
                   </p>
                 </button>
               )}
@@ -9833,6 +9835,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const pct = evento.capacidade ? Math.min(100, Math.round((participantes.length / evento.capacidade) * 100)) : null;
       const completo = pct != null && pct >= 100;
       const podeValidar = participantes.length > 0;
+      const presentes = participantes.filter(p => p.presente).length;
       const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }) : '';
 
       return (
@@ -9870,6 +9873,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{width: `${pct}%`, background: completo ? GREEN : ARCANJO_COLOR}} />
                 </div>
+              )}
+              {presentes > 0 && (
+                <p className="text-xs font-bold mt-1.5" style={{color: GREEN}}>
+                  {presentes}{evento.capacidade ? ` / ${evento.capacidade}` : ''} confirmado{presentes !== 1 ? 's' : ''}
+                </p>
               )}
             </div>
             <div className="mt-3 flex flex-col gap-1.5" onClick={e => e.stopPropagation()}>
@@ -9967,9 +9975,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {participantes.length > 0 && (
                 <button type="button" onClick={selecionarTodos}
                   className="sticky top-0 z-10 bg-white w-full flex items-center gap-3 px-3 py-2 mb-1 rounded-xl text-left border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <div className={"w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosSelecionados ? '' : 'border-gray-200')}
+                  <div className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosSelecionados ? '' : 'border-gray-200')}
                     style={todosSelecionados ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
-                    {todosSelecionados && <CheckCircle className="w-3 h-3 text-white" />}
+                    {todosSelecionados && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                   </div>
                   <p className="text-xs font-bold" style={{color: ARCANJO_COLOR}}>
                     {todosSelecionados ? 'Desmarcar todos' : `Selecionar todos (${participantes.length})`}
@@ -9982,9 +9990,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <div key={p.pessoaId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
                     style={selecionado ? {background:'#f5f3ff'} : undefined}>
                     <button type="button" onClick={() => toggleSelecao(p.pessoaId)} title="Selecionar"
-                      className={"w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (selecionado ? '' : 'border-gray-200')}
+                      className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (selecionado ? '' : 'border-gray-200')}
                       style={selecionado ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
-                      {selecionado && <CheckCircle className="w-3 h-3 text-white" />}
+                      {selecionado && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                     </button>
                     <button type="button" onClick={() => onTogglePresenca(p.pessoaId)} title="Marcar presença"
                       className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200')}
