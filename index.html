@@ -9596,6 +9596,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       { key: 'eventos', label: 'Eventos' },
     ];
 
+    // Kanban de eventos — cadastrado é o estado inicial; validar exige >0 participante;
+    // confirmado só pode virar concluído ou cancelado (ou voltar por arraste manual).
+    const ARCANJO_EVENTO_STATUSES = [
+      { key: 'cadastrado', label: 'Cadastrados', color: '#6b7280', bg: '#f9fafb', border: '#e2e8f0' },
+      { key: 'confirmado', label: 'Confirmados', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+      { key: 'concluido',  label: 'Concluídos',  color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+      { key: 'cancelado',  label: 'Cancelados',  color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    ];
+
     function ArcanjoEventoModal({ editing, onSubmit, onClose }) {
       const [form, setForm] = React.useState(() => editing ? {
         nome: editing.nome || '', bairro: editing.bairro || '', local: editing.local || '',
@@ -9724,7 +9733,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
 
       function confirmar() {
-        const novos = pessoas.filter(p => selecionados.has(p.id)).map(p => ({ pessoaId: p.id, nome: p.nome, telefone: p.telefone || '' }));
+        const novos = pessoas.filter(p => selecionados.has(p.id)).map(p => ({ pessoaId: p.id, nome: p.nome, telefone: p.telefone || '', presente: false }));
         if (novos.length) onAdd(novos);
         onClose();
       }
@@ -9817,22 +9826,27 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    function ArcanjoEventoCard({ evento, onIncluir, onEdit, onDelete, onRemoverParticipante }) {
-      const [expandido, setExpandido] = React.useState(false);
+    function ArcanjoEventoCard({ evento, onIncluir, onEdit, onDelete, onAbrir, onValidar, onConcluir, onCancelar, dragging, onDragStart, onDragEnd }) {
       const participantes = evento.participantes || [];
+      const status = evento.status || 'cadastrado';
+      const statusInfo = ARCANJO_EVENTO_STATUSES.find(s => s.key === status) || ARCANJO_EVENTO_STATUSES[0];
       const pct = evento.capacidade ? Math.min(100, Math.round((participantes.length / evento.capacidade) * 100)) : null;
       const completo = pct != null && pct >= 100;
+      const podeValidar = participantes.length > 0;
       const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }) : '';
 
       return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3">
+        <div draggable onDragStart={e => onDragStart(e, evento.id)} onDragEnd={onDragEnd}
+          onClick={() => onAbrir(evento)}
+          className={"bg-white rounded-2xl border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all " + (dragging ? 'opacity-30' : '')}
+          style={{borderColor:'#f3f4f6', borderTop: `3px solid ${statusInfo.color}`}}>
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="font-bold text-gray-800 text-sm truncate">{evento.nome}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{evento.bairro}{evento.local ? ` · ${evento.local}` : ''}</p>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">{evento.bairro}{evento.local ? ` · ${evento.local}` : ''}</p>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
                 <button onClick={() => onEdit(evento)} className="p-1.5 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors">
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
@@ -9841,17 +9855,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-3 text-xs text-gray-400">
-              <Calendar className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-gray-400">
+              <Calendar className="w-3 h-3" />
               <span>{dataFmt || 'sem data'}</span>
             </div>
             <div className="mt-3">
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <button onClick={() => setExpandido(e => !e)} className="font-bold flex items-center gap-1" style={{color: completo ? GREEN : ARCANJO_COLOR}}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-bold" style={{color: completo ? GREEN : ARCANJO_COLOR}}>
                   {participantes.length}{evento.capacidade ? ` / ${evento.capacidade}` : ''} pessoa(s)
-                  {expandido ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </button>
-                {pct != null && <span className={completo ? 'font-bold' : 'text-gray-400'} style={completo ? {color: GREEN} : undefined}>{pct}%</span>}
+                </span>
+                {pct != null && <span className="font-bold" style={{color: completo ? GREEN : '#9ca3af'}}>{pct}%</span>}
               </div>
               {pct != null && (
                 <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -9859,26 +9872,89 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </div>
               )}
             </div>
-            {expandido && participantes.length > 0 && (
-              <div className="mt-3 space-y-1 max-h-48 overflow-y-auto pr-1">
-                {participantes.map(p => (
-                  <div key={p.pessoaId} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-gray-700 truncate">{p.nome}</p>
-                      <p className="text-[10px] text-gray-400">{p.telefone || 'sem telefone'}</p>
-                    </div>
-                    <button onClick={() => onRemoverParticipante(p.pessoaId)} className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+            <div className="mt-3 flex flex-col gap-1.5" onClick={e => e.stopPropagation()}>
+              {(status === 'cadastrado' || status === 'confirmado') && (
+                <button onClick={() => onIncluir(evento)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border transition-colors"
+                  style={{color: ARCANJO_COLOR, borderColor: '#ddd6fe', background: '#f5f3ff'}}>
+                  <UserPlus className="w-3.5 h-3.5" /> Incluir Pessoas
+                </button>
+              )}
+              {status === 'cadastrado' && (
+                <button onClick={() => podeValidar && onValidar(evento.id)} disabled={!podeValidar}
+                  title={podeValidar ? '' : 'Inclua ao menos uma pessoa para validar'}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{background: '#1d4ed8'}}>
+                  <CheckCircle className="w-3.5 h-3.5" /> Validar Evento
+                </button>
+              )}
+              {status === 'confirmado' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button onClick={() => onConcluir(evento.id)}
+                    className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold text-white transition-colors" style={{background: GREEN}}>
+                    <CheckCircle className="w-3.5 h-3.5" /> Concluído
+                  </button>
+                  <button onClick={() => onCancelar(evento.id)}
+                    className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold text-white transition-colors" style={{background: '#dc2626'}}>
+                    <X className="w-3.5 h-3.5" /> Cancelado
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ArcanjoEventoDetalheModal({ evento, onClose, onTogglePresenca, onRemoverParticipante }) {
+      const participantes = evento.participantes || [];
+      const status = evento.status || 'cadastrado';
+      const statusInfo = ARCANJO_EVENTO_STATUSES.find(s => s.key === status) || ARCANJO_EVENTO_STATUSES[0];
+      const presentes = participantes.filter(p => p.presente).length;
+      const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }) : '';
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[88vh] flex flex-col">
+            <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
+              <div className="min-w-0">
+                <span className="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full mb-1.5"
+                  style={{color: statusInfo.color, background: statusInfo.bg}}>{statusInfo.label}</span>
+                <h2 className="font-bold text-gray-800 text-sm truncate">{evento.nome}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{evento.bairro}{evento.local ? ` · ${evento.local}` : ''} · {dataFmt || 'sem data'}</p>
               </div>
-            )}
-            <button onClick={() => onIncluir(evento)}
-              className="mt-4 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border transition-colors"
-              style={{color: ARCANJO_COLOR, borderColor: '#ddd6fe', background: '#f5f3ff'}}>
-              <UserPlus className="w-3.5 h-3.5" /> Incluir Pessoas
-            </button>
+              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-6 py-3 border-b border-gray-50 flex items-center justify-between">
+              <p className="text-xs font-bold" style={{color: ARCANJO_COLOR}}>
+                {participantes.length}{evento.capacidade ? ` / ${evento.capacidade}` : ''} pessoa(s) incluída(s)
+              </p>
+              <p className="text-xs text-gray-400">{presentes} presente(s)</p>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-3 space-y-1">
+              {participantes.length === 0 && (
+                <p className="text-center text-xs text-gray-400 py-10">Nenhuma pessoa incluída neste evento ainda.</p>
+              )}
+              {participantes.map(p => (
+                <div key={p.pessoaId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                  <button type="button" onClick={() => onTogglePresenca(p.pessoaId)}
+                    className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200')}
+                    style={p.presente ? {background: GREEN, borderColor: GREEN} : undefined}>
+                    {p.presente && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-700 truncate">{p.nome}</p>
+                    <p className="text-xs text-gray-400">{p.telefone || 'sem telefone'}</p>
+                  </div>
+                  <button type="button" onClick={() => onRemoverParticipante(p.pessoaId)} className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">Fechar</button>
+            </div>
           </div>
         </div>
       );
@@ -9893,6 +9969,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [editandoEvento, setEditandoEvento] = React.useState(null);
       const [incluindoEm, setIncluindoEm] = React.useState(null);
       const [editandoBairroDe, setEditandoBairroDe] = React.useState(null);
+      const [detalheEventoId, setDetalheEventoId] = React.useState(null);
+      const [arrastando, setArrastando] = React.useState(null);
+      const [colunaSobre, setColunaSobre] = React.useState(null);
 
       const POR_PAGINA = 50;
 
@@ -10005,7 +10084,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </div>
               </div>
             ) : (
-              <div className="max-w-5xl mx-auto space-y-4">
+              <div className="max-w-full space-y-4">
                 <div className="flex justify-end">
                   <button onClick={() => setShowEventoModal(true)}
                     className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors"
@@ -10019,15 +10098,51 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     <p className="text-sm text-gray-400">Nenhum evento cadastrado ainda.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {eventosOrdenados.map(ev => (
-                      <ArcanjoEventoCard key={ev.id} evento={ev}
-                        onIncluir={setIncluindoEm}
-                        onEdit={setEditandoEvento}
-                        onDelete={onDeleteEvento}
-                        onRemoverParticipante={pessoaId => onUpdateEvento(ev.id, { participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId) })}
-                      />
-                    ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+                    {ARCANJO_EVENTO_STATUSES.map(st => {
+                      const cardsDaColuna = eventosOrdenados.filter(ev => (ev.status || 'cadastrado') === st.key);
+                      const sobre = colunaSobre === st.key;
+                      return (
+                        <div key={st.key}
+                          onDragOver={e => { e.preventDefault(); if (colunaSobre !== st.key) setColunaSobre(st.key); }}
+                          onDragLeave={() => setColunaSobre(c => c === st.key ? null : c)}
+                          onDrop={e => {
+                            e.preventDefault();
+                            const id = e.dataTransfer.getData('text/plain');
+                            if (id) onUpdateEvento(id, { status: st.key });
+                            setColunaSobre(null); setArrastando(null);
+                          }}
+                          className="rounded-2xl p-3 transition-colors"
+                          style={{background: sobre ? st.bg : '#f1f5f9', border: `2px dashed ${sobre ? st.border : 'transparent'}`}}>
+                          <div className="flex items-center justify-between px-1 pb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background: st.color}} />
+                              <h3 className="text-xs font-black uppercase tracking-wider" style={{color: st.color}}>{st.label}</h3>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 bg-white px-1.5 py-0.5 rounded-full">{cardsDaColuna.length}</span>
+                          </div>
+                          <div className="space-y-3 min-h-[90px]">
+                            {cardsDaColuna.map(ev => (
+                              <ArcanjoEventoCard key={ev.id} evento={ev}
+                                dragging={arrastando === ev.id}
+                                onDragStart={(e, id) => { e.dataTransfer.setData('text/plain', id); setArrastando(id); }}
+                                onDragEnd={() => setArrastando(null)}
+                                onIncluir={setIncluindoEm}
+                                onEdit={setEditandoEvento}
+                                onDelete={onDeleteEvento}
+                                onAbrir={ev2 => setDetalheEventoId(ev2.id)}
+                                onValidar={id => onUpdateEvento(id, { status: 'confirmado' })}
+                                onConcluir={id => onUpdateEvento(id, { status: 'concluido' })}
+                                onCancelar={id => onUpdateEvento(id, { status: 'cancelado' })}
+                              />
+                            ))}
+                            {cardsDaColuna.length === 0 && (
+                              <p className="text-center text-[11px] text-gray-300 py-6">Arraste um evento para cá.</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -10055,6 +10170,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               onClose={() => setIncluindoEm(null)}
             />
           )}
+
+          {detalheEventoId && (() => {
+            const ev = eventos.find(e => e.id === detalheEventoId);
+            if (!ev) return null;
+            return (
+              <ArcanjoEventoDetalheModal
+                evento={ev}
+                onClose={() => setDetalheEventoId(null)}
+                onTogglePresenca={pessoaId => onUpdateEvento(ev.id, {
+                  participantes: (ev.participantes || []).map(p => p.pessoaId === pessoaId ? { ...p, presente: !p.presente } : p),
+                })}
+                onRemoverParticipante={pessoaId => onUpdateEvento(ev.id, { participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId) })}
+              />
+            );
+          })()}
 
           {editandoBairroDe && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}}>
@@ -16565,7 +16695,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
         await db.collection(COL('arcanjo_pessoas')).doc(id).update({ bairro });
       }
       async function handleAddArcanjoEvento(data) {
-        await db.collection(COL('arcanjo_eventos')).add({ ...data, participantes: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await db.collection(COL('arcanjo_eventos')).add({ ...data, participantes: [], status: 'cadastrado', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       }
       async function handleUpdateArcanjoEvento(id, data) {
         await db.collection(COL('arcanjo_eventos')).doc(id).update(data);
@@ -17069,7 +17199,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
               <div className="flex items-center gap-4">
                 {/* Modo privacidade — oculta/revela os valores em tela */}
-                {!showArcanjoPage && !showArcanjoGerencial && (
+                {!showArcanjoPage && !showArcanjoGerencial && !showArcanjoAcoes && (
                   <button onClick={() => setOcultarValores(v => !v)}
                     className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all"
                     style={ocultarValores
@@ -17082,7 +17212,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                     <span className="hidden sm:inline">{ocultarValores ? 'Valores ocultos' : 'Valores visíveis'}</span>
                   </button>
                 )}
-                {!showArcanjoPage && !showArcanjoGerencial && (<>
+                {!showArcanjoPage && !showArcanjoGerencial && !showArcanjoAcoes && (<>
                   {/* Indicador de alertas */}
                   {hasAlert_sb && (
                     <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
