@@ -8366,6 +8366,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       'Sorteio de Brindes', 'Spa dos Pés', 'Teste Rápido', 'Tomografia', 'Ultrassom Transvaginal',
       'Ultrassom de Mama', 'Ultrassonografia', 'Vacinação', 'Vacinação Animal', 'Ventosaterapia',
       'Workshop de Empreendedorismo',
+      // Categorias de status (não são serviços em si) — cobrem quem não tem nenhum serviço
+      // reconhecido, para que ninguém fique fora do filtro.
+      'Nenhum Atendimento Registrado', 'Em Branco',
     ];
 
     /* Campo de liderança com autocomplete — sugere nomes já cadastrados (clicando
@@ -9711,7 +9714,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         ARCANJO_SERVICOS.filter(s => !servicosFiltro.includes(s)), [servicosFiltro]);
       const disponiveis = React.useMemo(() => {
         const q = busca.trim().toLowerCase();
-        return pessoas.filter(p => bairrosFiltro.includes(p.bairro) && !jaIncluidos.has(p.id) &&
+        return pessoas.filter(p => (bairrosFiltro.length === 0 || bairrosFiltro.includes(p.bairro)) && !jaIncluidos.has(p.id) &&
           (servicosFiltro.length === 0 || (p.servicos || []).some(s => servicosFiltro.includes(s))) &&
           (!q || p.nome.toLowerCase().includes(q) || (p.telefone || '').includes(q)));
       }, [pessoas, bairrosFiltro, servicosFiltro, jaIncluidos, busca]);
@@ -9790,13 +9793,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <span key={b} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-semibold"
                     style={{background:'#f5f3ff', color: ARCANJO_COLOR}}>
                     {b}
-                    {bairrosFiltro.length > 1 && (
-                      <button type="button" onClick={() => removerBairro(b)} className="p-0.5 rounded-full hover:bg-white/60 transition-colors">
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
+                    <button type="button" onClick={() => removerBairro(b)} className="p-0.5 rounded-full hover:bg-white/60 transition-colors">
+                      <X className="w-3 h-3" />
+                    </button>
                   </span>
                 ))}
+                {bairrosFiltro.length === 0 && (
+                  <span className="text-xs text-gray-400 font-medium">Todos os bairros ·</span>
+                )}
                 <select value={novoBairro} onChange={e => adicionarBairro(e.target.value)}
                   className="text-xs font-semibold text-gray-400 border border-dashed border-gray-200 rounded-full pl-2.5 pr-1.5 py-1 bg-white focus:outline-none focus:ring-2 transition-all">
                   <option value="">+ Adicionar bairro</option>
@@ -10128,6 +10132,30 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const eventosOrdenados = React.useMemo(() =>
         [...eventos].sort((a, b) => (b.data || '').localeCompare(a.data || '')), [eventos]);
 
+      // Indicadores do topo — pessoas confirmadas: presença marcada em qualquer evento;
+      // impactadas: presença marcada especificamente em evento já concluído (subconjunto).
+      const acoesStats = React.useMemo(() => {
+        const confirmadas = new Set();
+        const impactadas = new Set();
+        let eventosConcluidos = 0;
+        eventos.forEach(ev => {
+          const concluido = ev.status === 'concluido';
+          if (concluido) eventosConcluidos++;
+          (ev.participantes || []).forEach(p => {
+            if (!p.presente) return;
+            confirmadas.add(p.pessoaId);
+            if (concluido) impactadas.add(p.pessoaId);
+          });
+        });
+        return {
+          pessoas: pessoas.length,
+          eventos: eventos.length,
+          confirmadas: confirmadas.size,
+          eventosConcluidos,
+          impactadas: impactadas.size,
+        };
+      }, [pessoas, eventos]);
+
       return (
         <div className="flex-1 flex flex-col min-h-screen bg-gray-50">
           <div className="bg-white border-b border-gray-100 px-6 pt-6 pb-0">
@@ -10139,6 +10167,18 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <h1 className="text-lg font-extrabold tracking-tight" style={{color: ARCANJO_COLOR}}>Ações</h1>
                 <p className="text-[11px] text-gray-400 font-medium">Instituto Arcanjo's · Base de pessoas por bairro e organização de eventos</p>
               </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+              <ArcanjoKpiCard label="Pessoas Cadastradas" value={acoesStats.pessoas} icon={Users}
+                color={ARCANJO_COLOR} bg="#f5f3ff" border="#ddd6fe" delay={0} />
+              <ArcanjoKpiCard label="Eventos Criados" value={acoesStats.eventos} icon={Calendar}
+                color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" delay={0.05} />
+              <ArcanjoKpiCard label="Pessoas Confirmadas" value={acoesStats.confirmadas} icon={CheckCircle}
+                color="#0891b2" bg="#ecfeff" border="#a5f3fc" delay={0.1} />
+              <ArcanjoKpiCard label="Eventos Concluídos" value={acoesStats.eventosConcluidos} icon={CheckCircle}
+                color={GREEN} bg="#f0fdf4" border="#bbf7d0" delay={0.15} />
+              <ArcanjoKpiCard label="Pessoas Impactadas" value={acoesStats.impactadas} icon={TrendingUp}
+                color="#ea580c" bg="#fff7ed" border="#fed7aa" delay={0.2} />
             </div>
             <div className="flex gap-1">
               {ARCANJO_ACOES_TABS.map(t => (
