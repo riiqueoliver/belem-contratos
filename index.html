@@ -9699,7 +9699,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    function ArcanjoIncluirPessoasModal({ evento, pessoas, onAdd, onClose }) {
+    function ArcanjoIncluirPessoasModal({ evento, pessoas, todosEventos, onAdd, onClose }) {
       const [busca, setBusca] = React.useState('');
       const [selecionados, setSelecionados] = React.useState(() => new Set());
       const [bairrosFiltro, setBairrosFiltro] = React.useState(() => [evento.bairro]);
@@ -9708,6 +9708,20 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [novoServico, setNovoServico] = React.useState('');
 
       const jaIncluidos = React.useMemo(() => new Set((evento.participantes || []).map(p => p.pessoaId)), [evento.participantes]);
+
+      // Em quais OUTROS eventos cada pessoa já está — alerta pra não incluir de novo sem perceber,
+      // com destaque maior se algum desses eventos já foi concluído (ela já foi atendida de fato).
+      const participacaoAlheia = React.useMemo(() => {
+        const m = new Map();
+        (todosEventos || []).forEach(ev => {
+          if (ev.id === evento.id) return;
+          (ev.participantes || []).forEach(p => {
+            if (!m.has(p.pessoaId)) m.set(p.pessoaId, []);
+            m.get(p.pessoaId).push(ev);
+          });
+        });
+        return m;
+      }, [todosEventos, evento.id]);
       const bairrosDisponiveis = React.useMemo(() =>
         ARCANJO_BAIRROS.filter(b => !bairrosFiltro.includes(b)), [bairrosFiltro]);
       const servicosDisponiveis = React.useMemo(() =>
@@ -9848,6 +9862,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {disponiveis.slice(0, 300).map(p => {
                 const checked = selecionados.has(p.id);
                 const disabled = !checked && lotado;
+                const outros = participacaoAlheia.get(p.id) || [];
+                const outrosConcluidos = outros.filter(e => e.status === 'concluido');
+                const outrosAbertos = outros.filter(e => e.status !== 'concluido');
                 return (
                   <button key={p.id} type="button" onClick={() => toggle(p.id)} disabled={disabled}
                     className={"w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors " + (checked ? '' : disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50')}
@@ -9862,6 +9879,17 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       {servicosFiltro.length > 0 && (
                         <p className="text-[10px] font-semibold mt-0.5 truncate" style={{color: GREEN}}>
                           {(p.servicos || []).filter(s => servicosFiltro.includes(s)).join(' · ')}
+                        </p>
+                      )}
+                      {outrosConcluidos.length > 0 && (
+                        <p className="text-[10px] font-bold mt-0.5 truncate flex items-center gap-1" style={{color:'#dc2626'}}>
+                          <AlertTriangle className="w-2.5 h-2.5 flex-shrink-0" />
+                          Já participou de "{outrosConcluidos[0].nome}"{outrosConcluidos.length > 1 ? ` +${outrosConcluidos.length - 1}` : ''}
+                        </p>
+                      )}
+                      {outrosConcluidos.length === 0 && outrosAbertos.length > 0 && (
+                        <p className="text-[10px] font-semibold mt-0.5 truncate" style={{color:'#d97706'}}>
+                          Já incluída em "{outrosAbertos[0].nome}"{outrosAbertos.length > 1 ? ` +${outrosAbertos.length - 1}` : ''}
                         </p>
                       )}
                     </div>
@@ -10336,6 +10364,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             <ArcanjoIncluirPessoasModal
               evento={incluindoEm}
               pessoas={pessoas}
+              todosEventos={eventos}
               onAdd={novos => onUpdateEvento(incluindoEm.id, { participantes: [...(incluindoEm.participantes || []), ...novos] })}
               onClose={() => setIncluindoEm(null)}
             />

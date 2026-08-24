@@ -13616,6 +13616,7 @@ function ArcanjoEventoModal({
 function ArcanjoIncluirPessoasModal({
   evento,
   pessoas,
+  todosEventos,
   onAdd,
   onClose
 }) {
@@ -13626,6 +13627,17 @@ function ArcanjoIncluirPessoasModal({
   const [servicosFiltro, setServicosFiltro] = React.useState(() => []);
   const [novoServico, setNovoServico] = React.useState('');
   const jaIncluidos = React.useMemo(() => new Set((evento.participantes || []).map(p => p.pessoaId)), [evento.participantes]);
+  const participacaoAlheia = React.useMemo(() => {
+    const m = new Map();
+    (todosEventos || []).forEach(ev => {
+      if (ev.id === evento.id) return;
+      (ev.participantes || []).forEach(p => {
+        if (!m.has(p.pessoaId)) m.set(p.pessoaId, []);
+        m.get(p.pessoaId).push(ev);
+      });
+    });
+    return m;
+  }, [todosEventos, evento.id]);
   const bairrosDisponiveis = React.useMemo(() => ARCANJO_BAIRROS.filter(b => !bairrosFiltro.includes(b)), [bairrosFiltro]);
   const servicosDisponiveis = React.useMemo(() => ARCANJO_SERVICOS.filter(s => !servicosFiltro.includes(s)), [servicosFiltro]);
   const disponiveis = React.useMemo(() => {
@@ -13792,6 +13804,9 @@ function ArcanjoIncluirPessoasModal({
   }, algumVisivelSelecionado ? 'Desmarcar todos' : `Selecionar todos (${disponiveis.length})`)), disponiveis.slice(0, 300).map(p => {
     const checked = selecionados.has(p.id);
     const disabled = !checked && lotado;
+    const outros = participacaoAlheia.get(p.id) || [];
+    const outrosConcluidos = outros.filter(e => e.status === 'concluido');
+    const outrosAbertos = outros.filter(e => e.status !== 'concluido');
     return React.createElement("button", {
       key: p.id,
       type: "button",
@@ -13820,7 +13835,19 @@ function ArcanjoIncluirPessoasModal({
       style: {
         color: GREEN
       }
-    }, (p.servicos || []).filter(s => servicosFiltro.includes(s)).join(' · '))));
+    }, (p.servicos || []).filter(s => servicosFiltro.includes(s)).join(' · ')), outrosConcluidos.length > 0 && React.createElement("p", {
+      className: "text-[10px] font-bold mt-0.5 truncate flex items-center gap-1",
+      style: {
+        color: '#dc2626'
+      }
+    }, React.createElement(AlertTriangle, {
+      className: "w-2.5 h-2.5 flex-shrink-0"
+    }), "J\xE1 participou de \"", outrosConcluidos[0].nome, "\"", outrosConcluidos.length > 1 ? ` +${outrosConcluidos.length - 1}` : ''), outrosConcluidos.length === 0 && outrosAbertos.length > 0 && React.createElement("p", {
+      className: "text-[10px] font-semibold mt-0.5 truncate",
+      style: {
+        color: '#d97706'
+      }
+    }, "J\xE1 inclu\xEDda em \"", outrosAbertos[0].nome, "\"", outrosAbertos.length > 1 ? ` +${outrosAbertos.length - 1}` : '')));
   })), React.createElement("div", {
     className: "px-6 py-4 border-t border-gray-100 flex items-center justify-between"
   }, React.createElement("p", {
@@ -14451,6 +14478,7 @@ function ArcanjoAcoesPage({
   }), incluindoEm && React.createElement(ArcanjoIncluirPessoasModal, {
     evento: incluindoEm,
     pessoas: pessoas,
+    todosEventos: eventos,
     onAdd: novos => onUpdateEvento(incluindoEm.id, {
       participantes: [...(incluindoEm.participantes || []), ...novos]
     }),
