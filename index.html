@@ -389,6 +389,7 @@
     const TrendingUp    = ({className}) => <SVG className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></SVG>;
     const Clipboard     = ({className}) => <SVG className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></SVG>;
     const Info          = ({className}) => <SVG className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></SVG>;
+    const HelpCircle     = ({className}) => <SVG className={className}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></SVG>;
     const Shield        = ({className}) => <SVG className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></SVG>;
     const Maximize2     = ({className,style}) => <SVG className={className} style={style}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></SVG>;
     const Minimize2     = ({className,style}) => <SVG className={className} style={style}><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></SVG>;
@@ -10196,6 +10197,225 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
+    /* ═══════════════════════════════════════════════════════
+       TUTORIAL DO MÓDULO AÇÕES — carrossel de passo a passo.
+       As "telas" abaixo são recriações fiéis em HTML/CSS (mesmas cores,
+       textos e layout do app real) com dados fictícios — não são prints
+       de verdade, porque a captura de tela não está disponível neste
+       ambiente de build. Trocar por prints reais é só substituir o
+       conteúdo de cada `render()`.
+    ═══════════════════════════════════════════════════════ */
+    function TutorialChip({ children, color, bg }) {
+      return <span className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold" style={{color, background: bg}}>{children}</span>;
+    }
+    function TutorialBtn({ children, color = ARCANJO_COLOR, outline }) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold"
+          style={outline ? {color, border:`1px solid ${color}55`, background:'#fff'} : {color:'#fff', background: color}}>
+          {children}
+        </span>
+      );
+    }
+    const ARCANJO_TUTORIAL_STEPS = [
+      {
+        titulo: 'Tela inicial',
+        texto: 'Ao abrir "Ações" você vê 5 indicadores gerais — pessoas cadastradas, eventos criados, confirmadas, concluídos e impactadas — e duas abas: Pessoas e Eventos.',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px]">
+            <div className="grid grid-cols-5 gap-1.5 mb-2">
+              {[['4653','PESSOAS',ARCANJO_COLOR,'#f5f3ff'],['12','EVENTOS','#1d4ed8','#eff6ff'],['24','CONFIRMADAS','#0891b2','#ecfeff'],['3','CONCLUÍDOS',GREEN,'#f0fdf4'],['9','IMPACTADAS','#ea580c','#fff7ed']].map(([v,l,c,bg],i) => (
+                <div key={i} className="rounded-lg p-1.5" style={{background:bg}}>
+                  <p className="text-xs font-black" style={{color:c}}>{v}</p>
+                  <p className="text-[6px] font-bold text-gray-400 uppercase">{l}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 border-b border-gray-100 pb-1">
+              <span className="font-bold border-b-2 pb-1" style={{color: ARCANJO_COLOR, borderColor: ARCANJO_COLOR}}>Pessoas</span>
+              <span className="text-gray-400">Eventos (12)</span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Aba Pessoas — buscar e filtrar',
+        texto: 'Busque por nome ou telefone, e combine três filtros: bairro, serviço realizado e ação específica (Belém por Elas, Capacitação SEBRAE etc.). Todos são opcionais e combináveis.',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px] space-y-1.5">
+            <div className="flex gap-1.5">
+              <div className="flex-1 border border-gray-100 rounded-lg px-2 py-1.5 text-gray-300 bg-gray-50">Buscar por nome ou telefone…</div>
+              <div className="border border-gray-100 rounded-lg px-2 py-1.5 text-gray-400 bg-white">Todos os bairros</div>
+            </div>
+            <div className="flex gap-1"><TutorialChip color={GREEN} bg="#ecfdf5">Roda de Conversa</TutorialChip><span className="text-gray-300">+ Serviço</span></div>
+            <div className="flex gap-1"><TutorialChip color="#1d4ed8" bg="#eff6ff">Belém por Elas - Jurunas</TutorialChip><span className="text-gray-300">+ Ação</span></div>
+            <div className="border border-gray-100 rounded-lg overflow-hidden mt-1.5">
+              {[['Maria da Silva Souza','98 99999-0001','Jurunas'],['João Pereira Costa','98 98888-0002','Guamá']].map((r,i) => (
+                <div key={i} className="flex items-center justify-between px-2 py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="font-semibold text-gray-700">{r[0]}</span>
+                  <span className="text-gray-400">{r[1]}</span>
+                  <span className="text-gray-400">{r[2]}</span>
+                  <Edit2 className="w-2.5 h-2.5 text-gray-300" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Cadastrar ou editar pessoa',
+        texto: 'O botão "Cadastrar Pessoa" abre um formulário simples — nome, telefone e bairro. O ícone de lápis em cada linha abre o mesmo formulário para editar os dados de quem já está na base.',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px]">
+            <div className="flex justify-end mb-2"><TutorialBtn><UserPlus className="w-2.5 h-2.5" /> Cadastrar Pessoa</TutorialBtn></div>
+            <div className="border border-gray-100 rounded-lg p-2.5 space-y-1.5">
+              <p className="text-[7px] font-bold text-gray-400 uppercase">Nome completo</p>
+              <div className="border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700">Maria da Silva Souza</div>
+              <p className="text-[7px] font-bold text-gray-400 uppercase">Telefone</p>
+              <div className="border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700">(91) 99999-0001</div>
+              <p className="text-[7px] font-bold text-gray-400 uppercase">Bairro</p>
+              <div className="border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700">Jurunas</div>
+              <div className="flex justify-end gap-1.5 pt-1"><TutorialBtn outline color="#9ca3af">Cancelar</TutorialBtn><TutorialBtn>Cadastrar</TutorialBtn></div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Aba Eventos — o quadro Kanban',
+        texto: 'Todo evento novo nasce na coluna Cadastrados. Ele avança para Confirmados, e termina em Concluídos ou Cancelados — arrastando o card ou pelos botões de cada etapa.',
+        render: () => (
+          <div className="bg-white rounded-xl p-2.5">
+            <div className="grid grid-cols-4 gap-1.5">
+              {ARCANJO_EVENTO_STATUSES.map(st => (
+                <div key={st.key} className="rounded-lg p-1.5" style={{background:'#f1f5f9'}}>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{background: st.color}} />
+                    <span className="text-[6px] font-black uppercase" style={{color: st.color}}>{st.label}</span>
+                  </div>
+                  {st.key === 'confirmado' && (
+                    <div className="bg-white rounded-md p-1.5 shadow-sm" style={{borderTop:`2px solid ${st.color}`}}>
+                      <p className="text-[7px] font-bold text-gray-700 truncate">Mutirão Documentos</p>
+                      <p className="text-[6px] text-gray-400">24/08 · 30/50</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Criar evento e incluir pessoas',
+        texto: '"Novo Evento" pede nome, bairro, local, capacidade e data. Depois, "Incluir Pessoas" abre a mesma combinação de filtros (bairro, serviço, ação) para montar a lista de quem vai participar — inclusive um "Selecionar todos".',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px] space-y-1.5">
+            <p className="font-bold text-gray-700 text-[10px]">Incluir Pessoas — Mutirão Documentos</p>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-gray-100">
+              <div className="w-3 h-3 rounded flex items-center justify-center" style={{background: ARCANJO_COLOR}}><CheckCircle className="w-2 h-2 text-white" /></div>
+              <span className="font-bold" style={{color: ARCANJO_COLOR}}>Selecionar todos (18)</span>
+            </div>
+            {['Maria da Silva Souza','João Pereira Costa','Ana Clara Lima'].map((n,i) => (
+              <div key={i} className="flex items-center gap-1.5 px-2 py-1">
+                <div className="w-3 h-3 rounded border border-gray-200" />
+                <span className="text-gray-600">{n}</span>
+              </div>
+            ))}
+            <div className="flex justify-end"><TutorialBtn>Adicionar (18)</TutorialBtn></div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Validar e avançar o evento',
+        texto: 'Com pelo menos 1 pessoa incluída, o botão "Validar Evento" habilita e move o card para Confirmados. De lá, "Concluído" ou "Cancelado" fecham o ciclo — e viram os indicadores de pessoas impactadas.',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px]">
+            <div className="rounded-lg border shadow-sm p-2.5 max-w-[180px] mx-auto" style={{borderTop:`3px solid #6b7280`}}>
+              <p className="font-bold text-gray-700 text-[10px]">Mutirão Documentos</p>
+              <p className="text-gray-400 text-[8px] mb-1.5">Jurunas · 24/08/2026</p>
+              <div className="h-1 rounded-full bg-gray-100 mb-1.5"><div className="h-1 rounded-full" style={{width:'60%', background: ARCANJO_COLOR}} /></div>
+              <p className="font-bold mb-1.5" style={{color: ARCANJO_COLOR}}>18 / 30 pessoa(s)</p>
+              <div className="text-center py-1.5 rounded-lg text-white font-bold" style={{background:'#1d4ed8'}}>Validar Evento</div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        titulo: 'Marcar presença no dia do evento',
+        texto: 'Clicar no card (fora dos botões) abre a lista completa de participantes. Cada um tem uma marcação de presença — pra registrar, no dia, quem realmente compareceu.',
+        render: () => (
+          <div className="bg-white rounded-xl p-3 text-[9px] space-y-1">
+            <p className="font-bold text-gray-700 text-[10px] mb-1">18 / 30 pessoa(s) incluída(s) · 12 presente(s)</p>
+            {[['Maria da Silva Souza', true], ['João Pereira Costa', true], ['Ana Clara Lima', false]].map(([n,p],i) => (
+              <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background: p ? '#f0fdf4' : undefined}}>
+                <div className="w-3 h-3 rounded flex items-center justify-center" style={p ? {background: GREEN} : {border:'1px solid #d1d5db'}}>
+                  {p && <CheckCircle className="w-2 h-2 text-white" />}
+                </div>
+                <span className="text-gray-600">{n}</span>
+              </div>
+            ))}
+          </div>
+        ),
+      },
+    ];
+
+    function ArcanjoTutorialModal({ onClose }) {
+      const [step, setStep] = React.useState(0);
+      const total = ARCANJO_TUTORIAL_STEPS.length;
+      const atual = ARCANJO_TUTORIAL_STEPS[step];
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.7)'}}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background: ARCANJO_COLOR}}>
+                  <HelpCircle className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-bold text-gray-800 text-sm">Como usar o módulo Ações</h2>
+                  <p className="text-[11px] text-gray-400">Passo {step + 1} de {total}</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <div className="rounded-xl p-3 mb-4" style={{background:'#f8fafc'}}>
+                {atual.render()}
+              </div>
+              <h3 className="font-bold text-gray-800 text-sm mb-1.5">{atual.titulo}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{atual.texto}</p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+              <div className="flex gap-1.5">
+                {ARCANJO_TUTORIAL_STEPS.map((_, i) => (
+                  <button key={i} onClick={() => setStep(i)} className="w-2 h-2 rounded-full transition-colors"
+                    style={{background: i === step ? ARCANJO_COLOR : '#e5e7eb'}} />
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {step > 0 && (
+                  <button onClick={() => setStep(s => Math.max(0, s - 1))}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+                    Anterior
+                  </button>
+                )}
+                {step < total - 1 ? (
+                  <button onClick={() => setStep(s => Math.min(total - 1, s + 1))}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-colors" style={{background: ARCANJO_COLOR}}>
+                    Próximo
+                  </button>
+                ) : (
+                  <button onClick={onClose}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-colors" style={{background: ARCANJO_COLOR}}>
+                    Concluir
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function ArcanjoPessoaModal({ editing, onSubmit, onClose }) {
       const [form, setForm] = React.useState(() => editing ? {
         nome: editing.nome || '', telefone: editing.telefone || '', bairro: editing.bairro || '',
@@ -10264,6 +10484,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [incluindoEm, setIncluindoEm] = React.useState(null);
       const [showCadastroPessoa, setShowCadastroPessoa] = React.useState(false);
       const [editandoPessoa, setEditandoPessoa] = React.useState(null);
+      const [showTutorial, setShowTutorial] = React.useState(false);
       const [detalheEventoId, setDetalheEventoId] = React.useState(null);
       const [arrastando, setArrastando] = React.useState(null);
       const [colunaSobre, setColunaSobre] = React.useState(null);
@@ -10331,14 +10552,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       return (
         <div className="flex-1 flex flex-col min-h-screen bg-gray-50">
           <div className="bg-white border-b border-gray-100 px-6 pt-6 pb-0">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background: ARCANJO_COLOR}}>
-                <Calendar className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0" style={{background: ARCANJO_COLOR}}>
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-lg font-extrabold tracking-tight" style={{color: ARCANJO_COLOR}}>Ações</h1>
+                  <p className="text-[11px] text-gray-400 font-medium">Instituto Arcanjo's · Base de pessoas por bairro e organização de eventos</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-extrabold tracking-tight" style={{color: ARCANJO_COLOR}}>Ações</h1>
-                <p className="text-[11px] text-gray-400 font-medium">Instituto Arcanjo's · Base de pessoas por bairro e organização de eventos</p>
-              </div>
+              <button onClick={() => setShowTutorial(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex-shrink-0"
+                style={{color: ARCANJO_COLOR, borderColor:'#ddd6fe', background:'#f5f3ff'}}>
+                <HelpCircle className="w-3.5 h-3.5" /> Tutorial
+              </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
               <ArcanjoKpiCard label="Pessoas Cadastradas" value={acoesStats.pessoas} icon={Users}
@@ -10585,6 +10813,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               onClose={() => { setShowCadastroPessoa(false); setEditandoPessoa(null); }}
             />
           )}
+
+          {showTutorial && <ArcanjoTutorialModal onClose={() => setShowTutorial(false)} />}
         </div>
       );
     }

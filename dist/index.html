@@ -970,6 +970,22 @@ const Info = ({
   x2: "12.01",
   y2: "8"
 }));
+const HelpCircle = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "10"
+}), React.createElement("path", {
+  d: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"
+}), React.createElement("line", {
+  x1: "12",
+  y1: "17",
+  x2: "12.01",
+  y2: "17"
+}));
 const Shield = ({
   className
 }) => React.createElement(SVG, {
@@ -14208,6 +14224,336 @@ function ArcanjoEventoDetalheModal({
     className: "px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
   }, "Fechar"))));
 }
+function TutorialChip({
+  children,
+  color,
+  bg
+}) {
+  return React.createElement("span", {
+    className: "inline-block px-2 py-0.5 rounded-full text-[8px] font-bold",
+    style: {
+      color,
+      background: bg
+    }
+  }, children);
+}
+function TutorialBtn({
+  children,
+  color = ARCANJO_COLOR,
+  outline
+}) {
+  return React.createElement("span", {
+    className: "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold",
+    style: outline ? {
+      color,
+      border: `1px solid ${color}55`,
+      background: '#fff'
+    } : {
+      color: '#fff',
+      background: color
+    }
+  }, children);
+}
+const ARCANJO_TUTORIAL_STEPS = [{
+  titulo: 'Tela inicial',
+  texto: 'Ao abrir "Ações" você vê 5 indicadores gerais — pessoas cadastradas, eventos criados, confirmadas, concluídos e impactadas — e duas abas: Pessoas e Eventos.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px]"
+  }, React.createElement("div", {
+    className: "grid grid-cols-5 gap-1.5 mb-2"
+  }, [['4653', 'PESSOAS', ARCANJO_COLOR, '#f5f3ff'], ['12', 'EVENTOS', '#1d4ed8', '#eff6ff'], ['24', 'CONFIRMADAS', '#0891b2', '#ecfeff'], ['3', 'CONCLUÍDOS', GREEN, '#f0fdf4'], ['9', 'IMPACTADAS', '#ea580c', '#fff7ed']].map(([v, l, c, bg], i) => React.createElement("div", {
+    key: i,
+    className: "rounded-lg p-1.5",
+    style: {
+      background: bg
+    }
+  }, React.createElement("p", {
+    className: "text-xs font-black",
+    style: {
+      color: c
+    }
+  }, v), React.createElement("p", {
+    className: "text-[6px] font-bold text-gray-400 uppercase"
+  }, l)))), React.createElement("div", {
+    className: "flex gap-3 border-b border-gray-100 pb-1"
+  }, React.createElement("span", {
+    className: "font-bold border-b-2 pb-1",
+    style: {
+      color: ARCANJO_COLOR,
+      borderColor: ARCANJO_COLOR
+    }
+  }, "Pessoas"), React.createElement("span", {
+    className: "text-gray-400"
+  }, "Eventos (12)")))
+}, {
+  titulo: 'Aba Pessoas — buscar e filtrar',
+  texto: 'Busque por nome ou telefone, e combine três filtros: bairro, serviço realizado e ação específica (Belém por Elas, Capacitação SEBRAE etc.). Todos são opcionais e combináveis.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px] space-y-1.5"
+  }, React.createElement("div", {
+    className: "flex gap-1.5"
+  }, React.createElement("div", {
+    className: "flex-1 border border-gray-100 rounded-lg px-2 py-1.5 text-gray-300 bg-gray-50"
+  }, "Buscar por nome ou telefone\u2026"), React.createElement("div", {
+    className: "border border-gray-100 rounded-lg px-2 py-1.5 text-gray-400 bg-white"
+  }, "Todos os bairros")), React.createElement("div", {
+    className: "flex gap-1"
+  }, React.createElement(TutorialChip, {
+    color: GREEN,
+    bg: "#ecfdf5"
+  }, "Roda de Conversa"), React.createElement("span", {
+    className: "text-gray-300"
+  }, "+ Servi\xE7o")), React.createElement("div", {
+    className: "flex gap-1"
+  }, React.createElement(TutorialChip, {
+    color: "#1d4ed8",
+    bg: "#eff6ff"
+  }, "Bel\xE9m por Elas - Jurunas"), React.createElement("span", {
+    className: "text-gray-300"
+  }, "+ A\xE7\xE3o")), React.createElement("div", {
+    className: "border border-gray-100 rounded-lg overflow-hidden mt-1.5"
+  }, [['Maria da Silva Souza', '98 99999-0001', 'Jurunas'], ['João Pereira Costa', '98 98888-0002', 'Guamá']].map((r, i) => React.createElement("div", {
+    key: i,
+    className: "flex items-center justify-between px-2 py-1.5 border-b border-gray-50 last:border-0"
+  }, React.createElement("span", {
+    className: "font-semibold text-gray-700"
+  }, r[0]), React.createElement("span", {
+    className: "text-gray-400"
+  }, r[1]), React.createElement("span", {
+    className: "text-gray-400"
+  }, r[2]), React.createElement(Edit2, {
+    className: "w-2.5 h-2.5 text-gray-300"
+  })))))
+}, {
+  titulo: 'Cadastrar ou editar pessoa',
+  texto: 'O botão "Cadastrar Pessoa" abre um formulário simples — nome, telefone e bairro. O ícone de lápis em cada linha abre o mesmo formulário para editar os dados de quem já está na base.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px]"
+  }, React.createElement("div", {
+    className: "flex justify-end mb-2"
+  }, React.createElement(TutorialBtn, null, React.createElement(UserPlus, {
+    className: "w-2.5 h-2.5"
+  }), " Cadastrar Pessoa")), React.createElement("div", {
+    className: "border border-gray-100 rounded-lg p-2.5 space-y-1.5"
+  }, React.createElement("p", {
+    className: "text-[7px] font-bold text-gray-400 uppercase"
+  }, "Nome completo"), React.createElement("div", {
+    className: "border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700"
+  }, "Maria da Silva Souza"), React.createElement("p", {
+    className: "text-[7px] font-bold text-gray-400 uppercase"
+  }, "Telefone"), React.createElement("div", {
+    className: "border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700"
+  }, "(91) 99999-0001"), React.createElement("p", {
+    className: "text-[7px] font-bold text-gray-400 uppercase"
+  }, "Bairro"), React.createElement("div", {
+    className: "border border-gray-100 rounded px-2 py-1 bg-gray-50 text-gray-700"
+  }, "Jurunas"), React.createElement("div", {
+    className: "flex justify-end gap-1.5 pt-1"
+  }, React.createElement(TutorialBtn, {
+    outline: true,
+    color: "#9ca3af"
+  }, "Cancelar"), React.createElement(TutorialBtn, null, "Cadastrar"))))
+}, {
+  titulo: 'Aba Eventos — o quadro Kanban',
+  texto: 'Todo evento novo nasce na coluna Cadastrados. Ele avança para Confirmados, e termina em Concluídos ou Cancelados — arrastando o card ou pelos botões de cada etapa.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-2.5"
+  }, React.createElement("div", {
+    className: "grid grid-cols-4 gap-1.5"
+  }, ARCANJO_EVENTO_STATUSES.map(st => React.createElement("div", {
+    key: st.key,
+    className: "rounded-lg p-1.5",
+    style: {
+      background: '#f1f5f9'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-1 mb-1"
+  }, React.createElement("span", {
+    className: "w-1.5 h-1.5 rounded-full",
+    style: {
+      background: st.color
+    }
+  }), React.createElement("span", {
+    className: "text-[6px] font-black uppercase",
+    style: {
+      color: st.color
+    }
+  }, st.label)), st.key === 'confirmado' && React.createElement("div", {
+    className: "bg-white rounded-md p-1.5 shadow-sm",
+    style: {
+      borderTop: `2px solid ${st.color}`
+    }
+  }, React.createElement("p", {
+    className: "text-[7px] font-bold text-gray-700 truncate"
+  }, "Mutir\xE3o Documentos"), React.createElement("p", {
+    className: "text-[6px] text-gray-400"
+  }, "24/08 \xB7 30/50"))))))
+}, {
+  titulo: 'Criar evento e incluir pessoas',
+  texto: '"Novo Evento" pede nome, bairro, local, capacidade e data. Depois, "Incluir Pessoas" abre a mesma combinação de filtros (bairro, serviço, ação) para montar a lista de quem vai participar — inclusive um "Selecionar todos".',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px] space-y-1.5"
+  }, React.createElement("p", {
+    className: "font-bold text-gray-700 text-[10px]"
+  }, "Incluir Pessoas \u2014 Mutir\xE3o Documentos"), React.createElement("div", {
+    className: "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-gray-100"
+  }, React.createElement("div", {
+    className: "w-3 h-3 rounded flex items-center justify-center",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, React.createElement(CheckCircle, {
+    className: "w-2 h-2 text-white"
+  })), React.createElement("span", {
+    className: "font-bold",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, "Selecionar todos (18)")), ['Maria da Silva Souza', 'João Pereira Costa', 'Ana Clara Lima'].map((n, i) => React.createElement("div", {
+    key: i,
+    className: "flex items-center gap-1.5 px-2 py-1"
+  }, React.createElement("div", {
+    className: "w-3 h-3 rounded border border-gray-200"
+  }), React.createElement("span", {
+    className: "text-gray-600"
+  }, n))), React.createElement("div", {
+    className: "flex justify-end"
+  }, React.createElement(TutorialBtn, null, "Adicionar (18)")))
+}, {
+  titulo: 'Validar e avançar o evento',
+  texto: 'Com pelo menos 1 pessoa incluída, o botão "Validar Evento" habilita e move o card para Confirmados. De lá, "Concluído" ou "Cancelado" fecham o ciclo — e viram os indicadores de pessoas impactadas.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px]"
+  }, React.createElement("div", {
+    className: "rounded-lg border shadow-sm p-2.5 max-w-[180px] mx-auto",
+    style: {
+      borderTop: `3px solid #6b7280`
+    }
+  }, React.createElement("p", {
+    className: "font-bold text-gray-700 text-[10px]"
+  }, "Mutir\xE3o Documentos"), React.createElement("p", {
+    className: "text-gray-400 text-[8px] mb-1.5"
+  }, "Jurunas \xB7 24/08/2026"), React.createElement("div", {
+    className: "h-1 rounded-full bg-gray-100 mb-1.5"
+  }, React.createElement("div", {
+    className: "h-1 rounded-full",
+    style: {
+      width: '60%',
+      background: ARCANJO_COLOR
+    }
+  })), React.createElement("p", {
+    className: "font-bold mb-1.5",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, "18 / 30 pessoa(s)"), React.createElement("div", {
+    className: "text-center py-1.5 rounded-lg text-white font-bold",
+    style: {
+      background: '#1d4ed8'
+    }
+  }, "Validar Evento")))
+}, {
+  titulo: 'Marcar presença no dia do evento',
+  texto: 'Clicar no card (fora dos botões) abre a lista completa de participantes. Cada um tem uma marcação de presença — pra registrar, no dia, quem realmente compareceu.',
+  render: () => React.createElement("div", {
+    className: "bg-white rounded-xl p-3 text-[9px] space-y-1"
+  }, React.createElement("p", {
+    className: "font-bold text-gray-700 text-[10px] mb-1"
+  }, "18 / 30 pessoa(s) inclu\xEDda(s) \xB7 12 presente(s)"), [['Maria da Silva Souza', true], ['João Pereira Costa', true], ['Ana Clara Lima', false]].map(([n, p], i) => React.createElement("div", {
+    key: i,
+    className: "flex items-center gap-1.5 px-2 py-1 rounded-lg",
+    style: {
+      background: p ? '#f0fdf4' : undefined
+    }
+  }, React.createElement("div", {
+    className: "w-3 h-3 rounded flex items-center justify-center",
+    style: p ? {
+      background: GREEN
+    } : {
+      border: '1px solid #d1d5db'
+    }
+  }, p && React.createElement(CheckCircle, {
+    className: "w-2 h-2 text-white"
+  })), React.createElement("span", {
+    className: "text-gray-600"
+  }, n))))
+}];
+function ArcanjoTutorialModal({
+  onClose
+}) {
+  const [step, setStep] = React.useState(0);
+  const total = ARCANJO_TUTORIAL_STEPS.length;
+  const atual = ARCANJO_TUTORIAL_STEPS[step];
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.7)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 min-w-0"
+  }, React.createElement("div", {
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, React.createElement(HelpCircle, {
+    className: "w-4 h-4 text-white"
+  })), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h2", {
+    className: "font-bold text-gray-800 text-sm"
+  }, "Como usar o m\xF3dulo A\xE7\xF5es"), React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, "Passo ", step + 1, " de ", total))), React.createElement("button", {
+    onClick: onClose,
+    className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "flex-1 overflow-y-auto px-6 py-5"
+  }, React.createElement("div", {
+    className: "rounded-xl p-3 mb-4",
+    style: {
+      background: '#f8fafc'
+    }
+  }, atual.render()), React.createElement("h3", {
+    className: "font-bold text-gray-800 text-sm mb-1.5"
+  }, atual.titulo), React.createElement("p", {
+    className: "text-sm text-gray-500 leading-relaxed"
+  }, atual.texto)), React.createElement("div", {
+    className: "px-6 py-4 border-t border-gray-100 flex items-center justify-between"
+  }, React.createElement("div", {
+    className: "flex gap-1.5"
+  }, ARCANJO_TUTORIAL_STEPS.map((_, i) => React.createElement("button", {
+    key: i,
+    onClick: () => setStep(i),
+    className: "w-2 h-2 rounded-full transition-colors",
+    style: {
+      background: i === step ? ARCANJO_COLOR : '#e5e7eb'
+    }
+  }))), React.createElement("div", {
+    className: "flex gap-2"
+  }, step > 0 && React.createElement("button", {
+    onClick: () => setStep(s => Math.max(0, s - 1)),
+    className: "px-3 py-2 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+  }, "Anterior"), step < total - 1 ? React.createElement("button", {
+    onClick: () => setStep(s => Math.min(total - 1, s + 1)),
+    className: "px-4 py-2 rounded-xl text-xs font-bold text-white transition-colors",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, "Pr\xF3ximo") : React.createElement("button", {
+    onClick: onClose,
+    className: "px-4 py-2 rounded-xl text-xs font-bold text-white transition-colors",
+    style: {
+      background: ARCANJO_COLOR
+    }
+  }, "Concluir")))));
+}
 function ArcanjoPessoaModal({
   editing,
   onSubmit,
@@ -14329,6 +14675,7 @@ function ArcanjoAcoesPage({
   const [incluindoEm, setIncluindoEm] = React.useState(null);
   const [showCadastroPessoa, setShowCadastroPessoa] = React.useState(false);
   const [editandoPessoa, setEditandoPessoa] = React.useState(null);
+  const [showTutorial, setShowTutorial] = React.useState(false);
   const [detalheEventoId, setDetalheEventoId] = React.useState(null);
   const [arrastando, setArrastando] = React.useState(null);
   const [colunaSobre, setColunaSobre] = React.useState(null);
@@ -14393,22 +14740,36 @@ function ArcanjoAcoesPage({
   }, React.createElement("div", {
     className: "bg-white border-b border-gray-100 px-6 pt-6 pb-0"
   }, React.createElement("div", {
-    className: "flex items-center gap-3 mb-5"
+    className: "flex items-center justify-between gap-3 mb-5"
   }, React.createElement("div", {
-    className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm",
+    className: "flex items-center gap-3 min-w-0"
+  }, React.createElement("div", {
+    className: "w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0",
     style: {
       background: ARCANJO_COLOR
     }
   }, React.createElement(Calendar, {
     className: "w-5 h-5 text-white"
-  })), React.createElement("div", null, React.createElement("h1", {
+  })), React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h1", {
     className: "text-lg font-extrabold tracking-tight",
     style: {
       color: ARCANJO_COLOR
     }
   }, "A\xE7\xF5es"), React.createElement("p", {
     className: "text-[11px] text-gray-400 font-medium"
-  }, "Instituto Arcanjo's \xB7 Base de pessoas por bairro e organiza\xE7\xE3o de eventos"))), React.createElement("div", {
+  }, "Instituto Arcanjo's \xB7 Base de pessoas por bairro e organiza\xE7\xE3o de eventos"))), React.createElement("button", {
+    onClick: () => setShowTutorial(true),
+    className: "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex-shrink-0",
+    style: {
+      color: ARCANJO_COLOR,
+      borderColor: '#ddd6fe',
+      background: '#f5f3ff'
+    }
+  }, React.createElement(HelpCircle, {
+    className: "w-3.5 h-3.5"
+  }), " Tutorial")), React.createElement("div", {
     className: "grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5"
   }, React.createElement(ArcanjoKpiCard, {
     label: "Pessoas Cadastradas",
@@ -14734,6 +15095,8 @@ function ArcanjoAcoesPage({
       setShowCadastroPessoa(false);
       setEditandoPessoa(null);
     }
+  }), showTutorial && React.createElement(ArcanjoTutorialModal, {
+    onClose: () => setShowTutorial(false)
   }));
 }
 const CAMPANHA_COLOR = '#4338ca';
