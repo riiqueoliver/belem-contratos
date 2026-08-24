@@ -13928,7 +13928,8 @@ function ArcanjoEventoDetalheModal({
   evento,
   onClose,
   onTogglePresenca,
-  onRemoverParticipante
+  onRemoverParticipante,
+  onRemoverVarios
 }) {
   const participantes = evento.participantes || [];
   const status = evento.status || 'cadastrado';
@@ -13939,6 +13940,31 @@ function ArcanjoEventoDetalheModal({
     month: 'short',
     year: 'numeric'
   }) : '';
+  const [selecionados, setSelecionados] = React.useState(() => new Set());
+  React.useEffect(() => {
+    setSelecionados(sel => {
+      const validos = new Set(participantes.map(p => p.pessoaId));
+      const next = new Set([...sel].filter(id => validos.has(id)));
+      return next.size === sel.size ? sel : next;
+    });
+  }, [participantes]);
+  const todosSelecionados = participantes.length > 0 && participantes.every(p => selecionados.has(p.pessoaId));
+  function selecionarTodos() {
+    setSelecionados(todosSelecionados ? new Set() : new Set(participantes.map(p => p.pessoaId)));
+  }
+  function toggleSelecao(id) {
+    setSelecionados(sel => {
+      const next = new Set(sel);
+      if (next.has(id)) next.delete(id);else next.add(id);
+      return next;
+    });
+  }
+  function removerSelecionados() {
+    if (selecionados.size === 0) return;
+    if (!confirm(`Remover ${selecionados.size} pessoa(s) deste evento?`)) return;
+    onRemoverVarios(Array.from(selecionados));
+    setSelecionados(new Set());
+  }
   return React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4",
     style: {
@@ -13978,34 +14004,78 @@ function ArcanjoEventoDetalheModal({
     className: "overflow-y-auto flex-1 px-6 py-3 space-y-1"
   }, participantes.length === 0 && React.createElement("p", {
     className: "text-center text-xs text-gray-400 py-10"
-  }, "Nenhuma pessoa inclu\xEDda neste evento ainda."), participantes.map(p => React.createElement("div", {
-    key: p.pessoaId,
-    className: "flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
-  }, React.createElement("button", {
+  }, "Nenhuma pessoa inclu\xEDda neste evento ainda."), participantes.length > 0 && React.createElement("button", {
     type: "button",
-    onClick: () => onTogglePresenca(p.pessoaId),
-    className: "w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200'),
-    style: p.presente ? {
-      background: GREEN,
-      borderColor: GREEN
+    onClick: selecionarTodos,
+    className: "sticky top-0 z-10 bg-white w-full flex items-center gap-3 px-3 py-2 mb-1 rounded-xl text-left border-b border-gray-50 hover:bg-gray-50 transition-colors"
+  }, React.createElement("div", {
+    className: "w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosSelecionados ? '' : 'border-gray-200'),
+    style: todosSelecionados ? {
+      background: ARCANJO_COLOR,
+      borderColor: ARCANJO_COLOR
     } : undefined
-  }, p.presente && React.createElement(CheckCircle, {
-    className: "w-3.5 h-3.5 text-white"
+  }, todosSelecionados && React.createElement(CheckCircle, {
+    className: "w-3 h-3 text-white"
+  })), React.createElement("p", {
+    className: "text-xs font-bold",
+    style: {
+      color: ARCANJO_COLOR
+    }
+  }, todosSelecionados ? 'Desmarcar todos' : `Selecionar todos (${participantes.length})`)), participantes.map(p => {
+    const selecionado = selecionados.has(p.pessoaId);
+    return React.createElement("div", {
+      key: p.pessoaId,
+      className: "flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors",
+      style: selecionado ? {
+        background: '#f5f3ff'
+      } : undefined
+    }, React.createElement("button", {
+      type: "button",
+      onClick: () => toggleSelecao(p.pessoaId),
+      title: "Selecionar",
+      className: "w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (selecionado ? '' : 'border-gray-200'),
+      style: selecionado ? {
+        background: ARCANJO_COLOR,
+        borderColor: ARCANJO_COLOR
+      } : undefined
+    }, selecionado && React.createElement(CheckCircle, {
+      className: "w-3 h-3 text-white"
+    })), React.createElement("button", {
+      type: "button",
+      onClick: () => onTogglePresenca(p.pessoaId),
+      title: "Marcar presen\xE7a",
+      className: "w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200'),
+      style: p.presente ? {
+        background: GREEN,
+        borderColor: GREEN
+      } : undefined
+    }, p.presente && React.createElement(CheckCircle, {
+      className: "w-3.5 h-3.5 text-white"
+    })), React.createElement("div", {
+      className: "min-w-0 flex-1"
+    }, React.createElement("p", {
+      className: "text-sm font-semibold text-gray-700 truncate"
+    }, p.nome), React.createElement("p", {
+      className: "text-xs text-gray-400"
+    }, p.telefone || 'sem telefone')), React.createElement("button", {
+      type: "button",
+      onClick: () => onRemoverParticipante(p.pessoaId),
+      title: "Remover",
+      className: "p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+    }, React.createElement(X, {
+      className: "w-3.5 h-3.5"
+    })));
   })), React.createElement("div", {
-    className: "min-w-0 flex-1"
-  }, React.createElement("p", {
-    className: "text-sm font-semibold text-gray-700 truncate"
-  }, p.nome), React.createElement("p", {
-    className: "text-xs text-gray-400"
-  }, p.telefone || 'sem telefone')), React.createElement("button", {
-    type: "button",
-    onClick: () => onRemoverParticipante(p.pessoaId),
-    className: "p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-  }, React.createElement(X, {
+    className: "px-6 py-4 border-t border-gray-100 flex items-center justify-between"
+  }, selecionados.size > 0 ? React.createElement("button", {
+    onClick: removerSelecionados,
+    className: "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors",
+    style: {
+      background: '#dc2626'
+    }
+  }, React.createElement(Trash2, {
     className: "w-3.5 h-3.5"
-  }))))), React.createElement("div", {
-    className: "px-6 py-4 border-t border-gray-100 flex justify-end"
-  }, React.createElement("button", {
+  }), " Remover ", selecionados.size, " selecionado(s)") : React.createElement("span", null), React.createElement("button", {
     onClick: onClose,
     className: "px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
   }, "Fechar"))));
@@ -14271,6 +14341,9 @@ function ArcanjoAcoesPage({
       }),
       onRemoverParticipante: pessoaId => onUpdateEvento(ev.id, {
         participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId)
+      }),
+      onRemoverVarios: ids => onUpdateEvento(ev.id, {
+        participantes: (ev.participantes || []).filter(p => !ids.includes(p.pessoaId))
       })
     });
   })(), editandoBairroDe && React.createElement("div", {

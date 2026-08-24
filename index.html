@@ -9906,12 +9906,41 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    function ArcanjoEventoDetalheModal({ evento, onClose, onTogglePresenca, onRemoverParticipante }) {
+    function ArcanjoEventoDetalheModal({ evento, onClose, onTogglePresenca, onRemoverParticipante, onRemoverVarios }) {
       const participantes = evento.participantes || [];
       const status = evento.status || 'cadastrado';
       const statusInfo = ARCANJO_EVENTO_STATUSES.find(s => s.key === status) || ARCANJO_EVENTO_STATUSES[0];
       const presentes = participantes.filter(p => p.presente).length;
       const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }) : '';
+
+      const [selecionados, setSelecionados] = React.useState(() => new Set());
+      React.useEffect(() => {
+        // Some participantes somem da lista (removidos em outra aba) — mantém a seleção coerente.
+        setSelecionados(sel => {
+          const validos = new Set(participantes.map(p => p.pessoaId));
+          const next = new Set([...sel].filter(id => validos.has(id)));
+          return next.size === sel.size ? sel : next;
+        });
+      }, [participantes]);
+
+      const todosSelecionados = participantes.length > 0 && participantes.every(p => selecionados.has(p.pessoaId));
+
+      function selecionarTodos() {
+        setSelecionados(todosSelecionados ? new Set() : new Set(participantes.map(p => p.pessoaId)));
+      }
+      function toggleSelecao(id) {
+        setSelecionados(sel => {
+          const next = new Set(sel);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+        });
+      }
+      function removerSelecionados() {
+        if (selecionados.size === 0) return;
+        if (!confirm(`Remover ${selecionados.size} pessoa(s) deste evento?`)) return;
+        onRemoverVarios(Array.from(selecionados));
+        setSelecionados(new Set());
+      }
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}}>
@@ -9935,24 +9964,52 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {participantes.length === 0 && (
                 <p className="text-center text-xs text-gray-400 py-10">Nenhuma pessoa incluída neste evento ainda.</p>
               )}
-              {participantes.map(p => (
-                <div key={p.pessoaId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-                  <button type="button" onClick={() => onTogglePresenca(p.pessoaId)}
-                    className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200')}
-                    style={p.presente ? {background: GREEN, borderColor: GREEN} : undefined}>
-                    {p.presente && <CheckCircle className="w-3.5 h-3.5 text-white" />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-700 truncate">{p.nome}</p>
-                    <p className="text-xs text-gray-400">{p.telefone || 'sem telefone'}</p>
+              {participantes.length > 0 && (
+                <button type="button" onClick={selecionarTodos}
+                  className="sticky top-0 z-10 bg-white w-full flex items-center gap-3 px-3 py-2 mb-1 rounded-xl text-left border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                  <div className={"w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (todosSelecionados ? '' : 'border-gray-200')}
+                    style={todosSelecionados ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
+                    {todosSelecionados && <CheckCircle className="w-3 h-3 text-white" />}
                   </div>
-                  <button type="button" onClick={() => onRemoverParticipante(p.pessoaId)} className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+                  <p className="text-xs font-bold" style={{color: ARCANJO_COLOR}}>
+                    {todosSelecionados ? 'Desmarcar todos' : `Selecionar todos (${participantes.length})`}
+                  </p>
+                </button>
+              )}
+              {participantes.map(p => {
+                const selecionado = selecionados.has(p.pessoaId);
+                return (
+                  <div key={p.pessoaId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                    style={selecionado ? {background:'#f5f3ff'} : undefined}>
+                    <button type="button" onClick={() => toggleSelecao(p.pessoaId)} title="Selecionar"
+                      className={"w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 " + (selecionado ? '' : 'border-gray-200')}
+                      style={selecionado ? {background: ARCANJO_COLOR, borderColor: ARCANJO_COLOR} : undefined}>
+                      {selecionado && <CheckCircle className="w-3 h-3 text-white" />}
+                    </button>
+                    <button type="button" onClick={() => onTogglePresenca(p.pessoaId)} title="Marcar presença"
+                      className={"w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors " + (p.presente ? '' : 'border-gray-200')}
+                      style={p.presente ? {background: GREEN, borderColor: GREEN} : undefined}>
+                      {p.presente && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-700 truncate">{p.nome}</p>
+                      <p className="text-xs text-gray-400">{p.telefone || 'sem telefone'}</p>
+                    </div>
+                    <button type="button" onClick={() => onRemoverParticipante(p.pessoaId)} title="Remover" className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+              {selecionados.size > 0 ? (
+                <button onClick={removerSelecionados}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors"
+                  style={{background:'#dc2626'}}>
+                  <Trash2 className="w-3.5 h-3.5" /> Remover {selecionados.size} selecionado(s)
+                </button>
+              ) : <span />}
               <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">Fechar</button>
             </div>
           </div>
@@ -10182,6 +10239,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   participantes: (ev.participantes || []).map(p => p.pessoaId === pessoaId ? { ...p, presente: !p.presente } : p),
                 })}
                 onRemoverParticipante={pessoaId => onUpdateEvento(ev.id, { participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId) })}
+                onRemoverVarios={ids => onUpdateEvento(ev.id, { participantes: (ev.participantes || []).filter(p => !ids.includes(p.pessoaId)) })}
               />
             );
           })()}
