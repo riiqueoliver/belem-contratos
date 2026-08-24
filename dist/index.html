@@ -13465,10 +13465,17 @@ const ARCANJO_ACOES_TABS = [{
   label: 'Eventos'
 }];
 function ArcanjoEventoModal({
+  editing,
   onSubmit,
   onClose
 }) {
-  const [form, setForm] = React.useState({
+  const [form, setForm] = React.useState(() => editing ? {
+    nome: editing.nome || '',
+    bairro: editing.bairro || '',
+    local: editing.local || '',
+    capacidade: editing.capacidade != null ? String(editing.capacidade) : '',
+    data: editing.data || ''
+  } : {
     nome: '',
     bairro: '',
     local: '',
@@ -13512,7 +13519,7 @@ function ArcanjoEventoModal({
     className: "w-4 h-4 text-white"
   })), React.createElement("h2", {
     className: "font-bold text-gray-800 text-sm"
-  }, "Novo Evento")), React.createElement("button", {
+  }, editing ? 'Editar Evento' : 'Novo Evento')), React.createElement("button", {
     onClick: onClose,
     className: "p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
   }, React.createElement(X, {
@@ -13578,7 +13585,7 @@ function ArcanjoEventoModal({
     style: {
       background: ARCANJO_COLOR
     }
-  }, "Criar Evento"))));
+  }, editing ? 'Salvar Alterações' : 'Criar Evento'))));
 }
 function ArcanjoIncluirPessoasModal({
   evento,
@@ -13768,12 +13775,14 @@ function ArcanjoIncluirPessoasModal({
 function ArcanjoEventoCard({
   evento,
   onIncluir,
+  onEdit,
   onDelete,
   onRemoverParticipante
 }) {
   const [expandido, setExpandido] = React.useState(false);
   const participantes = evento.participantes || [];
   const pct = evento.capacidade ? Math.min(100, Math.round(participantes.length / evento.capacidade * 100)) : null;
+  const completo = pct != null && pct >= 100;
   const dataFmt = evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'short',
@@ -13791,12 +13800,19 @@ function ArcanjoEventoCard({
     className: "font-bold text-gray-800 text-sm truncate"
   }, evento.nome), React.createElement("p", {
     className: "text-xs text-gray-400 mt-0.5"
-  }, evento.bairro, evento.local ? ` · ${evento.local}` : '')), React.createElement("button", {
+  }, evento.bairro, evento.local ? ` · ${evento.local}` : '')), React.createElement("div", {
+    className: "flex items-center gap-1 flex-shrink-0"
+  }, React.createElement("button", {
+    onClick: () => onEdit(evento),
+    className: "p-1.5 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+  }, React.createElement(Edit2, {
+    className: "w-3.5 h-3.5"
+  })), React.createElement("button", {
     onClick: () => onDelete(evento.id),
-    className: "p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+    className: "p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
   }, React.createElement(Trash2, {
     className: "w-3.5 h-3.5"
-  }))), React.createElement("div", {
+  })))), React.createElement("div", {
     className: "flex items-center gap-2 mt-3 text-xs text-gray-400"
   }, React.createElement(Calendar, {
     className: "w-3.5 h-3.5"
@@ -13808,21 +13824,24 @@ function ArcanjoEventoCard({
     onClick: () => setExpandido(e => !e),
     className: "font-bold flex items-center gap-1",
     style: {
-      color: ARCANJO_COLOR
+      color: completo ? GREEN : ARCANJO_COLOR
     }
   }, participantes.length, evento.capacidade ? ` / ${evento.capacidade}` : '', " pessoa(s)", expandido ? React.createElement(ChevronUp, {
     className: "w-3 h-3"
   }) : React.createElement(ChevronDown, {
     className: "w-3 h-3"
   })), pct != null && React.createElement("span", {
-    className: "text-gray-400"
+    className: completo ? 'font-bold' : 'text-gray-400',
+    style: completo ? {
+      color: GREEN
+    } : undefined
   }, pct, "%")), pct != null && React.createElement("div", {
     className: "h-1.5 rounded-full bg-gray-100 overflow-hidden"
   }, React.createElement("div", {
     className: "h-full rounded-full transition-all",
     style: {
       width: `${pct}%`,
-      background: pct >= 100 ? '#dc2626' : ARCANJO_COLOR
+      background: completo ? GREEN : ARCANJO_COLOR
     }
   }))), expandido && participantes.length > 0 && React.createElement("div", {
     className: "mt-3 space-y-1 max-h-48 overflow-y-auto pr-1"
@@ -13865,6 +13884,7 @@ function ArcanjoAcoesPage({
   const [filtroBairro, setFiltroBairro] = React.useState('');
   const [pagina, setPagina] = React.useState(0);
   const [showEventoModal, setShowEventoModal] = React.useState(false);
+  const [editandoEvento, setEditandoEvento] = React.useState(null);
   const [incluindoEm, setIncluindoEm] = React.useState(null);
   const [editandoBairroDe, setEditandoBairroDe] = React.useState(null);
   const POR_PAGINA = 50;
@@ -14014,16 +14034,22 @@ function ArcanjoAcoesPage({
     key: ev.id,
     evento: ev,
     onIncluir: setIncluindoEm,
+    onEdit: setEditandoEvento,
     onDelete: onDeleteEvento,
     onRemoverParticipante: pessoaId => onUpdateEvento(ev.id, {
       participantes: (ev.participantes || []).filter(p => p.pessoaId !== pessoaId)
     })
-  }))))), showEventoModal && React.createElement(ArcanjoEventoModal, {
+  }))))), (showEventoModal || editandoEvento) && React.createElement(ArcanjoEventoModal, {
+    editing: editandoEvento,
     onSubmit: data => {
-      onAddEvento(data);
+      if (editandoEvento) onUpdateEvento(editandoEvento.id, data);else onAddEvento(data);
       setShowEventoModal(false);
+      setEditandoEvento(null);
     },
-    onClose: () => setShowEventoModal(false)
+    onClose: () => {
+      setShowEventoModal(false);
+      setEditandoEvento(null);
+    }
   }), incluindoEm && React.createElement(ArcanjoIncluirPessoasModal, {
     evento: incluindoEm,
     pessoas: pessoas,
