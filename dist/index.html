@@ -22018,7 +22018,7 @@ function NfListView({
   })), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
   }, React.createElement("div", {
-    className: "hidden md:grid text-[10px] font-black uppercase tracking-widest text-gray-400\r bg-gray-50 border-b border-gray-100 px-4 py-2.5 gap-3",
+    className: "hidden md:grid text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 border-b border-gray-100 px-4 py-2.5 gap-3",
     style: {
       gridTemplateColumns: '1.1fr 1.4fr 0.8fr 0.9fr 1.1fr 0.8fr 28px'
     }
@@ -24171,6 +24171,9 @@ function App() {
         header: 'Telefone',
         width: 16
       }, {
+        header: 'Endereço',
+        width: 36
+      }, {
         header: 'Liderança',
         width: 22
       }, {
@@ -24201,7 +24204,7 @@ function App() {
             }
           });
         }
-        ws.mergeCells('B1:I1');
+        ws.mergeCells('B1:J1');
         const tc = ws.getCell('B1');
         tc.value = "Instituto Arcanjo's  —  " + tab.name;
         tc.font = {
@@ -24215,7 +24218,7 @@ function App() {
           vertical: 'middle',
           horizontal: 'left'
         };
-        ws.mergeCells('B2:I2');
+        ws.mergeCells('B2:J2');
         const sc = ws.getCell('B2');
         const dt = new Date().toLocaleDateString('pt-BR', {
           day: '2-digit',
@@ -24262,7 +24265,7 @@ function App() {
         data.forEach((r, idx) => {
           const row = ws.getRow(idx + 4);
           const stLabel = ARCANJO_ALL_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
-          const vals = [r.nome || '', r.cpf || '', r.dataNasc || '', r.telefone || '', r.lideranca || '', r.coordenador || '', stLabel, r.observacao || ''];
+          const vals = [r.nome || '', r.cpf || '', r.dataNasc || '', r.telefone || '', r.endereco || '', r.lideranca || '', r.coordenador || '', stLabel, r.observacao || ''];
           vals.forEach((v, ci) => {
             const cell = row.getCell(ci + 2);
             cell.value = v;
@@ -24271,7 +24274,7 @@ function App() {
             };
             cell.alignment = {
               vertical: 'middle',
-              wrapText: ci === 7
+              wrapText: ci === 8
             };
             if (idx % 2 === 0) cell.fill = {
               type: 'pattern',
@@ -24280,7 +24283,7 @@ function App() {
                 argb: 'FFF9F5FF'
               }
             };
-            if (ci === 6) {
+            if (ci === 7) {
               const st = ARCANJO_STATUSES.find(s => s.key === r.status);
               if (st) {
                 cell.fill = {
@@ -24306,7 +24309,7 @@ function App() {
           });
           row.height = 18;
         });
-        ws.autoFilter = 'B3:I3';
+        ws.autoFilter = 'B3:J3';
         ws.views = [{
           state: 'frozen',
           ySplit: 3
@@ -24390,7 +24393,7 @@ function App() {
         background: '#ef4444'
       }
     }, badge > 9 ? '9+' : badge), React.createElement("span", {
-      className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap\r opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
+      className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
       style: {
         background: '#1e293b'
       }
@@ -24535,7 +24538,7 @@ function App() {
     },
     className: "text-white font-black text-xs"
   }, "GCSP"))), React.createElement("span", {
-    className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap\r opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
+    className: "absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]",
     style: {
       background: '#1e293b'
     }

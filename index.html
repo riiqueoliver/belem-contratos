@@ -17369,6 +17369,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             { header: 'CPF',         width: 16 },
             { header: 'Dt. Nasc.',   width: 13 },
             { header: 'Telefone',    width: 16 },
+            { header: 'Endereço',    width: 36 },
             { header: 'Liderança',   width: 22 },
             { header: 'Coordenador', width: 22 },
             { header: 'Status',      width: 18 },
@@ -17387,15 +17388,15 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 65, height: 65 } });
             }
 
-            // Título (B1:I1)
-            ws.mergeCells('B1:I1');
+            // Título (B1:J1)
+            ws.mergeCells('B1:J1');
             const tc = ws.getCell('B1');
             tc.value = "Instituto Arcanjo's  —  " + tab.name;
             tc.font = { bold: true, size: 15, color: { argb: 'FF7B61C7' } };
             tc.alignment = { vertical: 'middle', horizontal: 'left' };
 
-            // Subtítulo (B2:I2)
-            ws.mergeCells('B2:I2');
+            // Subtítulo (B2:J2)
+            ws.mergeCells('B2:J2');
             const sc = ws.getCell('B2');
             const dt = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
             sc.value = 'Emitido em ' + dt + '  ·  ' + data.length + ' registro' + (data.length !== 1 ? 's' : '');
@@ -17406,7 +17407,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             ws.getColumn(1).width = 10;
             COLS.forEach((c, i) => { ws.getColumn(i + 2).width = c.width; });
 
-            // Linha de cabeçalho (row 3, colunas B-I)
+            // Linha de cabeçalho (row 3, colunas B-J)
             const hRow = ws.getRow(3);
             COLS.forEach((c, i) => {
               const cell = hRow.getCell(i + 2);
@@ -17416,18 +17417,18 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               cell.alignment = { vertical: 'middle', horizontal: 'center' };
             });
 
-            // Linhas de dados (row 4+, colunas B-I)
+            // Linhas de dados (row 4+, colunas B-J)
             data.forEach((r, idx) => {
               const row = ws.getRow(idx + 4);
               const stLabel = ARCANJO_ALL_STATUSES.find(s => s.key === r.status)?.label || r.status || '';
-              const vals = [r.nome||'', r.cpf||'', r.dataNasc||'', r.telefone||'', r.lideranca||'', r.coordenador||'', stLabel, r.observacao||''];
+              const vals = [r.nome||'', r.cpf||'', r.dataNasc||'', r.telefone||'', r.endereco||'', r.lideranca||'', r.coordenador||'', stLabel, r.observacao||''];
               vals.forEach((v, ci) => {
                 const cell = row.getCell(ci + 2);
                 cell.value = v;
                 cell.font = { size: 10 };
-                cell.alignment = { vertical: 'middle', wrapText: ci === 7 };
+                cell.alignment = { vertical: 'middle', wrapText: ci === 8 };
                 if (idx % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F5FF' } };
-                if (ci === 6) {
+                if (ci === 7) {
                   const st = ARCANJO_STATUSES.find(s => s.key === r.status);
                   if (st) {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + st.bg.replace('#','').toUpperCase() } };
@@ -17439,7 +17440,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               row.height = 18;
             });
 
-            ws.autoFilter = 'B3:I3';
+            ws.autoFilter = 'B3:J3';
             ws.views = [{ state: 'frozen', ySplit: 3 }];
           }
 
