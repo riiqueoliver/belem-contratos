@@ -12185,14 +12185,8 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
       header: 'D/N',
       width: 13
     }, {
-      header: 'CEP',
-      width: 13
-    }, {
-      header: 'Nº Casa',
-      width: 10
-    }, {
-      header: 'Bairro',
-      width: 20
+      header: 'Endereço',
+      width: 46
     }, {
       header: 'Telefone',
       width: 16
@@ -12219,7 +12213,7 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
         }
       });
     }
-    ws.mergeCells('B1:I1');
+    ws.mergeCells('B1:H1');
     const tc = ws.getCell('B1');
     tc.value = `Instituto Arcanjo's  —  Pendências de ${tipoLabel} · ${nome}`;
     tc.font = {
@@ -12233,7 +12227,7 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
       vertical: 'middle',
       horizontal: 'left'
     };
-    ws.mergeCells('B2:I2');
+    ws.mergeCells('B2:H2');
     const sc = ws.getCell('B2');
     const dt = new Date().toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -12290,7 +12284,7 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
       const solicitacao = r.tipo === 'certidao' ? `Certidão${r.subtipo ? ' - ' + r.subtipo.charAt(0).toUpperCase() + r.subtipo.slice(1) : ''}` : 'RG';
       const d = toJsDate(r.createdAt);
       const criadoTxt = d ? d.toLocaleDateString('pt-BR') : '';
-      const vals = [r.nome || '', r.cpf || '', r.dataNascimento || '', r.cep || '', r.numeroCasa || '', r.bairro || '', r.telefone || '', solicitacao, criadoTxt];
+      const vals = [r.nome || '', r.cpf || '', r.dataNascimento || '', r.endereco || '', r.telefone || '', solicitacao, criadoTxt];
       vals.forEach((v, ci) => {
         const cell = row.getCell(ci + 2);
         cell.value = v;
@@ -12299,7 +12293,7 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
         };
         cell.alignment = {
           vertical: 'middle',
-          horizontal: ci === 7 || ci === 8 ? 'center' : 'left'
+          horizontal: ci === 5 || ci === 6 ? 'center' : 'left'
         };
         if (idx % 2 === 0) cell.fill = {
           type: 'pattern',
@@ -12311,7 +12305,7 @@ async function exportarPendentesPorResponsavel(records, nome, tipo, addToast) {
       });
       row.height = 18;
     });
-    ws.autoFilter = 'B3:J3';
+    ws.autoFilter = 'B3:H3';
     ws.views = [{
       state: 'frozen',
       ySplit: 3
