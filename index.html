@@ -8811,6 +8811,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           { header: 'Nome',          width: 32 },
           { header: 'CPF',           width: 16 },
           { header: 'D/N',           width: 13 },
+          { header: 'CEP',           width: 13 },
+          { header: 'Nº Casa',       width: 10 },
+          { header: 'Bairro',        width: 20 },
           { header: 'Endereço',      width: 46 },
           { header: 'Telefone',      width: 16 },
           { header: 'Solicitação',   width: 18 },
@@ -8826,13 +8829,13 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 65, height: 65 } });
         }
 
-        ws.mergeCells('B1:H1');
+        ws.mergeCells('B1:K1');
         const tc = ws.getCell('B1');
         tc.value = `Instituto Arcanjo's  —  Pendências de ${tipoLabel} · ${nome}`;
         tc.font = { bold: true, size: 15, color: { argb: 'FF7B61C7' } };
         tc.alignment = { vertical: 'middle', horizontal: 'left' };
 
-        ws.mergeCells('B2:H2');
+        ws.mergeCells('B2:K2');
         const sc = ws.getCell('B2');
         const dt = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         sc.value = `Emitido em ${dt}  ·  ${alvo.length} pessoa${alvo.length !== 1 ? 's' : ''} pendente${alvo.length !== 1 ? 's' : ''}`;
@@ -8866,18 +8869,18 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             : 'RG';
           const d = toJsDate(r.createdAt);
           const criadoTxt = d ? d.toLocaleDateString('pt-BR') : '';
-          const vals = [r.nome||'', r.cpf||'', r.dataNascimento||'', r.endereco||'', r.telefone||'', solicitacao, criadoTxt];
+          const vals = [r.nome||'', r.cpf||'', r.dataNascimento||'', r.cep||'', r.numeroCasa||'', r.bairro||'', r.endereco||'', r.telefone||'', solicitacao, criadoTxt];
           vals.forEach((v, ci) => {
             const cell = row.getCell(ci + 2);
             cell.value = v;
             cell.font = { size: 10 };
-            cell.alignment = { vertical: 'middle', horizontal: (ci === 5 || ci === 6) ? 'center' : 'left' };
+            cell.alignment = { vertical: 'middle', horizontal: (ci === 8 || ci === 9) ? 'center' : 'left' };
             if (idx % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
           });
           row.height = 18;
         });
 
-        ws.autoFilter = 'B3:H3';
+        ws.autoFilter = 'B3:K3';
         ws.views = [{ state: 'frozen', ySplit: 3 }];
 
         const buf = await wb.xlsx.writeBuffer();
