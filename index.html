@@ -11469,10 +11469,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     // Motor de cálculo — distribui itens mês a mês e aplica impostos/rateio
     function calcCronograma({ itens, prazo, pctBD, base, aliquotaTotal }) {
       const nPrazo  = Math.max(1, Math.round(cronNum(prazo)) || 1);
+      // Até onde os itens realmente vão. Um item mensal que começa depois do mês 1
+      // pode ultrapassar o prazo; se o cálculo parasse no prazo, esses meses sumiriam
+      // da conta e a base do rateio ficaria menor que o valor do contrato.
+      const ultimoMesItem = (itens || []).reduce((max, it) => {
+        const ini = Math.round(cronNum(it.mes_inicio)) || 1;
+        const dur = it.tipo_recorrencia === 'MENSAL'
+          ? (Math.round(cronNum(it.meses_duracao)) || Math.round(cronNum(it.quantidade)) || 1)
+          : 1;
+        return Math.max(max, ini + dur - 1);
+      }, 0);
+      const nMeses  = Math.max(nPrazo, ultimoMesItem);
       const pctParc = 100 - cronNum(pctBD);
       const meses = [];
       let acum = 0, acumBruto = 0;
-      for (let m = 1; m <= nPrazo; m++) {
+      for (let m = 1; m <= nMeses; m++) {
         let bruto = 0;
         const det = [];  // contribuição de cada item neste mês
         (itens || []).forEach(it => {
@@ -11503,7 +11514,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         bd:      a.bd      + x.bd,
       }), { bruto:0, imposto:0, liquido:0, repasse:0, bd:0 });
       const margemEfetiva = tot.bruto > 0 ? (tot.bd / tot.bruto) * 100 : 0;
-      return { meses, tot, margemEfetiva, pctParc };
+      return { meses, tot, margemEfetiva, pctParc, nMeses, mesesAlemDoPrazo: Math.max(0, nMeses - nPrazo) };
     }
 
     // Validações e alertas de negócio
@@ -11518,6 +11529,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
       if (cronNum(valorGlobal) > 0 && Math.abs(somaItens - cronNum(valorGlobal)) > 0.5) {
         out.push({ nivel:'ALERTA', txt:`Divergência entre itens e valor global: soma dos itens ${fmtCurrency(somaItens)} × valor global ${fmtCurrency(valorGlobal)}.` });
+      }
+      if (calc.mesesAlemDoPrazo > 0) {
+        out.push({ nivel:'CRITICO', txt:`Os itens se estendem até o mês ${calc.nMeses}, mas o prazo informado é de ${Math.round(cronNum(prazo))} meses — ${calc.mesesAlemDoPrazo} mês(es) além do contrato. O cálculo considera todos eles; confira se o prazo, o mês de início ou a duração do item estão corretos.` });
       }
       const mesesComFat = calc.meses.filter(x => x.bruto > 0).length;
       if (mesesComFat < cronNum(prazo)) {
@@ -11556,13 +11570,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     function CronogramaTabelaMensal({ calc, prazo, itens = [], nomeBD = 'Contratada', nomeParc = 'Parceira' }) {
       const [mostrarRepasses, setMostrarRepasses] = React.useState(false);
       const [abrirItens,      setAbrirItens]      = React.useState(false);
-      const blocos = Math.ceil(prazo / 12);
+      // Renderiza todos os meses calculados — inclusive os que passam do prazo,
+      // que antes ficavam de fora da tela mesmo entrando (ou não) na conta.
+      const totalMeses = calc.meses.length || Math.max(1, Math.round(cronNum(prazo)) || 1);
+      const blocos = Math.ceil(totalMeses / 12);
       const linhas = cronLinhas(mostrarRepasses, nomeBD, nomeParc);
       const CORES_ITEM = ['#2563eb','#7c3aed','#0891b2','#c2410c','#be185d','#0f766e','#a16207','#4338ca'];
       return (
         <>
           {Array.from({ length: blocos }, (_, b) => {
-            const ini = b*12 + 1, fim = Math.min(prazo, (b+1)*12);
+            const ini = b*12 + 1, fim = Math.min(totalMeses, (b+1)*12);
             const cols = calc.meses.slice(ini-1, fim);
             const brutoBloco = cols.reduce((s,c) => s + c.bruto, 0);
             return (

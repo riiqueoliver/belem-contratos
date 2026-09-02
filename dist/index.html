@@ -16051,11 +16051,17 @@ function calcCronograma({
   aliquotaTotal
 }) {
   const nPrazo = Math.max(1, Math.round(cronNum(prazo)) || 1);
+  const ultimoMesItem = (itens || []).reduce((max, it) => {
+    const ini = Math.round(cronNum(it.mes_inicio)) || 1;
+    const dur = it.tipo_recorrencia === 'MENSAL' ? Math.round(cronNum(it.meses_duracao)) || Math.round(cronNum(it.quantidade)) || 1 : 1;
+    return Math.max(max, ini + dur - 1);
+  }, 0);
+  const nMeses = Math.max(nPrazo, ultimoMesItem);
   const pctParc = 100 - cronNum(pctBD);
   const meses = [];
   let acum = 0,
     acumBruto = 0;
-  for (let m = 1; m <= nPrazo; m++) {
+  for (let m = 1; m <= nMeses; m++) {
     let bruto = 0;
     const det = [];
     (itens || []).forEach(it => {
@@ -16106,7 +16112,9 @@ function calcCronograma({
     meses,
     tot,
     margemEfetiva,
-    pctParc
+    pctParc,
+    nMeses,
+    mesesAlemDoPrazo: Math.max(0, nMeses - nPrazo)
   };
 }
 function cronAlertas({
@@ -16135,6 +16143,12 @@ function cronAlertas({
     out.push({
       nivel: 'ALERTA',
       txt: `Divergência entre itens e valor global: soma dos itens ${fmtCurrency(somaItens)} × valor global ${fmtCurrency(valorGlobal)}.`
+    });
+  }
+  if (calc.mesesAlemDoPrazo > 0) {
+    out.push({
+      nivel: 'CRITICO',
+      txt: `Os itens se estendem até o mês ${calc.nMeses}, mas o prazo informado é de ${Math.round(cronNum(prazo))} meses — ${calc.mesesAlemDoPrazo} mês(es) além do contrato. O cálculo considera todos eles; confira se o prazo, o mês de início ou a duração do item estão corretos.`
     });
   }
   const mesesComFat = calc.meses.filter(x => x.bruto > 0).length;
@@ -16243,14 +16257,15 @@ function CronogramaTabelaMensal({
 }) {
   const [mostrarRepasses, setMostrarRepasses] = React.useState(false);
   const [abrirItens, setAbrirItens] = React.useState(false);
-  const blocos = Math.ceil(prazo / 12);
+  const totalMeses = calc.meses.length || Math.max(1, Math.round(cronNum(prazo)) || 1);
+  const blocos = Math.ceil(totalMeses / 12);
   const linhas = cronLinhas(mostrarRepasses, nomeBD, nomeParc);
   const CORES_ITEM = ['#2563eb', '#7c3aed', '#0891b2', '#c2410c', '#be185d', '#0f766e', '#a16207', '#4338ca'];
   return React.createElement(React.Fragment, null, Array.from({
     length: blocos
   }, (_, b) => {
     const ini = b * 12 + 1,
-      fim = Math.min(prazo, (b + 1) * 12);
+      fim = Math.min(totalMeses, (b + 1) * 12);
     const cols = calc.meses.slice(ini - 1, fim);
     const brutoBloco = cols.reduce((s, c) => s + c.bruto, 0);
     return React.createElement("div", {
