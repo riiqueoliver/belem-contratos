@@ -16472,13 +16472,13 @@ function CronogramaResumo({
     bg: '#f1f5f9',
     bar: '#64748b'
   }, {
-    l: `Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)})`,
+    l: `Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)} do líquido)`,
     v: calc.tot.repasse,
     c: '#92400e',
     bg: '#FFE699',
     bar: '#d97706'
   }, {
-    l: `Resultado líquido — ${nomeBD}`,
+    l: `Fica com ${nomeBD} (${cronPctTxt(pctBD)} do líquido)`,
     v: calc.tot.bd,
     c: '#166534',
     bg: '#E2EFDA',
@@ -16534,7 +16534,7 @@ function CronogramaResumo({
     className: "text-2xl font-black text-gray-700"
   }, cronPctTxt(pctBD)), React.createElement("p", {
     className: "text-[10px] text-gray-400 mt-0.5"
-  }, "percentual acordado")), React.createElement("div", {
+  }, "acordado \xB7 fica com a contratada")), React.createElement("div", {
     className: "rounded-xl border p-3",
     style: {
       background: '#E2EFDA',
@@ -16555,7 +16555,7 @@ function CronogramaResumo({
     style: {
       color: '#4d7c0f'
     }
-  }, "ap\xF3s impostos \xB7 \u2212", cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)))));
+  }, "do bruto, ap\xF3s impostos \xB7 \u2212", cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)))));
 }
 async function exportCronogramaExcel({
   contrato,
@@ -17697,7 +17697,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     className: "grid grid-cols-2 lg:grid-cols-4 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: lc
-  }, "% ", nomeBD), React.createElement("input", {
+  }, "% que FICA com a contratada"), React.createElement("input", {
     type: "number",
     step: "0.01",
     min: "0",
@@ -17706,13 +17706,19 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     onChange: e => setP('pctBD', e.target.value === '' ? '' : cronNum(e.target.value)),
     className: icY,
     style: yStyle
-  })), React.createElement("div", null, React.createElement("label", {
+  }), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-1 leading-tight truncate",
+    title: nomeBD
+  }, nomeBD)), React.createElement("div", null, React.createElement("label", {
     className: lc
-  }, "% ", nomeParc, " (autom\xE1tico)"), React.createElement("input", {
+  }, "% REPASSADO \xE0 parceira (autom\xE1tico)"), React.createElement("input", {
     readOnly: true,
     value: cronPctTxt(calc.pctParc),
     className: ic + " bg-gray-50 text-gray-500 border-gray-200"
-  })), React.createElement("div", null, React.createElement("label", {
+  }), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-1 leading-tight truncate",
+    title: nomeParc
+  }, nomeParc)), React.createElement("div", null, React.createElement("label", {
     className: lc
   }, "Base de c\xE1lculo do repasse"), React.createElement("select", {
     value: draft.params.base,
@@ -17732,7 +17738,29 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     onChange: e => setC('prazo_meses', cronNum(e.target.value)),
     className: icY,
     style: yStyle
-  })))), React.createElement("div", {
+  }))), React.createElement("div", {
+    className: "mt-4 rounded-xl px-4 py-3 text-xs leading-relaxed",
+    style: {
+      background: '#f8fafc',
+      border: '1px solid #e2e8f0'
+    }
+  }, React.createElement("span", {
+    className: "font-bold text-gray-500"
+  }, "A cada R$ 100 faturados: "), React.createElement("span", {
+    className: "font-black",
+    style: {
+      color: '#166534'
+    }
+  }, "R$ ", cronNum(draft.params.pctBD).toFixed(2).replace('.', ','), " ficam com ", nomeBD), React.createElement("span", {
+    className: "text-gray-400"
+  }, " \xB7 "), React.createElement("span", {
+    className: "font-black",
+    style: {
+      color: '#92400e'
+    }
+  }, "R$ ", cronNum(calc.pctParc).toFixed(2).replace('.', ','), " s\xE3o repassados \xE0 ", nomeParc), React.createElement("span", {
+    className: "text-gray-400"
+  }, draft.params.base === 'BRUTO' ? ' — o repasse incide sobre o valor bruto, antes do imposto (a contratada absorve o tributo inteiro).' : ' — o repasse incide sobre o valor líquido, depois do imposto (o tributo é rateado entre as duas).'))), React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-200 p-5 shadow-sm"
   }, React.createElement("div", {
     className: "flex items-center justify-between mb-1 flex-wrap gap-2"
