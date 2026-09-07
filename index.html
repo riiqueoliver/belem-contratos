@@ -16,6 +16,8 @@
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- bcrypt.js self-hospedado (hash de senha no cliente, sem depender de CDN externo em runtime) -->
+  <script src="bcrypt.min.js"></script>
   <!-- Firebase Storage não utilizado: PDFs salvos diretamente no Firestore -->
   <!-- PDF.js — leitura do texto das certidões (validade, tipo, CNPJ) no lado do cliente -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
@@ -191,11 +193,14 @@
     const ARCANJO_USERS   = new Set(['laynesoares']); // podem ver o módulo Arcanjo's
     const ARCANJO_ONLY    = new Set(['laynesoares']);                     // veem APENAS o módulo Arcanjo's
 
+    // Senhas de semeadura já em hash bcrypt — usadas apenas se a coleção 'users'
+    // estiver vazia na primeira execução. NÃO reflete mais a senha real após o
+    // usuário trocá-la (ver PROFILE > Alterar Senha). Ver scripts/migrate-hash-passwords.js.
     const INITIAL_USERS = [
-      { id:1, username:'henriquecorreia',  password:'ngcc2026', name:'Henrique Correia',  funcional:'', phone:'', email:'', role:'admin' },
-      { id:2, username:'leonardomendonca', password:'ngcc2026', name:'Leonardo Mendonça', funcional:'', phone:'', email:'', role:'admin' },
-      { id:3, username:'laianalima',       password:'ngcc2026', name:'Laiana Lima',       funcional:'', phone:'', email:'', role:'user' },
-      { id:4, username:'laynesoares',      password:'Lasoa30.', name:'Layne Soares',      funcional:'', phone:'', email:'', role:'user' },
+      { id:1, username:'henriquecorreia',  password:'$2b$10$JT/KhrU3gMTpNRqy9Fk2bOUvR1n.5nbXi.8bh7PV3Q7OLrjasWJNW', name:'Henrique Correia',  funcional:'', phone:'', email:'', role:'admin' },
+      { id:2, username:'leonardomendonca', password:'$2b$10$JT/KhrU3gMTpNRqy9Fk2bOUvR1n.5nbXi.8bh7PV3Q7OLrjasWJNW', name:'Leonardo Mendonça', funcional:'', phone:'', email:'', role:'admin' },
+      { id:3, username:'laianalima',       password:'$2b$10$JT/KhrU3gMTpNRqy9Fk2bOUvR1n.5nbXi.8bh7PV3Q7OLrjasWJNW', name:'Laiana Lima',       funcional:'', phone:'', email:'', role:'user' },
+      { id:4, username:'laynesoares',      password:'$2b$10$ekCBm1kAKE0Jx0Ikok/mjuuZ0G73QbJ7xM4IWffF7QMx0ZAm9A6q.', name:'Layne Soares',      funcional:'', phone:'', email:'', role:'user' },
     ];
 
     function loadFromStorage(key, fallback) {
@@ -2479,7 +2484,7 @@ Regras:
         setPwdErr('');
         if (newPwd.length < 4)        { setPwdErr('A senha deve ter no mínimo 4 caracteres.'); return; }
         if (newPwd !== confirm)        { setPwdErr('As senhas não coincidem.'); return; }
-        onUpdateUser({ ...matched, password: newPwd });
+        onUpdateUser({ ...matched, password: dcodeIO.bcrypt.hashSync(newPwd, 10) });
         setStep('done');
       }
 
@@ -2651,7 +2656,7 @@ Regras:
             funcional: form.funcional.trim(),
             phone:     form.phone.trim(),
             email:     form.email.trim(),
-            password:  form.password,
+            password:  dcodeIO.bcrypt.hashSync(form.password, 10),
           });
           setDone(true);
         } catch(e) {
@@ -2761,14 +2766,21 @@ Regras:
       const [showForgot,   setShowForgot]   = useState(false);
       const [showRegister, setShowRegister] = useState(false);
 
-      function handleSubmit(e) {
+      async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true); setError('');
-        setTimeout(() => {
-          const user = users.find(u => u.username === username.trim() && u.password === password);
-          if (user) { onLogin(user); }
-          else { setError('Usuário ou senha incorretos.'); setLoading(false); }
-        }, 400);
+        try {
+          const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username.trim(), password, sysId: SYS.id }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok && data.user) { onLogin(data.user); }
+          else { setError(data.error || 'Usuário ou senha incorretos.'); setLoading(false); }
+        } catch (err) {
+          setError('Falha de conexão. Tente novamente.'); setLoading(false);
+        }
       }
 
       return (
@@ -2863,10 +2875,13 @@ Regras:
 
       function changePassword(e) {
         e.preventDefault(); setPwdErr('');
-        if (pwd.current !== currentUser.password) { setPwdErr('Senha atual incorreta.'); return; }
+        const stored = currentUser.password || '';
+        const isHash = /^\$2[aby]\$/.test(stored);
+        const currentOk = isHash ? dcodeIO.bcrypt.compareSync(pwd.current, stored) : stored === pwd.current;
+        if (!currentOk) { setPwdErr('Senha atual incorreta.'); return; }
         if (pwd.next.length < 4) { setPwdErr('Nova senha deve ter no mínimo 4 caracteres.'); return; }
         if (pwd.next !== pwd.confirm) { setPwdErr('As senhas não coincidem.'); return; }
-        onUpdateUser({ ...currentUser, password: pwd.next });
+        onUpdateUser({ ...currentUser, password: dcodeIO.bcrypt.hashSync(pwd.next, 10) });
         addToast('✅ Senha alterada com sucesso.');
         onClose();
       }
@@ -16248,7 +16263,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
         const unsubs = [
           db.collection(COL('users')).onSnapshot(snap => {
-            setUsers(snap.docs.map(d => d.data()));
+            // Nunca mantém o hash de senha de outros usuários em memória do app —
+            // só currentUser (o próprio usuário logado) carrega esse campo.
+            setUsers(snap.docs.map(d => { const u = d.data(); delete u.password; return u; }));
             markLoaded('users');
           }),
           db.collection(COL('contracts')).onSnapshot(snap => {
@@ -16614,9 +16631,10 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       }
       async function handleToggleAdmin(user) {
         const newRole = user.role === 'admin' ? 'user' : 'admin';
-        const updated = { ...user, role: newRole };
-        await db.collection(COL('users')).doc(String(user.id)).set(updated);
-        if (currentUser.id === user.id) setCurrentUser(updated);
+        // update() (não set()) — 'user' vem da lista em memória sem o campo password;
+        // um set() aqui apagaria a senha do usuário no Firestore.
+        await db.collection(COL('users')).doc(String(user.id)).update({ role: newRole });
+        if (currentUser.id === user.id) setCurrentUser({ ...currentUser, role: newRole });
         addToast(`✅ ${user.name} agora é ${newRole === 'admin' ? 'Administrador' : 'Usuário comum'}.`);
       }
       async function handleDeleteUser(user) {
