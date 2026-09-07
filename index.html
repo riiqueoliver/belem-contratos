@@ -251,6 +251,10 @@
     const COL = name => SYS.prefix + name;   // nome de coleção com prefixo do sistema
     // Link direto para o módulo privado de Campanha: /campanha
     const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
+    // Token de redefinição de senha vindo do link enviado por e-mail (?resetToken=...)
+    const RESET_TOKEN_FROM_URL = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('resetToken')
+      : null;
 
     // Módulos que o admin do sistema principal pode habilitar/desabilitar no GCSP
     const GCSP_MODULES = [
@@ -2462,30 +2466,29 @@ Regras:
     /* ═══════════════════════════════════════════════════════
        MODAL — ESQUECI A SENHA
     ═══════════════════════════════════════════════════════ */
-    function ForgotPasswordModal({ users, onUpdateUser, onClose }) {
-      const [email,    setEmail]    = useState('');
-      const [step,     setStep]     = useState('input'); // 'input' | 'notfound' | 'reset' | 'done'
-      const [matched,  setMatched]  = useState(null);
-      const [newPwd,   setNewPwd]   = useState('');
-      const [confirm,  setConfirm]  = useState('');
-      const [showNew,  setShowNew]  = useState(false);
-      const [showConf, setShowConf] = useState(false);
-      const [pwdErr,   setPwdErr]   = useState('');
+    function ForgotPasswordModal({ onClose }) {
+      const [email,   setEmail]   = useState('');
+      const [step,    setStep]    = useState('input'); // 'input' | 'sending' | 'sent' | 'error'
+      const [errMsg,  setErrMsg]  = useState('');
 
-      function handleCheckEmail(e) {
+      async function handleSubmit(e) {
         e.preventDefault();
-        const found = users.find(u => u.email && u.email.trim().toLowerCase() === email.trim().toLowerCase());
-        if (found) { setMatched(found); setStep('reset'); }
-        else        { setStep('notfound'); }
-      }
-
-      function handleResetPassword(e) {
-        e.preventDefault();
-        setPwdErr('');
-        if (newPwd.length < 4)        { setPwdErr('A senha deve ter no mínimo 4 caracteres.'); return; }
-        if (newPwd !== confirm)        { setPwdErr('As senhas não coincidem.'); return; }
-        onUpdateUser({ ...matched, password: dcodeIO.bcrypt.hashSync(newPwd, 10) });
-        setStep('done');
+        setStep('sending'); setErrMsg('');
+        try {
+          const resp = await fetch('/api/request-password-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim(), sysId: SYS.id }),
+          });
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || 'Não foi possível enviar o e-mail agora.');
+          }
+          setStep('sent');
+        } catch (err) {
+          setErrMsg(err.message || 'Não foi possível enviar o e-mail agora.');
+          setStep('error');
+        }
       }
 
       return (
@@ -2505,12 +2508,13 @@ Regras:
             </div>
 
             <div className="px-6 py-6">
-              {step === 'input' && (
+              {(step === 'input' || step === 'sending' || step === 'error') && (
                 <>
                   <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-                    Informe o <strong>e-mail cadastrado</strong> na sua conta para verificar o acesso.
+                    Informe o <strong>e-mail cadastrado</strong> na sua conta. Se ele estiver
+                    cadastrado, enviaremos um link para você criar uma nova senha.
                   </p>
-                  <form onSubmit={handleCheckEmail} className="space-y-4">
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5">E-mail da conta</label>
                       <input required type="email" value={email}
@@ -2518,10 +2522,13 @@ Regras:
                              placeholder="seuemail@cinbesa.com.br"
                              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
-                    <button type="submit"
-                            className="w-full text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                    {step === 'error' && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errMsg}</p>
+                    )}
+                    <button type="submit" disabled={step === 'sending'}
+                            className="w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
                             style={{background: BLUE}}>
-                      Verificar e-mail
+                      {step === 'sending' ? 'Enviando...' : 'Enviar link de redefinição'}
                     </button>
                     <button type="button" onClick={onClose}
                             className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors">
@@ -2531,91 +2538,124 @@ Regras:
                 </>
               )}
 
-              {step === 'notfound' && (
+              {step === 'sent' && (
                 <div className="text-center py-2">
-                  <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-                    <X className="w-7 h-7 text-red-500" />
+                  <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-7 h-7 text-green-500" />
                   </div>
-                  <p className="text-sm font-bold text-gray-800 mb-2">E-mail não encontrado</p>
+                  <p className="text-sm font-bold text-gray-800 mb-2">Verifique seu e-mail</p>
                   <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-                    Nenhuma conta está associada a <strong>{email}</strong>.<br/>
-                    Verifique o endereço ou entre em contato com o administrador.
+                    Se <strong>{email}</strong> estiver cadastrado, você vai receber um link para
+                    criar uma nova senha em alguns instantes. O link expira em 30 minutos.
                   </p>
-                  <button onClick={() => { setStep('input'); setEmail(''); }}
+                  <button onClick={onClose}
                           className="w-full py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-opacity"
                           style={{background: BLUE}}>
-                    Tentar novamente
-                  </button>
-                  <button onClick={onClose}
-                          className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors">
                     Fechar
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-              {step === 'reset' && (
-                <>
-                  <div className="flex items-center gap-3 mb-5 p-3 rounded-xl border" style={{background:'#f0fdf4', borderColor:'#bbf7d0'}}>
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-green-800">E-mail verificado</p>
-                      <p className="text-xs text-green-700">{matched.name || matched.username} · @{matched.username}</p>
+    /* ═══════════════════════════════════════════════════════
+       TELA DE DEFINIR NOVA SENHA — acessada pelo link do e-mail
+       de recuperação (?resetToken=...)
+    ═══════════════════════════════════════════════════════ */
+    function ResetPasswordScreen({ token }) {
+      const [newPwd,   setNewPwd]   = useState('');
+      const [confirm,  setConfirm]  = useState('');
+      const [showNew,  setShowNew]  = useState(false);
+      const [showConf, setShowConf] = useState(false);
+      const [status,   setStatus]   = useState('form'); // 'form' | 'loading' | 'done' | 'error'
+      const [errMsg,   setErrMsg]   = useState('');
+
+      async function handleSubmit(e) {
+        e.preventDefault();
+        setErrMsg('');
+        if (newPwd.length < 4) { setErrMsg('A senha deve ter no mínimo 4 caracteres.'); setStatus('error'); return; }
+        if (newPwd !== confirm) { setErrMsg('As senhas não coincidem.'); setStatus('error'); return; }
+        setStatus('loading');
+        try {
+          const resp = await fetch('/api/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, newPassword: newPwd, sysId: SYS.id }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || 'Link inválido ou expirado.');
+          setStatus('done');
+        } catch (err) {
+          setErrMsg(err.message || 'Link inválido ou expirado.');
+          setStatus('error');
+        }
+      }
+
+      function goToLogin() {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('resetToken');
+        window.location.href = url.toString();
+      }
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-6 py-5 flex items-center gap-2" style={{background: BLUE}}>
+              <KeyRound className="w-4 h-4 text-white" />
+              <h2 className="text-sm font-bold text-white">Definir Nova Senha</h2>
+            </div>
+            <div className="px-6 py-6">
+              {(status === 'form' || status === 'loading' || status === 'error') && (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova senha</label>
+                    <div className="relative">
+                      <input required type={showNew ? 'text' : 'password'}
+                             value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                             placeholder="Mínimo 4 caracteres"
+                             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" />
+                      <button type="button" onClick={() => setShowNew(v => !v)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
-                  <form onSubmit={handleResetPassword} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova senha</label>
-                      <div className="relative">
-                        <input required type={showNew ? 'text' : 'password'}
-                               value={newPwd} onChange={e => setNewPwd(e.target.value)}
-                               placeholder="Mínimo 4 caracteres"
-                               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" />
-                        <button type="button" onClick={() => setShowNew(v => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                          {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Confirmar nova senha</label>
+                    <div className="relative">
+                      <input required type={showConf ? 'text' : 'password'}
+                             value={confirm} onChange={e => setConfirm(e.target.value)}
+                             placeholder="Repita a nova senha"
+                             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" />
+                      <button type="button" onClick={() => setShowConf(v => !v)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        {showConf ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Confirmar nova senha</label>
-                      <div className="relative">
-                        <input required type={showConf ? 'text' : 'password'}
-                               value={confirm} onChange={e => setConfirm(e.target.value)}
-                               placeholder="Repita a nova senha"
-                               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" />
-                        <button type="button" onClick={() => setShowConf(v => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                          {showConf ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    {pwdErr && (
-                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{pwdErr}</p>
-                    )}
-                    <button type="submit"
-                            className="w-full text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                            style={{background: BLUE}}>
-                      Salvar nova senha
-                    </button>
-                    <button type="button" onClick={onClose}
-                            className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors">
-                      Cancelar
-                    </button>
-                  </form>
-                </>
+                  </div>
+                  {status === 'error' && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errMsg}</p>
+                  )}
+                  <button type="submit" disabled={status === 'loading'}
+                          className="w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
+                          style={{background: BLUE}}>
+                    {status === 'loading' ? 'Salvando...' : 'Salvar nova senha'}
+                  </button>
+                </form>
               )}
-
-              {step === 'done' && (
+              {status === 'done' && (
                 <div className="text-center py-2">
                   <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle className="w-7 h-7 text-green-500" />
                   </div>
                   <p className="text-sm font-bold text-gray-800 mb-2">Senha redefinida!</p>
                   <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-                    A senha de <strong>{matched.name || matched.username}</strong> foi atualizada com sucesso.<br/>
-                    Utilize a nova senha para fazer login.
+                    Sua senha foi atualizada com sucesso. Utilize a nova senha para fazer login.
                   </p>
-                  <button onClick={onClose}
+                  <button onClick={goToLogin}
                           className="w-full py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-opacity"
                           style={{background: BLUE}}>
                     Ir para o login
@@ -2623,6 +2663,7 @@ Regras:
                 </div>
               )}
             </div>
+            <p className="text-center text-xs text-gray-400 pb-5">Belém Digital · Prefeitura Municipal de Belém</p>
           </div>
         </div>
       );
@@ -2843,7 +2884,7 @@ Regras:
               </div>
             </form>
             <p className="text-center text-xs text-gray-400 pb-5">Belém Digital · Prefeitura Municipal de Belém</p>
-            {showForgot    && <ForgotPasswordModal users={users} onUpdateUser={onUpdateUser} onClose={() => setShowForgot(false)} />}
+            {showForgot    && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
             {showRegister  && <RegisterModal onClose={() => setShowRegister(false)} onSubmit={onRegister} />}
           </div>
         </div>
@@ -16853,6 +16894,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       );
 
       // Redireciona para login se não autenticado
+      if (!currentUser && RESET_TOKEN_FROM_URL) return <ResetPasswordScreen token={RESET_TOKEN_FROM_URL} />;
       if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onUpdateUser={handleUpdateUser} onRegister={handleRegister} />;
 
       function saveApiKey(key) {

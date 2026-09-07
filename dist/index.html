@@ -298,6 +298,7 @@ const SYS_ID = typeof window !== 'undefined' && /^\/gcsp(\/|$)/i.test(window.loc
 const SYS = SYSTEMS[SYS_ID];
 const COL = name => SYS.prefix + name;
 const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
+const RESET_TOKEN_FROM_URL = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('resetToken') : null;
 const GCSP_MODULES = [{
   key: 'contratos',
   label: 'Contratos'
@@ -3793,44 +3794,35 @@ function ContactsDrawer({
   }, "Nenhum contato cadastrado.")))));
 }
 function ForgotPasswordModal({
-  users,
-  onUpdateUser,
   onClose
 }) {
   const [email, setEmail] = useState('');
   const [step, setStep] = useState('input');
-  const [matched, setMatched] = useState(null);
-  const [newPwd, setNewPwd] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [showNew, setShowNew] = useState(false);
-  const [showConf, setShowConf] = useState(false);
-  const [pwdErr, setPwdErr] = useState('');
-  function handleCheckEmail(e) {
+  const [errMsg, setErrMsg] = useState('');
+  async function handleSubmit(e) {
     e.preventDefault();
-    const found = users.find(u => u.email && u.email.trim().toLowerCase() === email.trim().toLowerCase());
-    if (found) {
-      setMatched(found);
-      setStep('reset');
-    } else {
-      setStep('notfound');
+    setStep('sending');
+    setErrMsg('');
+    try {
+      const resp = await fetch('/api/request-password-reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          sysId: SYS.id
+        })
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Não foi possível enviar o e-mail agora.');
+      }
+      setStep('sent');
+    } catch (err) {
+      setErrMsg(err.message || 'Não foi possível enviar o e-mail agora.');
+      setStep('error');
     }
-  }
-  function handleResetPassword(e) {
-    e.preventDefault();
-    setPwdErr('');
-    if (newPwd.length < 4) {
-      setPwdErr('A senha deve ter no mínimo 4 caracteres.');
-      return;
-    }
-    if (newPwd !== confirm) {
-      setPwdErr('As senhas não coincidem.');
-      return;
-    }
-    onUpdateUser({
-      ...matched,
-      password: dcodeIO.bcrypt.hashSync(newPwd, 10)
-    });
-    setStep('done');
   }
   return React.createElement("div", {
     className: "fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4",
@@ -3856,10 +3848,10 @@ function ForgotPasswordModal({
     className: "w-5 h-5"
   }))), React.createElement("div", {
     className: "px-6 py-6"
-  }, step === 'input' && React.createElement(React.Fragment, null, React.createElement("p", {
+  }, (step === 'input' || step === 'sending' || step === 'error') && React.createElement(React.Fragment, null, React.createElement("p", {
     className: "text-sm text-gray-600 mb-5 leading-relaxed"
-  }, "Informe o ", React.createElement("strong", null, "e-mail cadastrado"), " na sua conta para verificar o acesso."), React.createElement("form", {
-    onSubmit: handleCheckEmail,
+  }, "Informe o ", React.createElement("strong", null, "e-mail cadastrado"), " na sua conta. Se ele estiver cadastrado, enviaremos um link para voc\xEA criar uma nova senha."), React.createElement("form", {
+    onSubmit: handleSubmit,
     className: "space-y-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-xs font-semibold text-gray-600 mb-1.5"
@@ -3870,52 +3862,102 @@ function ForgotPasswordModal({
     onChange: e => setEmail(e.target.value),
     placeholder: "seuemail@cinbesa.com.br",
     className: "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-  })), React.createElement("button", {
+  })), step === 'error' && React.createElement("p", {
+    className: "text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+  }, errMsg), React.createElement("button", {
     type: "submit",
-    className: "w-full text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity",
+    disabled: step === 'sending',
+    className: "w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity",
     style: {
       background: BLUE
     }
-  }, "Verificar e-mail"), React.createElement("button", {
+  }, step === 'sending' ? 'Enviando...' : 'Enviar link de redefinição'), React.createElement("button", {
     type: "button",
     onClick: onClose,
     className: "w-full py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors"
-  }, "Cancelar"))), step === 'notfound' && React.createElement("div", {
+  }, "Cancelar"))), step === 'sent' && React.createElement("div", {
     className: "text-center py-2"
   }, React.createElement("div", {
-    className: "w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4"
-  }, React.createElement(X, {
-    className: "w-7 h-7 text-red-500"
+    className: "w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4"
+  }, React.createElement(CheckCircle, {
+    className: "w-7 h-7 text-green-500"
   })), React.createElement("p", {
     className: "text-sm font-bold text-gray-800 mb-2"
-  }, "E-mail n\xE3o encontrado"), React.createElement("p", {
+  }, "Verifique seu e-mail"), React.createElement("p", {
     className: "text-xs text-gray-500 mb-5 leading-relaxed"
-  }, "Nenhuma conta est\xE1 associada a ", React.createElement("strong", null, email), ".", React.createElement("br", null), "Verifique o endere\xE7o ou entre em contato com o administrador."), React.createElement("button", {
-    onClick: () => {
-      setStep('input');
-      setEmail('');
-    },
+  }, "Se ", React.createElement("strong", null, email), " estiver cadastrado, voc\xEA vai receber um link para criar uma nova senha em alguns instantes. O link expira em 30 minutos."), React.createElement("button", {
+    onClick: onClose,
     className: "w-full py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-opacity",
     style: {
       background: BLUE
     }
-  }, "Tentar novamente"), React.createElement("button", {
-    onClick: onClose,
-    className: "w-full mt-2 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors"
-  }, "Fechar")), step === 'reset' && React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "flex items-center gap-3 mb-5 p-3 rounded-xl border",
-    style: {
-      background: '#f0fdf4',
-      borderColor: '#bbf7d0'
+  }, "Fechar")))));
+}
+function ResetPasswordScreen({
+  token
+}) {
+  const [newPwd, setNewPwd] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConf, setShowConf] = useState(false);
+  const [status, setStatus] = useState('form');
+  const [errMsg, setErrMsg] = useState('');
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrMsg('');
+    if (newPwd.length < 4) {
+      setErrMsg('A senha deve ter no mínimo 4 caracteres.');
+      setStatus('error');
+      return;
     }
-  }, React.createElement(CheckCircle, {
-    className: "w-5 h-5 text-green-500 flex-shrink-0"
-  }), React.createElement("div", null, React.createElement("p", {
-    className: "text-xs font-bold text-green-800"
-  }, "E-mail verificado"), React.createElement("p", {
-    className: "text-xs text-green-700"
-  }, matched.name || matched.username, " \xB7 @", matched.username))), React.createElement("form", {
-    onSubmit: handleResetPassword,
+    if (newPwd !== confirm) {
+      setErrMsg('As senhas não coincidem.');
+      setStatus('error');
+      return;
+    }
+    setStatus('loading');
+    try {
+      const resp = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token,
+          newPassword: newPwd,
+          sysId: SYS.id
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || 'Link inválido ou expirado.');
+      setStatus('done');
+    } catch (err) {
+      setErrMsg(err.message || 'Link inválido ou expirado.');
+      setStatus('error');
+    }
+  }
+  function goToLogin() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('resetToken');
+    window.location.href = url.toString();
+  }
+  return React.createElement("div", {
+    className: "min-h-screen flex items-center justify-center bg-slate-100 px-4"
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+  }, React.createElement("div", {
+    className: "px-6 py-5 flex items-center gap-2",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(KeyRound, {
+    className: "w-4 h-4 text-white"
+  }), React.createElement("h2", {
+    className: "text-sm font-bold text-white"
+  }, "Definir Nova Senha")), React.createElement("div", {
+    className: "px-6 py-6"
+  }, (status === 'form' || status === 'loading' || status === 'error') && React.createElement("form", {
+    onSubmit: handleSubmit,
     className: "space-y-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-xs font-semibold text-gray-600 mb-1.5"
@@ -3955,19 +3997,16 @@ function ForgotPasswordModal({
     className: "w-4 h-4"
   }) : React.createElement(Eye, {
     className: "w-4 h-4"
-  })))), pwdErr && React.createElement("p", {
+  })))), status === 'error' && React.createElement("p", {
     className: "text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-  }, pwdErr), React.createElement("button", {
+  }, errMsg), React.createElement("button", {
     type: "submit",
-    className: "w-full text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity",
+    disabled: status === 'loading',
+    className: "w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity",
     style: {
       background: BLUE
     }
-  }, "Salvar nova senha"), React.createElement("button", {
-    type: "button",
-    onClick: onClose,
-    className: "w-full py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors"
-  }, "Cancelar"))), step === 'done' && React.createElement("div", {
+  }, status === 'loading' ? 'Salvando...' : 'Salvar nova senha')), status === 'done' && React.createElement("div", {
     className: "text-center py-2"
   }, React.createElement("div", {
     className: "w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4"
@@ -3977,13 +4016,15 @@ function ForgotPasswordModal({
     className: "text-sm font-bold text-gray-800 mb-2"
   }, "Senha redefinida!"), React.createElement("p", {
     className: "text-xs text-gray-500 mb-5 leading-relaxed"
-  }, "A senha de ", React.createElement("strong", null, matched.name || matched.username), " foi atualizada com sucesso.", React.createElement("br", null), "Utilize a nova senha para fazer login."), React.createElement("button", {
-    onClick: onClose,
+  }, "Sua senha foi atualizada com sucesso. Utilize a nova senha para fazer login."), React.createElement("button", {
+    onClick: goToLogin,
     className: "w-full py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-opacity",
     style: {
       background: BLUE
     }
-  }, "Ir para o login")))));
+  }, "Ir para o login"))), React.createElement("p", {
+    className: "text-center text-xs text-gray-400 pb-5"
+  }, "Bel\xE9m Digital \xB7 Prefeitura Municipal de Bel\xE9m")));
 }
 function RegisterModal({
   onClose,
@@ -4340,8 +4381,6 @@ function LoginScreen({
   }, "Solicitar Cadastro"))), React.createElement("p", {
     className: "text-center text-xs text-gray-400 pb-5"
   }, "Bel\xE9m Digital \xB7 Prefeitura Municipal de Bel\xE9m"), showForgot && React.createElement(ForgotPasswordModal, {
-    users: users,
-    onUpdateUser: onUpdateUser,
     onClose: () => setShowForgot(false)
   }), showRegister && React.createElement(RegisterModal, {
     onClose: () => setShowRegister(false),
@@ -23509,6 +23548,9 @@ function App() {
   }), React.createElement("p", {
     className: "text-white/70 text-sm font-medium"
   }, "Conectando ao banco de dados\u2026"));
+  if (!currentUser && RESET_TOKEN_FROM_URL) return React.createElement(ResetPasswordScreen, {
+    token: RESET_TOKEN_FROM_URL
+  });
   if (!currentUser) return React.createElement(LoginScreen, {
     users: users,
     onLogin: handleLogin,

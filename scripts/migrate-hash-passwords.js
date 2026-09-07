@@ -9,17 +9,27 @@
  * IMPORTANTE — antes de rodar:
  *   1. Faça um backup/export do Firestore (Firebase Console > Firestore >
  *      Exportar, ou `gcloud firestore export`).
- *   2. Gere uma conta de serviço em Firebase Console > Configurações do
- *      projeto > Contas de serviço > Gerar nova chave privada.
- *   3. Exporte o conteúdo do JSON baixado como variável de ambiente:
- *        (PowerShell)  $env:FIREBASE_SERVICE_ACCOUNT = Get-Content .\serviceAccountKey.json -Raw
- *        (bash)        export FIREBASE_SERVICE_ACCOUNT="$(cat serviceAccountKey.json)"
- *      NUNCA commite esse arquivo JSON no repositório.
+ *   2. Coloque o MESMO arquivo JSON de conta de serviço usado na Vercel
+ *      (Firebase Console > Configurações do projeto > Contas de serviço)
+ *      na raiz do projeto como 'serviceAccountKey.json'. Esse nome já está
+ *      no .gitignore — nunca vai para o repositório.
+ *      (Alternativa: exportar FIREBASE_SERVICE_ACCOUNT como variável de
+ *      ambiente com o conteúdo do JSON, se preferir não salvar o arquivo.)
  *
  * Uso:
  *   node scripts/migrate-hash-passwords.js --dry-run   (só mostra o que mudaria)
  *   node scripts/migrate-hash-passwords.js             (aplica de fato)
  */
+const fs = require('fs');
+const path = require('path');
+
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  const keyFile = path.join(__dirname, '..', 'serviceAccountKey.json');
+  if (fs.existsSync(keyFile)) {
+    process.env.FIREBASE_SERVICE_ACCOUNT = fs.readFileSync(keyFile, 'utf8');
+  }
+}
+
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../lib/firebaseAdmin');
 
