@@ -11972,6 +11972,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       t2.alignment = { vertical:'middle', horizontal:'center' };
       ws2.getRow(r2).height = 26; r2 += 2;
 
+      const CORES_ITEM_X = ['FF2563EB','FF7C3AED','FF0891B2','FFC2410C','FFBE185D','FF0F766E','FFA16207','FF4338CA'];
       const linhasX = [
         { k:'bruto',     l:'TOTAL BRUTO (NF emitida)',        bg:'FFEFF6FF', cor:'FF1E3A8A' },
         { k:'imposto',   l:'(−) Impostos recolhidos',         bg:'FFFCE4D6', cor:'FF9A3412', neg:true },
@@ -12023,6 +12024,35 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           ct.numFmt = MOEDA; ct.fill = fill(ln.bg);
           ct.font = { bold:true, size:10, color:{argb:ln.cor} }; ct.border = boxAll;
           r2++;
+
+          // Composição do faturamento bruto por item — mesma quebra que "ver os itens" na tela
+          if (ln.k === 'bruto' && itens && itens.length > 0) {
+            itens.forEach((it, ii) => {
+              const temNoBloco = cols.some(c => (c.det?.[ii] || 0) > 0);
+              if (!temNoBloco) return;
+              const corItem = CORES_ITEM_X[ii % CORES_ITEM_X.length];
+              const sufixo = it.tipo_recorrencia === 'MENSAL'
+                ? ` (mensal · ${cronBRL(it.valor_unitario)}/mês)`
+                : ` (parcela única · mês ${it.mes_inicio})`;
+              const cIt = ws2.getCell(r2, 1);
+              cIt.value = '   ' + (it.descricao || `Item ${ii+1}`) + sufixo;
+              cIt.font = { italic:true, size:8, color:{argb:corItem} };
+              cIt.alignment = { indent:1 };
+              cIt.border = boxAll;
+              let somaItem = 0;
+              cols.forEach((c, i) => {
+                const v = c.det?.[ii] || 0;
+                somaItem += v;
+                const cc = ws2.getCell(r2, i + 2);
+                cc.value = v || null;
+                cc.numFmt = MOEDA; cc.font = { italic:true, size:8, color:{argb:corItem} }; cc.border = boxAll;
+              });
+              const ctIt = ws2.getCell(r2, 14);
+              ctIt.value = somaItem;
+              ctIt.numFmt = MOEDA; ctIt.font = { italic:true, bold:true, size:8, color:{argb:corItem} }; ctIt.border = boxAll;
+              r2++;
+            });
+          }
         });
         r2++;
       }
