@@ -3,6 +3,7 @@
 //   GET  ?acao=info                                   → e-mail da conta de serviço (para compartilhar pastas do Drive)
 //   POST ?acao=sincronizar   { projetoId, usuario }   → lista a pasta do projeto e grava a listagem no Firestore
 //   GET  ?acao=baixar&projetoId=&arquivoId=&inicio=  → devolve um pedaço (até CHUNK bytes) do arquivo
+//   GET  ?acao=acesso&projetoId=                     → p/ links públicos do Zoho: dados para o navegador baixar direto
 //
 // O download é feito em pedaços porque a Vercel limita a resposta de uma função
 // a ~4,5 MB. O navegador repete a chamada avançando `inicio` até completar o
@@ -11,7 +12,7 @@
 // Só são servidos arquivos que constam da última sincronização de um projeto
 // cadastrado — a função não aceita IDs arbitrários do Drive/WorkDrive.
 const { getDb } = require('../lib/firebaseAdmin');
-const { listarPasta, baixarArquivo, emailContaServico } = require('../lib/repositorios');
+const { listarPasta, baixarArquivo, acessoPublicoZoho, emailContaServico } = require('../lib/repositorios');
 
 const COLECAO = 'relatorio_projetos';
 const CHUNK = 3.8 * 1024 * 1024;
@@ -87,7 +88,11 @@ async function baixar(req, res) {
 module.exports = async (req, res) => {
   try {
     const acao = req.query.acao;
-    if (acao === 'info' && req.method === 'GET') {
+    if (acao === 'acesso' && req.method === 'GET') {
+      const { dados } = await carregarProjeto(req.query.projetoId);
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(200).json({ zoho: dados.provedor === 'zoho' ? await acessoPublicoZoho(dados.link) : null });
+    } else if (acao === 'info' && req.method === 'GET') {
       res.status(200).json({ emailContaServico: emailContaServico() });
     } else if (acao === 'sincronizar' && req.method === 'POST') {
       await sincronizar(req, res);

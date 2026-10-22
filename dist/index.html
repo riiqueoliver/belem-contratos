@@ -22760,7 +22760,7 @@ function PainelTV() {
   })))));
 }
 const REL_COL = COL('relatorio_projetos');
-const REL_MODELO_IA = 'claude-sonnet-5-5';
+const REL_MODELOS_IA = ['claude-sonnet-5-5', 'claude-sonnet-5'];
 const REL_NAVY = [11, 43, 94];
 const REL_GREEN = [58, 138, 53];
 const relScripts = {};
@@ -22826,7 +22826,30 @@ const relComparar = (a, b) => (a.pasta || '').localeCompare(b.pasta || '', 'pt-B
   numeric: true
 });
 const relLimpar = s => String(s || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/…/g, '...').replace(/[•●▪]/g, '-').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '');
-async function relBaixar(projetoId, arquivo, onProgresso) {
+async function relAcesso(projetoId) {
+  const resp = await fetch(`/api/relatorios?acao=acesso&projetoId=${encodeURIComponent(projetoId)}`);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  return data.zoho || null;
+}
+async function relBaixar(projetoId, arquivo, acesso, onProgresso) {
+  if (acesso) {
+    let erro = null;
+    for (const base of acesso.downloads) {
+      try {
+        const resp = await fetch(`${base}/${encodeURIComponent(arquivo.id)}?x-cli-msg=${acesso.cliMsg}`);
+        if (resp.ok) {
+          const b = new Uint8Array(await resp.arrayBuffer());
+          onProgresso?.(b.length, b.length);
+          return b;
+        }
+        erro = new Error(`o Zoho respondeu ${resp.status}`);
+      } catch (e) {
+        erro = e;
+      }
+    }
+    throw erro;
+  }
   const partes = [];
   let inicio = 0,
     total = 0;
@@ -22861,11 +22884,11 @@ async function relExtrairTexto(tipo, bytes, limite) {
         data: bytes.slice()
       }).promise;
       let t = '';
-      for (let i = 1; i <= Math.min(pdf.numPages, 40) && t.length < limite; i++) {
+      for (let i = 1; i <= Math.min(pdf.numPages, 60) && t.length < limite; i++) {
         const c = await (await pdf.getPage(i)).getTextContent();
-        t += c.items.map(it => it.str).join(' ') + '\n';
+        t += c.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join('') + '\n';
       }
-      return t.replace(/[ \t]+/g, ' ').slice(0, limite);
+      return t.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').slice(0, limite);
     }
     if (tipo === 'docx') return (await mammoth.extractRawText({
       arrayBuffer: bytes.slice().buffer
@@ -22874,7 +22897,9 @@ async function relExtrairTexto(tipo, bytes, limite) {
       const wb = XLSX.read(bytes, {
         type: 'array'
       });
-      return wb.SheetNames.map(n => `# ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n])).join('\n').slice(0, limite);
+      return wb.SheetNames.map(n => `# Aba ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], {
+        FS: ' | '
+      })).join('\n').slice(0, limite);
     }
     if (tipo === 'texto') return new TextDecoder().decode(bytes).slice(0, limite);
   } catch (e) {
@@ -22882,64 +22907,141 @@ async function relExtrairTexto(tipo, bytes, limite) {
   }
   return '';
 }
-async function relGerarTextosIA({
-  apiKey,
+const relRomano = n => {
+  const m = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let s = '';
+  for (const [v, r] of m) while (n >= v) {
+    s += r;
+    n -= v;
+  }
+  return s;
+};
+async function relGerarRelatorioIA({
   projeto,
-  titulo,
+  numero,
+  tituloBase,
   referencia,
-  docs
+  orientacoes,
+  docs,
+  onEtapa
 }) {
-  const corpo = docs.map(d => `### ANEXO ${d.n}: ${d.nome}\nPasta: ${d.pasta || '(raiz)'} | Tipo: ${relTipoLabel(d)} | Data: ${relFmtData(d.modificadoEm)}\n` + (d.texto || '(conteúdo não legível automaticamente — considere apenas o nome do arquivo)')).join('\n\n');
-  const prompt = `Você redige relatórios oficiais de execução da Belém Digital, empresa responsável pela implantação de sistemas para a Prefeitura de Belém.
+  const corpo = docs.map(d => `===== ANEXO ${relRomano(d.n)} (nº ${d.n}): ${d.nome}\nPasta: ${d.pasta || '(raiz)'} | Tipo: ${relTipoLabel(d)} | Data do arquivo: ${relFmtData(d.modificadoEm)}\n` + (d.texto || '(conteúdo não legível automaticamente — considere apenas o nome do arquivo)')).join('\n\n');
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const prompt = `Você é o gestor de contratos da Belém Digital (Companhia de Transformação Digital do Município de Belém) e redige os relatórios oficiais de execução das implantações de sistemas para a Prefeitura de Belém, que são entregues ao órgão contratante para fins de acompanhamento e medição.
 
-Dados do relatório:
-- Título: ${titulo}
-- Projeto/contrato em execução: ${projeto.nome}${projeto.contrato ? ` (Contrato ${projeto.contrato})` : ''}
-- Órgão/cliente: ${projeto.orgao || 'não informado'}
-- Objeto: ${projeto.objeto || 'não informado'}
-- Período/referência: ${referencia || 'não informado'}
-
-Abaixo estão os documentos que serão anexados ao relatório (atas de reunião, documentação de migração de dados, levantamentos de parametrização etc.).
+DADOS INFORMADOS NO SISTEMA
+- Projeto/contrato: ${projeto.nome}
+- Nº do contrato: ${projeto.contrato || 'identificar nos documentos'}
+- Órgão contratante: ${projeto.orgao || 'identificar nos documentos'}
+- Objeto: ${projeto.objeto || 'identificar nos documentos'}
+- Relatório: ${tituloBase} nº ${String(numero).padStart(2, '0')}
+- Período/referência: ${referencia || 'identificar nos documentos'}
+- Data de emissão: ${hoje}
+${orientacoes ? `- Orientações do gestor para esta emissão: ${orientacoes}\n` : ''}
+DOCUMENTOS DA PASTA (serão anexados na íntegra, nesta ordem e com esta numeração romana)
 
 ${corpo}
 
-Escreva os textos do relatório com base EXCLUSIVAMENTE nesses documentos. Retorne SOMENTE um JSON válido, sem markdown, com estas chaves:
+TAREFA
+Leia todos os documentos, entenda o contexto do contrato e do período, e redija o relatório completo. Ele deve seguir o padrão dos relatórios da Belém Digital:
+1. Quadro de identificação (Campo | Informação): contrato (número, data e fundamentação legal, se houver), contratante, contratada, parceira de soluções (se houver), período de execução, competência/pagamento (se houver), base de medição (se houver) e data de emissão.
+2. Seções numeradas com o conteúdo do período. Use as que os documentos sustentarem, por exemplo: Objeto do contrato; Valores da medição; Execução física por etapa; Atividades executadas no período; Reuniões realizadas; Migração de dados – situação e volumes; Entregas e produtos; Pendências e dependências da contratante; Próximos passos.
+3. Sempre que houver dados estruturados (etapas, percentuais, valores, reuniões com datas, arquivos e volumes, entregas), apresente em TABELA, com colunas objetivas. Linhas de total ficam por último e marcadas como total.
+4. Cite as evidências pelo anexo em numeração romana, ex.: "(Anexo III)".
+5. Um texto de encerramento curto declarando que as atividades relatadas foram executadas e estão suportadas pelas evidências anexas.
+
+REGRAS
+- Use SOMENTE informações presentes nos documentos ou nos dados acima. Não invente números, valores, datas, nomes, percentuais nem fatos. Se algo importante não estiver nos documentos, omita.
+- Português do Brasil formal, impessoal, objetivo, no tom de um relatório de fiscalização contratual.
+- Valores em reais no formato "R$ 1.234,56"; datas "dd/mm/aaaa"; números com separador de milhar.
+- Não inclua seções de "Anexos", "Encerramento" ou "Assinaturas" em "secoes" — o sistema monta essas partes.
+- Sem markdown e sem emojis.
+
+FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
 {
-  "sumarizacao": "Sumarização do assunto: 3 a 6 parágrafos, separados por \\n\\n, descrevendo o que foi executado no período, organizado por frente de trabalho (ex.: reuniões, migração de dados, parametrização), citando os anexos entre parênteses quando pertinente (ex.: \\"(Anexo 3)\\")",
-  "resumo": "Breve resumo executivo em 1 parágrafo de no máximo 6 linhas",
+  "cabecalho": "CONTRATO 005/2026 – SEFIN – BELÉM DIGITAL",
+  "titulo": "RELATÓRIO DE ATIVIDADES Nº ${String(numero).padStart(2, '0')}",
+  "subtitulo": "uma linha descrevendo o escopo (ex.: Execução do Cronograma de Implantação – Sistema X)",
+  "identificacao": [ ["Contrato", "..."], ["Contratante", "..."] ],
+  "resumo": "um parágrafo curto com o resumo executivo do período",
+  "secoes": [
+    { "titulo": "Objeto do contrato", "blocos": [
+      { "tipo": "paragrafo", "texto": "..." },
+      { "tipo": "destaque", "texto": "parágrafo que deve sair em negrito" },
+      { "tipo": "lista", "itens": ["...", "..."] },
+      { "tipo": "tabela", "colunas": ["Col 1", "Col 2"], "linhas": [["a", "b"], ["TOTAL", "c"]], "total": true }
+    ] }
+  ],
+  "encerramento": "Declaramos que ...",
   "documentos": [ { "n": 1, "descricao": "uma frase objetiva sobre o conteúdo do anexo" } ]
+}`;
+  let ultimoErro = null;
+  for (const modelo of REL_MODELOS_IA) {
+    onEtapa?.('A IA está lendo os documentos e escrevendo o relatório (pode levar alguns minutos)…');
+    const resp = await fetch('/api/ia', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: modelo,
+        max_tokens: 16000,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (data.error) {
+      ultimoErro = new Error(data.error.message || 'erro da IA');
+      if (data.error.type === 'not_found_error' || /model/i.test(data.error.message || '')) continue;
+      throw ultimoErro;
+    }
+    const t = (data.content?.find(b => b.type === 'text')?.text || '').trim();
+    const ini = t.indexOf('{'),
+      fim = t.lastIndexOf('}');
+    if (ini === -1) throw new Error('A IA não retornou o relatório no formato esperado.');
+    const r = JSON.parse(t.slice(ini, fim + 1));
+    const descricoes = {};
+    (r.documentos || []).forEach(d => {
+      const doc = docs.find(x => x.n === Number(d.n));
+      if (doc) descricoes[doc.id] = d.descricao || '';
+    });
+    return {
+      cabecalho: r.cabecalho || '',
+      titulo: r.titulo || '',
+      subtitulo: r.subtitulo || '',
+      identificacao: Array.isArray(r.identificacao) ? r.identificacao.filter(l => Array.isArray(l) && l.length >= 2).map(l => [String(l[0]), String(l[1])]) : [],
+      resumo: r.resumo || '',
+      secoes: Array.isArray(r.secoes) ? r.secoes : [],
+      encerramento: r.encerramento || '',
+      descricoes
+    };
+  }
+  throw ultimoErro || new Error('Nenhum modelo de IA disponível.');
 }
-Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fatos, datas, nomes ou números que não estejam nos documentos; não use markdown, listas com símbolos nem emojis; inclua em "documentos" um item para cada anexo, na mesma numeração.`;
-  const resp = await fetch('/api/ia', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: REL_MODELO_IA,
-      max_tokens: 8000,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    })
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (data.error) throw new Error(data.error.message);
-  let t = (data.content?.find(b => b.type === 'text')?.text || '').trim();
-  const ini = t.indexOf('{'),
-    fim = t.lastIndexOf('}');
-  if (ini === -1) throw new Error('A IA não retornou um texto no formato esperado.');
-  const ex = JSON.parse(t.slice(ini, fim + 1));
-  const descricoes = {};
-  (ex.documentos || []).forEach(d => {
-    const doc = docs.find(x => x.n === Number(d.n));
-    if (doc) descricoes[doc.id] = d.descricao || '';
-  });
+function relRelatorioVazio({
+  projeto,
+  numero,
+  tituloBase,
+  referencia
+}) {
   return {
-    sumarizacao: ex.sumarizacao || '',
-    resumo: ex.resumo || '',
-    descricoes
+    cabecalho: [projeto.contrato && `CONTRATO ${projeto.contrato}`, projeto.orgao, 'BELÉM DIGITAL'].filter(Boolean).join(' – ').toUpperCase(),
+    titulo: `${tituloBase} Nº ${String(numero).padStart(2, '0')}`.toUpperCase(),
+    subtitulo: projeto.nome,
+    identificacao: [['Contrato', projeto.contrato || ''], ['Contratante', projeto.orgao || ''], ['Contratada', 'Companhia de Transformação Digital do Município de Belém – Belém Digital'], ['Período de execução', referencia || ''], ['Data de emissão', new Date().toLocaleDateString('pt-BR')]],
+    resumo: '',
+    secoes: [{
+      titulo: 'Objeto do contrato',
+      blocos: [{
+        tipo: 'paragrafo',
+        texto: projeto.objeto || ''
+      }]
+    }],
+    encerramento: 'Declaramos que as atividades relatadas foram executadas conforme o Plano de Trabalho e o cronograma do projeto, e que estão suportadas pelas evidências anexas.',
+    descricoes: {}
   };
 }
 async function relImagemDataUrl(src) {
@@ -23161,11 +23263,10 @@ async function relAnexoParaPdf(tipo, bytes, nome) {
 }
 async function relMontarPdf({
   projeto,
-  titulo,
-  referencia,
-  textos,
+  rel,
   docs,
   signatarios,
+  comCapa,
   onEtapa
 }) {
   const {
@@ -23178,7 +23279,7 @@ async function relMontarPdf({
   } = window.PDFLib;
   const anexos = [];
   for (const d of docs) {
-    onEtapa?.(`Convertendo anexo ${d.n} de ${docs.length}: ${d.nome}`);
+    onEtapa?.(`Preparando o Anexo ${relRomano(d.n)} de ${relRomano(docs.length)}: ${d.nome}`);
     let pdf = null,
       aviso = null;
     try {
@@ -23197,7 +23298,7 @@ async function relMontarPdf({
       paginas: pdf ? pdf.getPageCount() : 0
     });
   }
-  onEtapa?.('Montando capa, textos e assinaturas…');
+  onEtapa?.('Montando o relatório…');
   const logoBranco = await relImagemDataUrl('belem-digital-branco.png').catch(() => null);
   const logoAzul = await relImagemDataUrl('belem-digital-azul.png').catch(() => null);
   const doc = new jsPDF({
@@ -23211,67 +23312,66 @@ async function relMontarPdf({
     MR = 20,
     CW = PW - ML - MR,
     TOPO = 34,
-    LIM = PH - 22;
-  const hoje = new Date();
-  const hojeExtenso = hoje.toLocaleDateString('pt-BR', {
+    LIM = PH - 20;
+  const LINHA_VERDE = [146, 208, 120];
+  const TEXTO = [33, 37, 41];
+  const hojeExtenso = new Date().toLocaleDateString('pt-BR', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
   });
+  const tituloCurto = relLimpar(rel.titulo || 'Relatório de Execução').replace(/^RELAT[ÓO]RIO/i, 'Relatório').replace(/\s+/g, ' ');
+  const rodape = relLimpar(['Belém Digital', tituloCurto.charAt(0) + tituloCurto.slice(1).toLowerCase().replace(/ n[ºo°]/i, ' nº'), projeto.contrato ? `Contrato nº ${projeto.contrato}${projeto.orgao ? ' – ' + projeto.orgao : ''}` : projeto.nome].join(' · '));
   let y = TOPO;
-  doc.setFillColor(...REL_NAVY);
-  doc.rect(0, 0, PW, 150, 'F');
-  doc.setFillColor(...REL_GREEN);
-  doc.rect(0, 150, PW, 3, 'F');
-  if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 22, 62, 62 * 115 / 444);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(150, 190, 240);
-  doc.text('RELATÓRIO DE EXECUÇÃO', ML, 78, {
-    charSpace: 0.8
-  });
-  doc.setFontSize(23);
-  doc.setTextColor(255, 255, 255);
-  const linhasTitulo = doc.splitTextToSize(relLimpar(projeto.nome), CW);
-  doc.text(linhasTitulo.slice(0, 3), ML, 92);
-  let yc = 92 + Math.min(3, linhasTitulo.length) * 9.5;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(13);
-  doc.setTextColor(200, 220, 245);
-  doc.text(doc.splitTextToSize(relLimpar(titulo + (referencia ? ` — ${referencia}` : '')), CW).slice(0, 2), ML, yc + 2);
-  const infos = [['Contrato', projeto.contrato], ['Órgão / Cliente', projeto.orgao], ['Objeto', projeto.objeto], ['Período de referência', referencia], ['Documentos anexados', `${docs.length} documento${docs.length !== 1 ? 's' : ''}`], ['Data de emissão', hojeExtenso]].filter(([, v]) => v);
-  yc = 170;
-  for (const [rotulo, valor] of infos) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(120, 130, 150);
-    doc.text(rotulo.toUpperCase(), ML, yc, {
-      charSpace: 0.4
-    });
+  if (comCapa) {
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(0, 0, PW, 150, 'F');
+    doc.setFillColor(...REL_GREEN);
+    doc.rect(0, 150, PW, 3, 'F');
+    if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 22, 62, 62 * 115 / 444);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...REL_NAVY);
-    const lv = doc.splitTextToSize(relLimpar(valor), CW).slice(0, 2);
-    doc.text(lv, ML, yc + 5.5);
-    yc += 5.5 + lv.length * 5 + 3;
-    doc.setDrawColor(225, 230, 238);
-    doc.setLineWidth(0.2);
-    doc.line(ML, yc - 2.5, PW - MR, yc - 2.5);
-    yc += 2;
+    doc.setFontSize(10);
+    doc.setTextColor(150, 190, 240);
+    doc.text(relLimpar(rel.cabecalho || '').toUpperCase(), ML, 76, {
+      maxWidth: CW
+    });
+    doc.setFontSize(21);
+    doc.setTextColor(255, 255, 255);
+    const lt = doc.splitTextToSize(relLimpar(rel.titulo), CW).slice(0, 3);
+    doc.text(lt, ML, 90);
+    let yc = 90 + lt.length * 9;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.setTextColor(200, 220, 245);
+    doc.text(doc.splitTextToSize(relLimpar(rel.subtitulo || projeto.nome), CW).slice(0, 3), ML, yc + 2);
+    yc = 170;
+    for (const [rot, val] of (rel.identificacao || []).slice(0, 7)) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 130, 150);
+      doc.text(relLimpar(rot).toUpperCase(), ML, yc, {
+        charSpace: 0.4
+      });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...REL_NAVY);
+      const lv = doc.splitTextToSize(relLimpar(val), CW).slice(0, 2);
+      doc.text(lv, ML, yc + 5);
+      yc += 5 + lv.length * 4.6 + 4;
+      if (yc > 262) break;
+    }
+    if (logoAzul) doc.addImage(logoAzul, 'PNG', ML, 272, 45, 45 * 87 / 585);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(120, 130, 150);
+    doc.text('Prefeitura Municipal de Belém', PW - MR, 278, {
+      align: 'right'
+    });
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(0, PH - 6, PW, 6, 'F');
+    doc.addPage();
   }
-  if (logoAzul) doc.addImage(logoAzul, 'PNG', ML, 272, 45, 45 * 87 / 585);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(120, 130, 150);
-  doc.text('Prefeitura Municipal de Belém', PW - MR, 278, {
-    align: 'right'
-  });
-  doc.setFillColor(...REL_NAVY);
-  doc.rect(0, PH - 6, PW, 6, 'F');
-  const ENTRADAS_POR_PAG = 32;
-  const nEntradas = 5 + anexos.length;
-  const pagsSumario = Math.max(1, Math.ceil((nEntradas + 2) / ENTRADAS_POR_PAG));
-  for (let i = 0; i < pagsSumario; i++) doc.addPage();
+  const primeiraInterna = doc.getNumberOfPages();
   const novaPagina = () => {
     doc.addPage();
     y = TOPO;
@@ -23279,309 +23379,307 @@ async function relMontarPdf({
   const garantir = h => {
     if (y + h > LIM) novaPagina();
   };
-  const tituloSecao = txt => {
-    garantir(18);
-    doc.setFillColor(235, 240, 250);
-    doc.roundedRect(ML, y, CW, 8, 1, 1, 'F');
-    doc.setFillColor(...REL_NAVY);
-    doc.rect(ML, y, 1.6, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...REL_NAVY);
-    doc.text(txt, ML + 5, y + 5.5);
-    y += 14;
+  const tabela = (head, body, opcoes = {}) => {
+    doc.autoTable({
+      startY: y,
+      head: head ? [head.map(relLimpar)] : undefined,
+      body: body.map(l => l.map(c => relLimpar(c))),
+      margin: {
+        left: ML,
+        right: MR,
+        top: TOPO,
+        bottom: 22
+      },
+      theme: 'grid',
+      styles: {
+        font: 'helvetica',
+        fontSize: 8.5,
+        cellPadding: 1.8,
+        textColor: TEXTO,
+        lineColor: [200, 205, 215],
+        lineWidth: 0.15,
+        valign: 'top',
+        overflow: 'linebreak'
+      },
+      headStyles: {
+        fillColor: REL_NAVY,
+        textColor: 255,
+        fontStyle: 'bold'
+      },
+      didParseCell: opcoes.total ? c => {
+        if (c.section === 'body' && c.row.index === body.length - 1) {
+          c.cell.styles.fontStyle = 'bold';
+          c.cell.styles.fillColor = [236, 239, 244];
+        }
+      } : undefined,
+      columnStyles: opcoes.colunas || {}
+    });
+    y = doc.lastAutoTable.finalY + 5;
   };
-  const paragrafos = txt => {
-    doc.setFont('helvetica', 'normal');
+  const tituloSecao = txt => {
+    garantir(16);
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(...REL_NAVY);
+    doc.text(relLimpar(txt), ML, y);
+    doc.setDrawColor(...LINHA_VERDE);
+    doc.setLineWidth(0.4);
+    doc.line(ML, y + 2, PW - MR, y + 2);
+    y += 8;
+  };
+  const paragrafo = (txt, negrito = false) => {
+    doc.setFont('helvetica', negrito ? 'bold' : 'normal');
     doc.setFontSize(10.5);
-    doc.setTextColor(40, 45, 55);
-    relLimpar(txt).split(/\n\s*\n|\n/).map(p => p.trim()).filter(Boolean).forEach(p => {
+    doc.setTextColor(...TEXTO);
+    relLimpar(txt).split(/\n+/).map(p => p.trim()).filter(Boolean).forEach(p => {
       const linhas = doc.splitTextToSize(p, CW);
       linhas.forEach((l, i) => {
-        garantir(5.2);
+        garantir(5.3);
         if (i < linhas.length - 1) doc.text(l, ML, y, {
           maxWidth: CW,
           align: 'justify'
         });else doc.text(l, ML, y);
-        y += 5.2;
+        y += 5.3;
       });
-      y += 3;
+      y += 2.5;
     });
   };
-  const paginaSecao = {};
-  novaPagina();
-  paginaSecao.sumarizacao = doc.getNumberOfPages();
-  tituloSecao('1. SUMARIZAÇÃO DO ASSUNTO');
-  paragrafos(textos.sumarizacao || 'Não informado.');
-  y += 4;
-  garantir(30);
-  paginaSecao.resumo = doc.getNumberOfPages();
-  tituloSecao('2. RESUMO');
-  paragrafos(textos.resumo || 'Não informado.');
-  y += 4;
-  garantir(40);
-  paginaSecao.identificacao = doc.getNumberOfPages();
-  tituloSecao('3. IDENTIFICAÇÃO DOS DOCUMENTOS');
-  doc.autoTable({
-    startY: y,
-    margin: {
-      left: ML,
-      right: MR,
-      top: TOPO,
-      bottom: 24
-    },
-    head: [['Anexo', 'Documento', 'Pasta', 'Data', 'Tipo', 'Descrição']],
-    body: anexos.map(a => [String(a.n), relLimpar(a.nome), relLimpar(a.pasta || '—'), relFmtData(a.modificadoEm), relTipoLabel(a), relLimpar(textos.descricoes?.[a.id] || '')]),
-    styles: {
-      fontSize: 7.5,
-      cellPadding: 1.6,
-      textColor: [40, 45, 55],
-      overflow: 'linebreak',
-      valign: 'top'
-    },
-    headStyles: {
-      fillColor: REL_NAVY,
-      textColor: 255,
-      fontStyle: 'bold'
-    },
-    alternateRowStyles: {
-      fillColor: [247, 249, 252]
-    },
-    columnStyles: {
+  const lista = itens => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TEXTO);
+    (itens || []).forEach(it => {
+      const linhas = doc.splitTextToSize(relLimpar(it), CW - 7);
+      garantir(5.3);
+      doc.setFillColor(...TEXTO);
+      doc.circle(ML + 2.2, y - 1.3, 0.75, 'F');
+      linhas.forEach((l, i) => {
+        garantir(5.3);
+        if (i < linhas.length - 1) doc.text(l, ML + 7, y, {
+          maxWidth: CW - 7,
+          align: 'justify'
+        });else doc.text(l, ML + 7, y);
+        y += 5.3;
+      });
+      y += 1.2;
+    });
+    y += 2;
+  };
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(...REL_NAVY);
+  const lt = doc.splitTextToSize(relLimpar(rel.titulo), CW);
+  doc.text(lt, PW / 2, y + 2, {
+    align: 'center'
+  });
+  y += 2 + lt.length * 6.5;
+  if (rel.subtitulo) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(...TEXTO);
+    const ls = doc.splitTextToSize(relLimpar(rel.subtitulo), CW);
+    doc.text(ls, PW / 2, y, {
+      align: 'center'
+    });
+    y += ls.length * 5 + 3;
+  }
+  if ((rel.identificacao || []).length) tabela(['Campo', 'Informação'], rel.identificacao, {
+    colunas: {
       0: {
-        cellWidth: 12,
-        halign: 'center'
-      },
-      1: {
-        cellWidth: 42
-      },
-      2: {
-        cellWidth: 26
-      },
-      3: {
-        cellWidth: 17
-      },
-      4: {
-        cellWidth: 15
+        cellWidth: 48
       }
     }
   });
-  y = doc.lastAutoTable.finalY + 10;
-  const sigs = (signatarios || []).filter(s => (s.nome || '').trim());
-  const altSigs = 22 + Math.ceil(Math.max(1, sigs.length) / 2) * 30;
-  if (y + Math.min(altSigs, 120) > LIM) novaPagina();
-  paginaSecao.assinaturas = doc.getNumberOfPages();
-  tituloSecao('4. ASSINATURAS');
+  if (rel.resumo) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const lr = doc.splitTextToSize(relLimpar(rel.resumo), CW - 10);
+    const h = lr.length * 4.9 + 11;
+    garantir(h);
+    doc.setFillColor(240, 245, 252);
+    doc.rect(ML, y, CW, h, 'F');
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(ML, y, 1.4, h, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...REL_NAVY);
+    doc.text('RESUMO DO PERÍODO', ML + 5, y + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXTO);
+    doc.text(lr, ML + 5, y + 10.5);
+    y += h + 5;
+  }
+  let num = 0;
+  for (const s of rel.secoes || []) {
+    tituloSecao(`${++num}. ${s.titulo || ''}`);
+    for (const b of s.blocos || []) {
+      if (b.tipo === 'tabela' && Array.isArray(b.linhas) && b.linhas.length) {
+        garantir(18);
+        const nCols = Math.max((b.colunas || []).length, ...b.linhas.map(l => (l || []).length));
+        const norm = l => Array.from({
+          length: nCols
+        }, (_, i) => (l || [])[i] ?? '');
+        tabela(b.colunas?.length ? norm(b.colunas) : null, b.linhas.map(norm), {
+          total: !!b.total
+        });
+      } else if (b.tipo === 'lista') lista(b.itens);else if (b.tipo === 'destaque') paragrafo(b.texto, true);else paragrafo(b.texto);
+    }
+  }
+  tituloSecao(`${++num}. Anexos`);
+  garantir(18);
+  tabela(['Anexo', 'Documento', 'Pasta', 'Data', 'Descrição'], anexos.map(a => [relRomano(a.n), a.nome, a.pasta || '—', relFmtData(a.modificadoEm), rel.descricoes?.[a.id] || '']), {
+    colunas: {
+      0: {
+        cellWidth: 14,
+        halign: 'center'
+      },
+      1: {
+        cellWidth: 48
+      },
+      2: {
+        cellWidth: 24
+      },
+      3: {
+        cellWidth: 19
+      }
+    }
+  });
+  tituloSecao(`${++num}. Encerramento`);
+  paragrafo(rel.encerramento || 'Declaramos que as atividades relatadas foram executadas conforme o Plano de Trabalho e o cronograma do projeto, e que estão suportadas pelas evidências anexas.');
+  garantir(10);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10.5);
-  doc.setTextColor(40, 45, 55);
-  doc.text(`Belém (PA), ${hojeExtenso}.`, PW - MR, y, {
+  doc.setTextColor(...TEXTO);
+  doc.text(`Belém (PA), ${hojeExtenso}.`, PW - MR, y + 2, {
     align: 'right'
   });
-  y += 22;
-  const colW = (CW - 10) / 2;
-  sigs.forEach((s, i) => {
-    const col = sigs.length === 1 ? 0.5 : i % 2;
-    if (i % 2 === 0 || sigs.length === 1) garantir(30);
-    const x = ML + col * (colW + 10);
-    doc.setDrawColor(60, 70, 90);
+  y += 24;
+  (signatarios || []).filter(s => (s.nome || '').trim()).forEach(s => {
+    garantir(30);
+    doc.setDrawColor(60, 65, 75);
     doc.setLineWidth(0.3);
-    doc.line(x + 6, y, x + colW - 6, y);
+    doc.line(PW / 2 - 40, y, PW / 2 + 40, y);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(30, 35, 45);
-    doc.text(relLimpar(s.nome), x + colW / 2, y + 5, {
-      align: 'center',
-      maxWidth: colW
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TEXTO);
+    doc.text(relLimpar(s.nome), PW / 2, y + 5, {
+      align: 'center'
     });
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(100, 110, 125);
-    doc.text(relLimpar(s.cargo || ''), x + colW / 2, y + 9.5, {
-      align: 'center',
-      maxWidth: colW
+    doc.setFontSize(10);
+    doc.text(relLimpar(s.cargo || ''), PW / 2, y + 10, {
+      align: 'center'
     });
-    if (i % 2 === 1 || i === sigs.length - 1) y += 30;
+    y += 34;
   });
-  const paginasFrente = doc.getNumberOfPages();
+  const paginasCorpo = doc.getNumberOfPages();
   anexos.forEach(a => {
     doc.addPage();
-    doc.setFillColor(...REL_NAVY);
-    doc.rect(0, 0, PW, 105, 'F');
-    doc.setFillColor(...REL_GREEN);
-    doc.rect(0, 105, PW, 2.5, 'F');
-    if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 18, 46, 46 * 115 / 444);
+    let ya = 105;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.setTextColor(150, 190, 240);
-    doc.text('ANEXO', ML, 62, {
-      charSpace: 1
+    doc.setTextColor(...REL_GREEN);
+    doc.text('ANEXO', PW / 2, ya, {
+      align: 'center',
+      charSpace: 1.5
     });
-    doc.setFontSize(44);
-    doc.setTextColor(255, 255, 255);
-    doc.text(String(a.n).padStart(2, '0'), ML, 84);
-    let ya = 124;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
+    doc.setFontSize(40);
     doc.setTextColor(...REL_NAVY);
-    const ln = doc.splitTextToSize(relLimpar(a.nome), CW).slice(0, 4);
-    doc.text(ln, ML, ya);
-    ya += ln.length * 7 + 6;
-    [['Pasta', a.pasta || '(raiz)'], ['Tipo', relTipoLabel(a)], ['Data', relFmtData(a.modificadoEm)], ['Páginas', a.paginas ? String(a.paginas) : '—']].forEach(([r, v]) => {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(120, 130, 150);
-      doc.text(r.toUpperCase(), ML, ya);
-      doc.setFontSize(10.5);
-      doc.setTextColor(40, 45, 55);
-      doc.text(relLimpar(v), ML + 28, ya);
-      ya += 7;
+    doc.text(relRomano(a.n), PW / 2, ya + 18, {
+      align: 'center'
     });
-    const desc = textos.descricoes?.[a.id];
+    ya += 34;
+    doc.setFontSize(13);
+    const ln = doc.splitTextToSize(relLimpar(a.nome), CW - 20).slice(0, 4);
+    doc.text(ln, PW / 2, ya, {
+      align: 'center'
+    });
+    ya += ln.length * 6 + 4;
+    const desc = rel.descricoes?.[a.id];
     if (desc) {
-      ya += 4;
-      doc.setFont('helvetica', 'italic');
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      doc.setTextColor(70, 80, 95);
-      const ld = doc.splitTextToSize(relLimpar(desc), CW).slice(0, 8);
-      doc.text(ld, ML, ya);
-      ya += ld.length * 5;
+      doc.setTextColor(90, 98, 110);
+      const ld = doc.splitTextToSize(relLimpar(desc), CW - 30).slice(0, 6);
+      doc.text(ld, PW / 2, ya, {
+        align: 'center'
+      });
+      ya += ld.length * 5 + 2;
     }
+    doc.setFontSize(8.5);
+    doc.setTextColor(130, 138, 150);
+    doc.text(relLimpar([a.pasta && `Pasta: ${a.pasta}`, `Data: ${relFmtData(a.modificadoEm)}`, a.paginas ? `${a.paginas} página${a.paginas !== 1 ? 's' : ''}` : null].filter(Boolean).join('   ·   ')), PW / 2, ya + 4, {
+      align: 'center'
+    });
     if (a.aviso) {
-      ya += 8;
+      ya += 14;
       doc.setFillColor(255, 247, 230);
-      doc.roundedRect(ML, ya, CW, 20, 2, 2, 'F');
+      doc.roundedRect(ML + 10, ya, CW - 20, 18, 2, 2, 'F');
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(9);
       doc.setTextColor(150, 90, 0);
-      doc.text(relLimpar(a.aviso) + ' O documento original está disponível no repositório:', ML + 4, ya + 7, {
-        maxWidth: CW - 8
+      doc.text(relLimpar(a.aviso) + ' O documento original está disponível na pasta de origem.', PW / 2, ya + 7, {
+        align: 'center',
+        maxWidth: CW - 30
       });
       if (a.url) {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(30, 80, 160);
-        doc.textWithLink(relLimpar(a.url).slice(0, 95), ML + 4, ya + 14, {
+        doc.textWithLink(relLimpar(a.url).slice(0, 80), ML + 15, ya + 13.5, {
           url: a.url
         });
       }
     }
-    doc.setFillColor(...REL_NAVY);
-    doc.rect(0, PH - 6, PW, 6, 'F');
   });
-  const inicioAnexo = {};
-  let pag = paginasFrente;
-  anexos.forEach(a => {
-    inicioAnexo[a.n] = pag + 1;
-    pag += 1 + a.paginas;
-  });
-  const totalPaginas = pag;
-  for (let p = 2; p <= paginasFrente; p++) {
+  for (let p = primeiraInterna; p <= doc.getNumberOfPages(); p++) {
     doc.setPage(p);
-    doc.setFillColor(...REL_NAVY);
-    doc.rect(0, 0, PW, 20, 'F');
-    doc.setFillColor(...REL_GREEN);
-    doc.rect(0, 20, PW, 1.2, 'F');
-    if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 5, 38, 38 * 115 / 444);
+    if (logoAzul) doc.addImage(logoAzul, 'PNG', ML, 10, 40, 40 * 87 / 585);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text('RELATÓRIO DE EXECUÇÃO', PW - MR, 9, {
-      align: 'right'
+    doc.setFontSize(7.5);
+    doc.setTextColor(...REL_NAVY);
+    doc.text(relLimpar(rel.cabecalho || '').toUpperCase(), ML, 23, {
+      maxWidth: CW
     });
+    doc.setDrawColor(...LINHA_VERDE);
+    doc.setLineWidth(0.5);
+    doc.line(ML, 25.5, PW - MR, 25.5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.setTextColor(170, 200, 240);
-    doc.text(doc.splitTextToSize(relLimpar(projeto.nome + (referencia ? ` · ${referencia}` : '')), 110)[0], PW - MR, 14, {
-      align: 'right'
-    });
-    doc.setDrawColor(220, 225, 235);
-    doc.setLineWidth(0.3);
-    doc.line(ML, PH - 13, PW - MR, PH - 13);
-    doc.setFontSize(7);
-    doc.setTextColor(120, 130, 150);
-    doc.text('Belém Digital · Prefeitura Municipal de Belém · Relatório de Execução', ML, PH - 8);
+    doc.setTextColor(120, 128, 140);
+    doc.text(doc.splitTextToSize(rodape, 130)[0], ML, PH - 8);
   }
-  const entradas = [{
-    t: '1. Sumarização do Assunto',
-    p: paginaSecao.sumarizacao
-  }, {
-    t: '2. Resumo',
-    p: paginaSecao.resumo
-  }, {
-    t: '3. Identificação dos Documentos',
-    p: paginaSecao.identificacao
-  }, {
-    t: '4. Assinaturas',
-    p: paginaSecao.assinaturas
-  }, {
-    t: 'ANEXOS',
-    p: anexos.length ? inicioAnexo[1] : null,
-    grupo: true
-  }, ...anexos.map(a => ({
-    t: `Anexo ${a.n} - ${a.nome}`,
-    p: inicioAnexo[a.n],
-    sub: true
-  }))];
-  let pSum = 2;
-  doc.setPage(pSum);
-  y = TOPO;
-  tituloSecao('SUMÁRIO');
-  entradas.forEach((e, i) => {
-    if (y > LIM - 4) {
-      pSum++;
-      doc.setPage(pSum);
-      y = TOPO;
-    }
-    if (e.grupo && !anexos.length) return;
-    const x = ML + (e.sub ? 6 : 0);
-    doc.setFont('helvetica', e.sub ? 'normal' : 'bold');
-    doc.setFontSize(e.sub ? 9.5 : 10.5);
-    doc.setTextColor(e.sub ? 60 : REL_NAVY[0], e.sub ? 65 : REL_NAVY[1], e.sub ? 75 : REL_NAVY[2]);
-    let txt = relLimpar(e.t);
-    while (doc.getTextWidth(txt) > CW - 30 && txt.length > 10) txt = txt.slice(0, -2);
-    if (txt !== relLimpar(e.t)) txt = txt.trimEnd() + '...';
-    doc.text(txt, x, y);
-    if (e.p) {
-      const num = String(e.p);
-      const xi = x + doc.getTextWidth(txt) + 2,
-        xf = PW - MR - doc.getTextWidth(num) - 2;
-      doc.setTextColor(170, 175, 185);
-      let pontos = '';
-      while (doc.getTextWidth(pontos + '.') < xf - xi) pontos += '.';
-      doc.text(pontos, xi, y);
-      doc.setTextColor(40, 45, 55);
-      doc.text(num, PW - MR, y, {
-        align: 'right'
-      });
-    }
-    y += e.sub ? 6.2 : 7.5;
-    if (e.grupo) y += 0.5;
-  });
   onEtapa?.('Juntando os anexos ao relatório…');
   const frente = await PDFDocument.load(doc.output('arraybuffer'));
   const final = await PDFDocument.create();
-  final.setTitle(relLimpar(`${titulo} - ${projeto.nome}${referencia ? ' - ' + referencia : ''}`));
+  final.setTitle(relLimpar(`${rel.titulo} - ${projeto.nome}`));
   final.setAuthor('Belém Digital');
   const copiar = async (origem, indices) => (await final.copyPages(origem, indices)).forEach(p => final.addPage(p));
   await copiar(frente, Array.from({
-    length: paginasFrente
+    length: paginasCorpo
   }, (_, i) => i));
   for (let i = 0; i < anexos.length; i++) {
-    await copiar(frente, [paginasFrente + i]);
+    await copiar(frente, [paginasCorpo + i]);
     if (anexos[i].pdf) await copiar(anexos[i].pdf, anexos[i].pdf.getPageIndices());
   }
+  const total = final.getPageCount();
   const fonte = await final.embedFont(StandardFonts.Helvetica);
+  const fonteN = await final.embedFont(StandardFonts.HelveticaBold);
   final.getPages().forEach((p, i) => {
-    if (i === 0) return;
-    const rot = p.getRotation().angle % 360;
-    if (rot !== 0) return;
+    if (comCapa && i === 0) return;
+    if (p.getRotation().angle % 360 !== 0) return;
     const {
       width
     } = p.getSize();
-    const txt = `Página ${i + 1} de ${totalPaginas}`;
-    const w = fonte.widthOfTextAtSize(txt, 7.5);
-    const x = width - 20 * 2.835 - w;
-    if (i >= paginasFrente) p.drawRectangle({
+    const proprio = i < paginasCorpo;
+    const a = `Página `,
+      b = `${i + 1}`,
+      c = ` de ${total}`;
+    const w = fonte.widthOfTextAtSize(a + c, 7.5) + fonteN.widthOfTextAtSize(b, 7.5);
+    let x = width - MR * 2.835 - w;
+    const yb = proprio ? 8 * 2.835 - 2.4 : 9.5;
+    if (!proprio) p.drawRectangle({
       x: x - 3,
       y: 6,
       width: w + 6,
@@ -23589,12 +23687,29 @@ async function relMontarPdf({
       color: rgb(1, 1, 1),
       opacity: 0.85
     });
-    p.drawText(txt, {
+    const cor = rgb(0.47, 0.5, 0.55);
+    p.drawText(a, {
       x,
-      y: i >= paginasFrente ? 9.5 : 8 * 2.835 - 2.5,
+      y: yb,
       size: 7.5,
       font: fonte,
-      color: rgb(0.4, 0.45, 0.52)
+      color: cor
+    });
+    x += fonte.widthOfTextAtSize(a, 7.5);
+    p.drawText(b, {
+      x,
+      y: yb,
+      size: 7.5,
+      font: fonteN,
+      color: rgb(0.13, 0.15, 0.17)
+    });
+    x += fonteN.widthOfTextAtSize(b, 7.5);
+    p.drawText(c, {
+      x,
+      y: yb,
+      size: 7.5,
+      font: fonte,
+      color: cor
     });
   });
   return await final.save();
@@ -23779,29 +23894,37 @@ function RelProjetoModal({
     }
   }, salvando ? 'Salvando…' : 'Salvar projeto'))));
 }
+const relTabelaParaTexto = b => [b.colunas || [], ...(b.linhas || [])].map(l => (l || []).join(' | ')).join('\n');
+const relTextoParaTabela = (t, b) => {
+  const ls = t.split('\n').filter(l => l.trim()).map(l => l.split('|').map(c => c.trim()));
+  return {
+    ...b,
+    colunas: ls[0] || [],
+    linhas: ls.slice(1)
+  };
+};
 function RelEmitirModal({
   projeto,
   arquivos,
   referenciaInicial,
   currentUser,
-  apiKey,
   addToast,
   onFechar
 }) {
+  const numeroSugerido = (projeto.emissoes?.length || 0) + 1;
   const [etapa, setEtapa] = useState('config');
-  const [titulo, setTitulo] = useState('Relatório de Execução');
+  const [tituloBase, setTituloBase] = useState(projeto.ultimoRascunho?.tituloBase || 'Relatório de Atividades');
+  const [numero, setNumero] = useState(numeroSugerido);
   const [referencia, setReferencia] = useState(referenciaInicial || '');
+  const [orientacoes, setOrientacoes] = useState(projeto.ultimoRascunho?.orientacoes || '');
+  const [comCapa, setComCapa] = useState(projeto.ultimoRascunho?.comCapa ?? true);
   const [signatarios, setSignatarios] = useState(() => (projeto.signatarios?.length ? projeto.signatarios : [{
     nome: '',
     cargo: ''
   }]).map(s => ({
     ...s
   })));
-  const [textos, setTextos] = useState({
-    sumarizacao: '',
-    resumo: '',
-    descricoes: {}
-  });
+  const [rel, setRel] = useState(null);
   const [msg, setMsg] = useState('');
   const [pct, setPct] = useState(0);
   const [erros, setErros] = useState([]);
@@ -23815,24 +23938,45 @@ function RelEmitirModal({
     n: i + 1,
     tipo: relTipo(a)
   })), [arquivos]);
-  const nomeArquivo = relLimpar(`${titulo} - ${projeto.nome}${referencia ? ' - ' + referencia : ''}`).replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
+  const nomeArquivo = relLimpar(`${rel?.titulo || tituloBase + ' ' + numero} - ${projeto.nome}`).replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
   async function baixarTodos() {
     const falhas = [];
-    for (const d of docs) {
-      if (bytesRef.current.has(d.id)) continue;
+    const pendentes = docs.filter(d => !bytesRef.current.get(d.id));
+    if (!pendentes.length) return falhas;
+    setMsg('Conectando à pasta de origem…');
+    const acesso = await relAcesso(projeto.id);
+    for (const d of pendentes) {
       setMsg(`Baixando ${d.n} de ${docs.length}: ${d.nome}`);
       try {
-        bytesRef.current.set(d.id, await relBaixar(projeto.id, d, (rec, tot) => tot && setPct((d.n - 1 + rec / tot) / docs.length * 100)));
+        bytesRef.current.set(d.id, await relBaixar(projeto.id, d, acesso, (rec, tot) => tot && setPct((d.n - 1 + rec / tot) / docs.length * 100)));
       } catch (e) {
         falhas.push(`${d.nome}: ${e.message}`);
-        bytesRef.current.set(d.id, null);
       }
       setPct(d.n / docs.length * 100);
     }
     return falhas;
   }
-  async function lerEGerar() {
-    setEtapa('lendo');
+  async function montar(relAtual) {
+    setMsg('Montando o PDF…');
+    const pdf = await relMontarPdf({
+      projeto,
+      rel: relAtual,
+      signatarios,
+      comCapa,
+      onEtapa: setMsg,
+      docs: docs.map(d => ({
+        ...d,
+        bytes: bytesRef.current.get(d.id) || null
+      }))
+    });
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(URL.createObjectURL(new Blob([pdf], {
+      type: 'application/pdf'
+    })));
+    setEtapa('pronto');
+  }
+  async function gerar() {
+    setEtapa('processando');
     setPct(0);
     setErros([]);
     try {
@@ -23840,13 +23984,9 @@ function RelEmitirModal({
       await relCarregarLibs();
       const falhas = await baixarTodos();
       setErros(falhas);
-      if (!apiKey) {
-        addToast('Chave da IA não configurada — preencha os textos manualmente.');
-        setEtapa('revisao');
-        return;
-      }
+      setPct(0);
       setMsg('Lendo o conteúdo dos documentos…');
-      const limite = Math.max(2000, Math.min(12000, Math.floor(160000 / Math.max(1, docs.length))));
+      const limite = Math.max(4000, Math.min(60000, Math.floor(350000 / Math.max(1, docs.length))));
       const comTexto = [];
       for (const d of docs) {
         const b = bytesRef.current.get(d.id);
@@ -23855,86 +23995,105 @@ function RelEmitirModal({
           texto: b ? await relExtrairTexto(d.tipo, b, limite) : ''
         });
       }
-      setMsg('A IA está escrevendo a sumarização, o resumo e a descrição dos documentos…');
-      setTextos(await relGerarTextosIA({
-        apiKey,
-        projeto,
-        titulo,
-        referencia,
-        docs: comTexto
-      }));
-      setEtapa('revisao');
+      let r;
+      try {
+        r = await relGerarRelatorioIA({
+          projeto,
+          numero,
+          tituloBase,
+          referencia,
+          orientacoes,
+          docs: comTexto,
+          onEtapa: setMsg
+        });
+      } catch (e) {
+        addToast('❌ A IA não conseguiu gerar o texto: ' + e.message + ' — o relatório sai com a estrutura básica para você completar.');
+        r = relRelatorioVazio({
+          projeto,
+          numero,
+          tituloBase,
+          referencia
+        });
+      }
+      setRel(r);
+      await montar(r);
     } catch (e) {
       console.error('[Relatórios]', e);
       addToast('❌ ' + e.message);
-      setEtapa(bytesRef.current.size ? 'revisao' : 'config');
+      setEtapa(rel ? 'revisao' : 'config');
     }
   }
-  async function emitir() {
-    setEtapa('montando');
-    setPct(0);
+  async function reemitir() {
+    setEtapa('processando');
     try {
       await relCarregarLibs();
-      const pdf = await relMontarPdf({
-        projeto,
-        titulo,
-        referencia,
-        textos,
-        signatarios,
-        docs: docs.map(d => ({
-          ...d,
-          bytes: bytesRef.current.get(d.id) || null
-        })),
-        onEtapa: setMsg
-      });
-      const url = URL.createObjectURL(new Blob([pdf], {
-        type: 'application/pdf'
-      }));
-      setPdfUrl(url);
-      setEtapa('pronto');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = nomeArquivo;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      db.collection(REL_COL).doc(projeto.id).set({
-        emissoes: firebase.firestore.FieldValue.arrayUnion({
-          em: new Date().toISOString(),
-          por: currentUser?.name || currentUser?.username || '',
-          titulo,
-          referencia,
-          qtdDocumentos: docs.length
-        }),
-        ultimoRascunho: {
-          titulo,
-          referencia,
-          sumarizacao: textos.sumarizacao,
-          resumo: textos.resumo
-        }
-      }, {
-        merge: true
-      }).catch(e => console.warn('[Relatórios] histórico:', e));
+      await montar(rel);
     } catch (e) {
       console.error('[Relatórios]', e);
       addToast('❌ Falha ao montar o PDF: ' + e.message);
       setEtapa('revisao');
     }
   }
+  function baixar() {
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    db.collection(REL_COL).doc(projeto.id).set({
+      emissoes: firebase.firestore.FieldValue.arrayUnion({
+        em: new Date().toISOString(),
+        por: currentUser?.name || currentUser?.username || '',
+        titulo: rel?.titulo || '',
+        numero,
+        referencia,
+        qtdDocumentos: docs.length
+      }),
+      ultimoRascunho: {
+        tituloBase,
+        orientacoes,
+        comCapa,
+        numero,
+        referencia
+      }
+    }, {
+      merge: true
+    }).catch(e => console.warn('[Relatórios] histórico:', e));
+  }
+  const setSec = (i, f) => setRel(r => ({
+    ...r,
+    secoes: r.secoes.map((s, j) => j === i ? f(s) : s)
+  }));
+  const setBloco = (i, k, f) => setSec(i, s => ({
+    ...s,
+    blocos: s.blocos.map((b, j) => j === k ? f(b) : b)
+  }));
+  const moverSec = (i, d) => setRel(r => {
+    const l = [...r.secoes];
+    const j = i + d;
+    if (j < 0 || j >= l.length) return r;
+    [l[i], l[j]] = [l[j], l[i]];
+    return {
+      ...r,
+      secoes: l
+    };
+  });
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400';
-  const ocupado = etapa === 'lendo' || etapa === 'montando';
+  const rot = 'text-[11px] font-bold text-gray-500 uppercase tracking-wide';
+  const ocupado = etapa === 'processando';
   return React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4",
     style: {
       background: 'rgba(15,23,42,0.55)'
     }
   }, React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[94vh] flex flex-col"
+    className: `bg-white rounded-2xl shadow-2xl w-full ${etapa === 'pronto' || etapa === 'revisao' ? 'max-w-5xl' : 'max-w-3xl'} max-h-[94vh] flex flex-col`
   }, React.createElement("div", {
     className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
   }, React.createElement("div", null, React.createElement("h2", {
     className: "text-base font-black text-gray-800"
-  }, "Emitir relat\xF3rio"), React.createElement("p", {
+  }, etapa === 'revisao' ? 'Ajustar conteúdo do relatório' : 'Gerar relatório'), React.createElement("p", {
     className: "text-[11px] text-gray-400"
   }, projeto.nome, " \xB7 ", docs.length, " documento", docs.length !== 1 ? 's' : '')), !ocupado && React.createElement("button", {
     onClick: onFechar,
@@ -23942,26 +24101,42 @@ function RelEmitirModal({
   }, React.createElement(X, {
     className: "w-4 h-4 text-gray-500"
   }))), React.createElement("div", {
-    className: "px-6 py-5 overflow-y-auto space-y-4"
+    className: `overflow-y-auto ${etapa === 'pronto' ? '' : 'px-6 py-5 space-y-4'}`
   }, etapa === 'config' && React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+    className: "grid grid-cols-1 sm:grid-cols-[1fr_90px_1fr] gap-3"
   }, React.createElement("div", null, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
-  }, "T\xEDtulo"), React.createElement("input", {
+    className: rot
+  }, "Tipo de relat\xF3rio"), React.createElement("input", {
     className: inp,
-    value: titulo,
-    onChange: e => setTitulo(e.target.value)
+    value: tituloBase,
+    onChange: e => setTituloBase(e.target.value)
   })), React.createElement("div", null, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+    className: rot
+  }, "N\xBA"), React.createElement("input", {
+    type: "number",
+    min: "1",
+    className: inp,
+    value: numero,
+    onChange: e => setNumero(Math.max(1, parseInt(e.target.value) || 1))
+  })), React.createElement("div", null, React.createElement("label", {
+    className: rot
   }, "Per\xEDodo / refer\xEAncia"), React.createElement("input", {
     className: inp,
     value: referencia,
     onChange: e => setReferencia(e.target.value),
-    placeholder: "Ex.: Outubro/2026 ou M\xEAs 5"
-  }))), React.createElement("div", null, React.createElement("div", {
+    placeholder: "Ex.: 20/07/2026 a 19/08/2026 (Medi\xE7\xE3o M01)"
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: rot
+  }, "Orienta\xE7\xF5es para a IA (opcional)"), React.createElement("textarea", {
+    className: inp,
+    rows: 2,
+    value: orientacoes,
+    onChange: e => setOrientacoes(e.target.value),
+    placeholder: "Ex.: incluir boletim de medi\xE7\xE3o com valores por etapa; destacar pend\xEAncias da SEFIN; citar o cronograma V02 como linha de base"
+  })), React.createElement("div", null, React.createElement("div", {
     className: "flex items-center justify-between"
   }, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+    className: rot
   }, "Signat\xE1rios"), React.createElement("button", {
     onClick: () => setSignatarios(s => [...s, {
       nome: '',
@@ -23989,7 +24164,7 @@ function RelEmitirModal({
   }), React.createElement("input", {
     className: inp,
     value: s.cargo,
-    placeholder: "Cargo / fun\xE7\xE3o",
+    placeholder: "Cargo \u2013 institui\xE7\xE3o",
     onChange: e => setSignatarios(l => l.map((x, j) => j === i ? {
       ...x,
       cargo: e.target.value
@@ -23999,20 +24174,26 @@ function RelEmitirModal({
     className: "p-2 rounded-lg hover:bg-red-50 flex-shrink-0"
   }, React.createElement(Trash2, {
     className: "w-4 h-4 text-red-400"
-  })))))), React.createElement("div", {
+  })))))), React.createElement("label", {
+    className: "flex items-center gap-2 text-sm text-gray-700"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: comCapa,
+    onChange: e => setComCapa(e.target.checked)
+  }), " Incluir capa no padr\xE3o Bel\xE9m Digital"), React.createElement("div", {
     className: "rounded-xl border border-gray-100 bg-gray-50 p-3"
   }, React.createElement("p", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1.5"
+    className: rot + ' mb-1.5'
   }, "Anexos, nesta ordem"), React.createElement("ol", {
-    className: "text-xs text-gray-600 space-y-0.5 max-h-40 overflow-y-auto"
+    className: "text-xs text-gray-600 space-y-0.5 max-h-36 overflow-y-auto"
   }, docs.map(d => React.createElement("li", {
     key: d.id
-  }, React.createElement("b", null, d.n, "."), " ", d.pasta ? React.createElement("span", {
+  }, React.createElement("b", null, relRomano(d.n), "."), " ", d.pasta ? React.createElement("span", {
     className: "text-gray-400"
   }, d.pasta, " / ") : null, d.nome)))), React.createElement("p", {
-    className: "text-[11px] text-gray-500"
-  }, "O relat\xF3rio ter\xE1: capa \xB7 sum\xE1rio \xB7 1. sumariza\xE7\xE3o do assunto \xB7 2. resumo \xB7 3. identifica\xE7\xE3o dos documentos \xB7 4. assinaturas \xB7 anexos na \xEDntegra. Os textos s\xE3o escritos pela IA a partir dos documentos e voc\xEA pode ajust\xE1-los antes de emitir.")), ocupado && React.createElement("div", {
-    className: "py-10 text-center"
+    className: "text-[11px] text-gray-500 leading-relaxed"
+  }, "O sistema baixa os arquivos, a IA l\xEA todo o conte\xFAdo e escreve o relat\xF3rio completo \u2014 quadro de identifica\xE7\xE3o, resumo, se\xE7\xF5es com tabelas, pend\xEAncias e encerramento \u2014 seguido das assinaturas e dos anexos na \xEDntegra. Quanto mais completos os documentos da pasta, mais rico o relat\xF3rio.")), ocupado && React.createElement("div", {
+    className: "py-12 text-center"
   }, React.createElement("div", {
     className: "w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4",
     style: {
@@ -24020,8 +24201,8 @@ function RelEmitirModal({
       borderTopColor: 'transparent'
     }
   }), React.createElement("p", {
-    className: "text-sm font-semibold text-gray-700"
-  }, msg), etapa === 'lendo' && pct > 0 && pct < 100 && React.createElement("div", {
+    className: "text-sm font-semibold text-gray-700 max-w-md mx-auto"
+  }, msg), pct > 0 && pct < 100 && React.createElement("div", {
     className: "max-w-sm mx-auto mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden"
   }, React.createElement("div", {
     className: "h-full rounded-full transition-all",
@@ -24029,118 +24210,342 @@ function RelEmitirModal({
       width: `${pct}%`,
       background: BLUE
     }
-  }))), etapa === 'revisao' && React.createElement(React.Fragment, null, erros.length > 0 && React.createElement("div", {
-    className: "rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
-  }, React.createElement("b", null, erros.length, " arquivo", erros.length !== 1 ? 's' : '', " n\xE3o p\xF4de ser baixado"), " \u2014 entrar\xE1", erros.length !== 1 ? 'ão' : '', " s\xF3 com a folha de rosto e o link:", React.createElement("ul", {
+  }))), etapa === 'pronto' && pdfUrl && React.createElement("div", null, erros.length > 0 && React.createElement("div", {
+    className: "mx-6 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+  }, React.createElement("b", null, erros.length, " arquivo", erros.length !== 1 ? 's' : '', " n\xE3o p\xF4de ser baixado"), " e entrou s\xF3 com a folha de rosto e o link:", React.createElement("ul", {
     className: "mt-1 list-disc pl-4"
   }, erros.map((e, i) => React.createElement("li", {
     key: i
-  }, e)))), React.createElement("div", null, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
-  }, "1. Sumariza\xE7\xE3o do assunto"), React.createElement("textarea", {
-    className: inp + ' leading-relaxed',
-    rows: 10,
-    value: textos.sumarizacao,
-    onChange: e => setTextos(t => ({
-      ...t,
-      sumarizacao: e.target.value
+  }, e)))), React.createElement("iframe", {
+    src: pdfUrl,
+    title: "Pr\xE9-visualiza\xE7\xE3o",
+    className: "w-full border-0",
+    style: {
+      height: '70vh'
+    }
+  })), etapa === 'revisao' && rel && React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: rot
+  }, "T\xEDtulo"), React.createElement("input", {
+    className: inp,
+    value: rel.titulo,
+    onChange: e => setRel(r => ({
+      ...r,
+      titulo: e.target.value
     }))
   })), React.createElement("div", null, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
-  }, "2. Resumo"), React.createElement("textarea", {
-    className: inp + ' leading-relaxed',
-    rows: 4,
-    value: textos.resumo,
-    onChange: e => setTextos(t => ({
-      ...t,
+    className: rot
+  }, "Cabe\xE7alho das p\xE1ginas"), React.createElement("input", {
+    className: inp,
+    value: rel.cabecalho,
+    onChange: e => setRel(r => ({
+      ...r,
+      cabecalho: e.target.value
+    }))
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: rot
+  }, "Subt\xEDtulo"), React.createElement("input", {
+    className: inp,
+    value: rel.subtitulo,
+    onChange: e => setRel(r => ({
+      ...r,
+      subtitulo: e.target.value
+    }))
+  })), React.createElement("div", null, React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, React.createElement("label", {
+    className: rot
+  }, "Quadro de identifica\xE7\xE3o"), React.createElement("button", {
+    onClick: () => setRel(r => ({
+      ...r,
+      identificacao: [...r.identificacao, ['', '']]
+    })),
+    className: "text-[11px] font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "+ Linha")), React.createElement("div", {
+    className: "space-y-1.5 mt-1.5"
+  }, rel.identificacao.map((l, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2"
+  }, React.createElement("input", {
+    className: inp + ' sm:max-w-[200px]',
+    value: l[0],
+    onChange: e => setRel(r => ({
+      ...r,
+      identificacao: r.identificacao.map((x, j) => j === i ? [e.target.value, x[1]] : x)
+    }))
+  }), React.createElement("input", {
+    className: inp,
+    value: l[1],
+    onChange: e => setRel(r => ({
+      ...r,
+      identificacao: r.identificacao.map((x, j) => j === i ? [x[0], e.target.value] : x)
+    }))
+  }), React.createElement("button", {
+    onClick: () => setRel(r => ({
+      ...r,
+      identificacao: r.identificacao.filter((_, j) => j !== i)
+    })),
+    className: "p-2 rounded-lg hover:bg-red-50 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  })))))), React.createElement("div", null, React.createElement("label", {
+    className: rot
+  }, "Resumo do per\xEDodo"), React.createElement("textarea", {
+    className: inp,
+    rows: 3,
+    value: rel.resumo,
+    onChange: e => setRel(r => ({
+      ...r,
       resumo: e.target.value
     }))
+  })), rel.secoes.map((s, i) => React.createElement("div", {
+    key: i,
+    className: "rounded-xl border border-gray-200 p-3 space-y-2"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("span", {
+    className: "text-sm font-black text-gray-400 w-6"
+  }, i + 1, "."), React.createElement("input", {
+    className: inp + ' font-bold',
+    value: s.titulo,
+    onChange: e => setSec(i, x => ({
+      ...x,
+      titulo: e.target.value
+    }))
+  }), React.createElement("button", {
+    onClick: () => moverSec(i, -1),
+    className: "p-1.5 rounded hover:bg-gray-100",
+    title: "Subir"
+  }, React.createElement(ChevronUp, {
+    className: "w-4 h-4 text-gray-500"
+  })), React.createElement("button", {
+    onClick: () => moverSec(i, 1),
+    className: "p-1.5 rounded hover:bg-gray-100",
+    title: "Descer"
+  }, React.createElement(ChevronDown, {
+    className: "w-4 h-4 text-gray-500"
+  })), React.createElement("button", {
+    onClick: () => setRel(r => ({
+      ...r,
+      secoes: r.secoes.filter((_, j) => j !== i)
+    })),
+    className: "p-1.5 rounded hover:bg-red-50",
+    title: "Remover se\xE7\xE3o"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  }))), (s.blocos || []).map((b, k) => React.createElement("div", {
+    key: k,
+    className: "flex gap-2 items-start pl-8"
+  }, React.createElement("span", {
+    className: "text-[10px] font-bold uppercase text-gray-400 w-16 pt-2.5 flex-shrink-0"
+  }, b.tipo === 'tabela' ? 'Tabela' : b.tipo === 'lista' ? 'Lista' : b.tipo === 'destaque' ? 'Negrito' : 'Texto'), React.createElement("div", {
+    className: "flex-1"
+  }, b.tipo === 'tabela' ? React.createElement(React.Fragment, null, React.createElement("textarea", {
+    className: inp + ' font-mono text-xs',
+    rows: Math.min(12, (b.linhas?.length || 0) + 2),
+    value: relTabelaParaTexto(b),
+    onChange: e => setBloco(i, k, x => relTextoParaTabela(e.target.value, x))
+  }), React.createElement("div", {
+    className: "flex items-center justify-between mt-1"
+  }, React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, "1\xAA linha = colunas \xB7 c\xE9lulas separadas por \"|\""), React.createElement("label", {
+    className: "text-[11px] text-gray-500 flex items-center gap-1"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!b.total,
+    onChange: e => setBloco(i, k, x => ({
+      ...x,
+      total: e.target.checked
+    }))
+  }), " \xFAltima linha \xE9 total"))) : b.tipo === 'lista' ? React.createElement(React.Fragment, null, React.createElement("textarea", {
+    className: inp,
+    rows: Math.min(10, (b.itens?.length || 1) + 1),
+    value: (b.itens || []).join('\n'),
+    onChange: e => setBloco(i, k, x => ({
+      ...x,
+      itens: e.target.value.split('\n')
+    }))
+  }), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-1"
+  }, "Um item por linha")) : React.createElement("textarea", {
+    className: inp + (b.tipo === 'destaque' ? ' font-bold' : ''),
+    rows: Math.min(10, Math.ceil((b.texto || '').length / 110) + 1),
+    value: b.texto || '',
+    onChange: e => setBloco(i, k, x => ({
+      ...x,
+      texto: e.target.value
+    }))
+  })), React.createElement("button", {
+    onClick: () => setSec(i, x => ({
+      ...x,
+      blocos: x.blocos.filter((_, j) => j !== k)
+    })),
+    className: "p-1.5 rounded hover:bg-red-50 mt-1",
+    title: "Remover bloco"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5 text-red-400"
+  })))), React.createElement("div", {
+    className: "flex gap-3 pl-8"
+  }, [['paragrafo', '+ Texto'], ['lista', '+ Lista'], ['tabela', '+ Tabela']].map(([t, l]) => React.createElement("button", {
+    key: t,
+    onClick: () => setSec(i, x => ({
+      ...x,
+      blocos: [...(x.blocos || []), t === 'tabela' ? {
+        tipo: t,
+        colunas: ['Coluna 1', 'Coluna 2'],
+        linhas: [['', '']]
+      } : t === 'lista' ? {
+        tipo: t,
+        itens: ['']
+      } : {
+        tipo: t,
+        texto: ''
+      }]
+    })),
+    className: "text-[11px] font-bold",
+    style: {
+      color: BLUE
+    }
+  }, l))))), React.createElement("button", {
+    onClick: () => setRel(r => ({
+      ...r,
+      secoes: [...r.secoes, {
+        titulo: 'Nova seção',
+        blocos: [{
+          tipo: 'paragrafo',
+          texto: ''
+        }]
+      }]
+    })),
+    className: "text-xs font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "+ Adicionar se\xE7\xE3o"), React.createElement("div", null, React.createElement("label", {
+    className: rot
+  }, "Encerramento"), React.createElement("textarea", {
+    className: inp,
+    rows: 3,
+    value: rel.encerramento,
+    onChange: e => setRel(r => ({
+      ...r,
+      encerramento: e.target.value
+    }))
   })), React.createElement("div", null, React.createElement("label", {
-    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
-  }, "3. Descri\xE7\xE3o de cada documento"), React.createElement("div", {
+    className: rot
+  }, "Descri\xE7\xE3o de cada anexo"), React.createElement("div", {
     className: "space-y-2 mt-1.5"
   }, docs.map(d => React.createElement("div", {
     key: d.id,
     className: "flex gap-2 items-start"
   }, React.createElement("span", {
-    className: "text-[11px] font-bold text-gray-400 w-24 flex-shrink-0 pt-2 truncate",
-    title: d.nome
-  }, "Anexo ", d.n), React.createElement("div", {
+    className: "text-[11px] font-bold text-gray-400 w-16 flex-shrink-0 pt-2"
+  }, "Anexo ", relRomano(d.n)), React.createElement("div", {
     className: "flex-1"
   }, React.createElement("p", {
     className: "text-[11px] text-gray-500 truncate"
   }, d.nome), React.createElement("input", {
     className: inp,
-    value: textos.descricoes[d.id] || '',
-    onChange: e => setTextos(t => ({
-      ...t,
+    value: rel.descricoes[d.id] || '',
+    onChange: e => setRel(r => ({
+      ...r,
       descricoes: {
-        ...t.descricoes,
+        ...r.descricoes,
         [d.id]: e.target.value
       }
     }))
-  }))))))), etapa === 'pronto' && React.createElement("div", {
-    className: "py-8 text-center"
-  }, React.createElement(CheckCircle, {
-    className: "w-12 h-12 mx-auto mb-3",
+  })))))), React.createElement("div", null, React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, React.createElement("label", {
+    className: rot
+  }, "Signat\xE1rios"), React.createElement("button", {
+    onClick: () => setSignatarios(s => [...s, {
+      nome: '',
+      cargo: ''
+    }]),
+    className: "text-[11px] font-bold",
     style: {
-      color: GREEN
+      color: BLUE
     }
-  }), React.createElement("p", {
-    className: "text-sm font-bold text-gray-800"
-  }, "Relat\xF3rio emitido"), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, "O download come\xE7ou automaticamente."), React.createElement("div", {
-    className: "flex justify-center gap-2 mt-4"
-  }, React.createElement("a", {
-    href: pdfUrl,
-    download: nomeArquivo,
-    className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5",
-    style: {
-      background: BLUE
-    }
-  }, React.createElement(Download, {
-    className: "w-4 h-4"
-  }), " Baixar de novo"), React.createElement("a", {
-    href: pdfUrl,
-    target: "_blank",
-    rel: "noopener",
-    className: "px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 text-gray-700 flex items-center gap-1.5"
-  }, React.createElement(Eye, {
-    className: "w-4 h-4"
-  }), " Visualizar")))), React.createElement("div", {
+  }, "+ Adicionar")), React.createElement("div", {
+    className: "space-y-2 mt-1.5"
+  }, signatarios.map((s, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2"
+  }, React.createElement("input", {
+    className: inp,
+    value: s.nome,
+    placeholder: "Nome completo",
+    onChange: e => setSignatarios(l => l.map((x, j) => j === i ? {
+      ...x,
+      nome: e.target.value
+    } : x))
+  }), React.createElement("input", {
+    className: inp,
+    value: s.cargo,
+    placeholder: "Cargo \u2013 institui\xE7\xE3o",
+    onChange: e => setSignatarios(l => l.map((x, j) => j === i ? {
+      ...x,
+      cargo: e.target.value
+    } : x))
+  }), React.createElement("button", {
+    onClick: () => setSignatarios(l => l.filter((_, j) => j !== i)),
+    className: "p-2 rounded-lg hover:bg-red-50 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  })))))))), React.createElement("div", {
     className: "flex justify-between gap-2 px-6 py-4 border-t border-gray-100"
-  }, React.createElement("div", null, etapa === 'revisao' && apiKey && React.createElement("button", {
-    onClick: lerEGerar,
+  }, React.createElement("div", {
+    className: "flex gap-2"
+  }, etapa === 'pronto' && React.createElement(React.Fragment, null, React.createElement("button", {
+    onClick: () => setEtapa('revisao'),
+    className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5"
+  }, React.createElement(Edit2, {
+    className: "w-4 h-4"
+  }), " Ajustar conte\xFAdo"), React.createElement("button", {
+    onClick: gerar,
     className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5"
   }, React.createElement(RotateCcw, {
     className: "w-4 h-4"
-  }), " Gerar textos de novo"), etapa === 'pronto' && React.createElement("button", {
-    onClick: () => setEtapa('revisao'),
-    className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5"
-  }, React.createElement(Edit2, {
-    className: "w-4 h-4"
-  }), " Ajustar textos e emitir de novo")), React.createElement("div", {
+  }), " Gerar de novo com a IA")), etapa === 'revisao' && pdfUrl && React.createElement("button", {
+    onClick: () => setEtapa('pronto'),
+    className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100"
+  }, "\u2190 Voltar \xE0 pr\xE9-visualiza\xE7\xE3o")), React.createElement("div", {
     className: "flex gap-2"
   }, !ocupado && React.createElement("button", {
     onClick: onFechar,
     className: "px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100"
   }, "Fechar"), etapa === 'config' && React.createElement("button", {
-    onClick: lerEGerar,
+    onClick: gerar,
     disabled: !docs.length,
-    className: "px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-40",
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-40 flex items-center gap-1.5",
     style: {
       background: BLUE
     }
-  }, "Ler documentos e gerar textos"), etapa === 'revisao' && React.createElement("button", {
-    onClick: emitir,
+  }, React.createElement(FilePdf, {
+    className: "w-4 h-4"
+  }), " Gerar relat\xF3rio"), etapa === 'revisao' && React.createElement("button", {
+    onClick: reemitir,
     className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5",
     style: {
       background: GREEN
     }
   }, React.createElement(FilePdf, {
     className: "w-4 h-4"
-  }), " Emitir PDF")))));
+  }), " Atualizar PDF"), etapa === 'pronto' && React.createElement("button", {
+    onClick: baixar,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5",
+    style: {
+      background: GREEN
+    }
+  }, React.createElement(Download, {
+    className: "w-4 h-4"
+  }), " Baixar PDF")))));
 }
 function RelatoriosExecucaoPage({
   currentUser,
@@ -24647,7 +25052,6 @@ function RelatoriosExecucaoPage({
     arquivos: selecionados,
     referenciaInicial: referenciaSugerida,
     currentUser: currentUser,
-    apiKey: apiKey,
     addToast: addToast,
     onFechar: () => setEmitindo(false)
   }));
