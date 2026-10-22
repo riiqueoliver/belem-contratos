@@ -24161,6 +24161,7 @@ function RelatoriosExecucaoPage({
   });
   const [busca, setBusca] = useState('');
   const [desmarcados, setDesmarcados] = useState(() => new Set());
+  const [verExcluidos, setVerExcluidos] = useState(false);
   const [emitindo, setEmitindo] = useState(false);
   useEffect(() => {
     const unsub = db.collection(REL_COL).onSnapshot(snap => {
@@ -24185,7 +24186,10 @@ function RelatoriosExecucaoPage({
       pasta: ''
     }));
     setBusca('');
+    setVerExcluidos(false);
   }, [selId]);
+  const excluidos = useMemo(() => new Set(projeto?.excluidos || []), [projeto]);
+  const qtdExcluidos = (projeto?.arquivos || []).filter(a => excluidos.has(a.id)).length;
   const pastasTopo = useMemo(() => {
     const s = new Set((projeto?.pastas || []).map(p => p.split('/')[0]));
     return [...s].sort((a, b) => a.localeCompare(b, 'pt-BR', {
@@ -24196,7 +24200,7 @@ function RelatoriosExecucaoPage({
     numeric: true
   })), [projeto]);
   const filtrados = useMemo(() => {
-    let l = [...(projeto?.arquivos || [])];
+    let l = (projeto?.arquivos || []).filter(a => verExcluidos ? excluidos.has(a.id) : !excluidos.has(a.id));
     if (filtro.modo === 'periodo') {
       const de = filtro.de ? new Date(filtro.de + 'T00:00:00') : null;
       const ate = filtro.ate ? new Date(filtro.ate + 'T23:59:59') : null;
@@ -24212,8 +24216,8 @@ function RelatoriosExecucaoPage({
       l = l.filter(a => a.nome.toLowerCase().includes(b) || (a.pasta || '').toLowerCase().includes(b));
     }
     return l.sort(relComparar);
-  }, [projeto, filtro, busca]);
-  const selecionados = filtrados.filter(a => !desmarcados.has(a.id));
+  }, [projeto, filtro, busca, excluidos, verExcluidos]);
+  const selecionados = verExcluidos ? [] : filtrados.filter(a => !desmarcados.has(a.id));
   const referenciaSugerida = filtro.modo === 'pasta' && filtro.pasta ? filtro.pasta.split('/').pop() : filtro.modo === 'periodo' && (filtro.de || filtro.ate) ? `${filtro.de ? relFmtData(filtro.de + 'T12:00') : '…'} a ${filtro.ate ? relFmtData(filtro.ate + 'T12:00') : '…'}` : '';
   async function salvarProjeto(dados) {
     const {
@@ -24288,6 +24292,35 @@ function RelatoriosExecucaoPage({
       setSincronizando(false);
     }
   }
+  async function excluirDaLista(ids) {
+    if (!ids.length) return;
+    try {
+      await db.collection(REL_COL).doc(projeto.id).update({
+        excluidos: firebase.firestore.FieldValue.arrayUnion(...ids)
+      });
+      setDesmarcados(s => {
+        const n = new Set(s);
+        ids.forEach(i => n.delete(i));
+        return n;
+      });
+      addToast(`${ids.length} arquivo${ids.length !== 1 ? 's' : ''} tirado${ids.length !== 1 ? 's' : ''} da lista. Nada foi alterado na pasta de origem.`);
+    } catch (e) {
+      addToast('❌ Erro ao excluir da lista: ' + e.message);
+    }
+  }
+  async function restaurarNaLista(ids) {
+    if (!ids.length) return;
+    try {
+      await db.collection(REL_COL).doc(projeto.id).update({
+        excluidos: firebase.firestore.FieldValue.arrayRemove(...ids)
+      });
+      addToast(`${ids.length} arquivo${ids.length !== 1 ? 's' : ''} de volta à lista.`);
+      if (ids.length >= qtdExcluidos) setVerExcluidos(false);
+    } catch (e) {
+      addToast('❌ Erro ao restaurar: ' + e.message);
+    }
+  }
+  const desmarcadosVisiveis = filtrados.filter(a => desmarcados.has(a.id)).map(a => a.id);
   const alternar = id => setDesmarcados(s => {
     const n = new Set(s);
     n.has(id) ? n.delete(id) : n.add(id);
@@ -24484,6 +24517,33 @@ function RelatoriosExecucaoPage({
     placeholder: "Buscar arquivo\u2026",
     className: "w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm"
   })))), React.createElement("div", {
+    className: "flex items-center justify-between gap-2 flex-wrap px-4 py-2.5 border-b border-gray-100",
+    style: {
+      background: verExcluidos ? '#fef2f2' : '#f8fafc'
+    }
+  }, React.createElement("p", {
+    className: "text-[11px] text-gray-500 flex items-center gap-1.5"
+  }, React.createElement(Info, {
+    className: "w-3.5 h-3.5 flex-shrink-0 text-gray-400"
+  }), verExcluidos ? 'Arquivos que você tirou da lista. Eles não entram nos relatórios até serem restaurados.' : 'Marque o que entra nesta emissão. Excluir tira o arquivo só da lista do sistema — nada é apagado na pasta de origem.'), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, !verExcluidos && desmarcadosVisiveis.length > 0 && React.createElement("button", {
+    onClick: () => excluirDaLista(desmarcadosVisiveis),
+    className: "text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 flex items-center gap-1"
+  }, React.createElement(Trash2, {
+    className: "w-3.5 h-3.5"
+  }), " Excluir os ", desmarcadosVisiveis.length, " desmarcado", desmarcadosVisiveis.length !== 1 ? 's' : '', " da lista"), verExcluidos && filtrados.length > 0 && React.createElement("button", {
+    onClick: () => restaurarNaLista(filtrados.map(a => a.id)),
+    className: "text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center gap-1",
+    style: {
+      color: BLUE
+    }
+  }, React.createElement(RotateCcw, {
+    className: "w-3.5 h-3.5"
+  }), " Restaurar todos"), (qtdExcluidos > 0 || verExcluidos) && React.createElement("button", {
+    onClick: () => setVerExcluidos(v => !v),
+    className: "text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600"
+  }, verExcluidos ? '← Voltar à lista' : `Excluídos (${qtdExcluidos})`))), React.createElement("div", {
     className: "overflow-x-auto"
   }, React.createElement("table", {
     className: "w-full text-sm"
@@ -24491,10 +24551,11 @@ function RelatoriosExecucaoPage({
     className: "text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100"
   }, React.createElement("th", {
     className: "px-4 py-2 w-8"
-  }, React.createElement("input", {
+  }, !verExcluidos && React.createElement("input", {
     type: "checkbox",
     checked: todosMarcados,
-    onChange: alternarTodos
+    onChange: alternarTodos,
+    title: "Marcar/desmarcar todos"
   })), React.createElement("th", {
     className: "px-2 py-2 text-left"
   }, "Arquivo"), React.createElement("th", {
@@ -24506,16 +24567,16 @@ function RelatoriosExecucaoPage({
   }, "Modificado"), React.createElement("th", {
     className: "px-2 py-2 text-right"
   }, "Tamanho"), React.createElement("th", {
-    className: "px-4 py-2 w-8"
+    className: "px-4 py-2 w-16"
   }))), React.createElement("tbody", null, filtrados.map(a => {
     const t = relTipo(a);
-    const marcado = !desmarcados.has(a.id);
+    const marcado = !verExcluidos && !desmarcados.has(a.id);
     return React.createElement("tr", {
       key: a.id,
       className: `border-b border-gray-50 hover:bg-gray-50 ${marcado ? '' : 'opacity-50'}`
     }, React.createElement("td", {
       className: "px-4 py-2"
-    }, React.createElement("input", {
+    }, !verExcluidos && React.createElement("input", {
       type: "checkbox",
       checked: marcado,
       onChange: () => alternar(a.id)
@@ -24539,24 +24600,36 @@ function RelatoriosExecucaoPage({
       className: "px-2 py-2 text-xs text-gray-500 text-right whitespace-nowrap"
     }, relFmtTam(a.tamanho)), React.createElement("td", {
       className: "px-4 py-2"
+    }, React.createElement("div", {
+      className: "flex items-center gap-2 justify-end"
     }, a.url && React.createElement("a", {
       href: a.url,
       target: "_blank",
       rel: "noopener",
-      title: "Abrir no reposit\xF3rio"
+      title: "Abrir na pasta de origem"
     }, React.createElement(ExternalLink, {
       className: "w-3.5 h-3.5 text-gray-400 hover:text-blue-600"
-    }))));
+    })), verExcluidos ? React.createElement("button", {
+      onClick: () => restaurarNaLista([a.id]),
+      title: "Restaurar na lista"
+    }, React.createElement(RotateCcw, {
+      className: "w-3.5 h-3.5 text-gray-400 hover:text-blue-600"
+    })) : React.createElement("button", {
+      onClick: () => excluirDaLista([a.id]),
+      title: "Excluir da lista (n\xE3o apaga na pasta de origem)"
+    }, React.createElement(Trash2, {
+      className: "w-3.5 h-3.5 text-gray-400 hover:text-red-500"
+    })))));
   }), !filtrados.length && React.createElement("tr", null, React.createElement("td", {
     colSpan: 7,
     className: "px-4 py-10 text-center text-sm text-gray-400"
-  }, (projeto.arquivos || []).length ? filtro.modo === 'pasta' && !filtro.pasta ? 'Selecione uma pasta.' : 'Nenhum arquivo neste filtro.' : 'A pasta está vazia.'))))), React.createElement("div", {
+  }, verExcluidos ? 'Nenhum arquivo excluído neste filtro.' : (projeto.arquivos || []).length ? filtro.modo === 'pasta' && !filtro.pasta ? 'Selecione uma pasta.' : 'Nenhum arquivo neste filtro.' : 'A pasta está vazia.'))))), React.createElement("div", {
     className: "flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 rounded-b-2xl flex-wrap"
   }, React.createElement("p", {
     className: "text-xs text-gray-500"
-  }, React.createElement("b", {
+  }, verExcluidos ? React.createElement(React.Fragment, null, filtrados.length, " arquivo", filtrados.length !== 1 ? 's' : '', " exclu\xEDdo", filtrados.length !== 1 ? 's' : '', " da lista") : React.createElement(React.Fragment, null, React.createElement("b", {
     className: "text-gray-800"
-  }, selecionados.length), " de ", filtrados.length, " arquivo", filtrados.length !== 1 ? 's' : '', " selecionado", selecionados.length !== 1 ? 's' : '', " para o relat\xF3rio"), React.createElement("button", {
+  }, selecionados.length), " de ", filtrados.length, " arquivo", filtrados.length !== 1 ? 's' : '', " selecionado", selecionados.length !== 1 ? 's' : '', " para o relat\xF3rio")), React.createElement("button", {
     onClick: () => setEmitindo(true),
     disabled: !selecionados.length,
     className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5 disabled:opacity-40",
