@@ -22777,6 +22777,1829 @@ function PainelTV() {
     }
   })))));
 }
+const REL_COL = COL('relatorio_projetos');
+const REL_MODELO_IA = 'claude-sonnet-5-5';
+const REL_NAVY = [11, 43, 94];
+const REL_GREEN = [58, 138, 53];
+const relScripts = {};
+function relCarregarScript(src) {
+  if (!relScripts[src]) relScripts[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => {
+      delete relScripts[src];
+      reject(new Error('Falha ao carregar ' + src));
+    };
+    document.head.appendChild(s);
+  });
+  return relScripts[src];
+}
+async function relCarregarLibs() {
+  if (!window.jspdf) await relCarregarScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+  if (!window.jspdf.jsPDF.API.autoTable) await relCarregarScript('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js');
+  if (!window.PDFLib) await relCarregarScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js');
+  if (!window.mammoth) await relCarregarScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+  if (!window.XLSX && window._loadExportLibs) await window._loadExportLibs();
+}
+function relTipo(a) {
+  const e = (a.ext || '').toLowerCase(),
+    m = a.mime || '';
+  if (a.nativo && m.startsWith('application/vnd.google-apps')) return 'pdf';
+  if (e === 'pdf' || m === 'application/pdf') return 'pdf';
+  if (['docx', 'docm'].includes(e)) return 'docx';
+  if (['xlsx', 'xlsm', 'xls', 'csv', 'ods'].includes(e)) return 'planilha';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(e) || m.startsWith('image/')) return 'imagem';
+  if (['txt', 'md'].includes(e)) return 'texto';
+  return 'outro';
+}
+const REL_TIPO_LABEL = {
+  pdf: 'PDF',
+  docx: 'Word',
+  planilha: 'Planilha',
+  imagem: 'Imagem',
+  texto: 'Texto',
+  outro: 'Outro'
+};
+const REL_GOOGLE_LABEL = {
+  document: 'Google Docs',
+  spreadsheet: 'Google Planilhas',
+  presentation: 'Google Slides',
+  drawing: 'Google Desenhos'
+};
+const relTipoLabel = a => a.nativo && REL_GOOGLE_LABEL[(a.mime || '').split('.').pop()] || REL_TIPO_LABEL[relTipo(a)];
+const REL_TIPO_COR = {
+  pdf: '#dc2626',
+  docx: '#2563eb',
+  planilha: '#16a34a',
+  imagem: '#9333ea',
+  texto: '#64748b',
+  outro: '#94a3b8'
+};
+const relFmtData = iso => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
+const relFmtTam = b => b == null ? '—' : b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(1).replace('.', ',')} MB`;
+const relComparar = (a, b) => (a.pasta || '').localeCompare(b.pasta || '', 'pt-BR', {
+  numeric: true
+}) || a.nome.localeCompare(b.nome, 'pt-BR', {
+  numeric: true
+});
+const relLimpar = s => String(s || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/…/g, '...').replace(/[•●▪]/g, '-').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '');
+async function relBaixar(projetoId, arquivo, onProgresso) {
+  const partes = [];
+  let inicio = 0,
+    total = 0;
+  do {
+    const resp = await fetch(`/api/relatorios?acao=baixar&projetoId=${encodeURIComponent(projetoId)}&arquivoId=${encodeURIComponent(arquivo.id)}&inicio=${inicio}`);
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try {
+        msg = (await resp.json()).error || msg;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    total = Number(resp.headers.get('X-Total-Size')) || 0;
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    if (!buf.length) break;
+    partes.push(buf);
+    inicio += buf.length;
+    onProgresso?.(inicio, total);
+  } while (inicio < total);
+  const out = new Uint8Array(inicio);
+  let p = 0;
+  for (const b of partes) {
+    out.set(b, p);
+    p += b.length;
+  }
+  return out;
+}
+async function relExtrairTexto(tipo, bytes, limite) {
+  try {
+    if (tipo === 'pdf' && window.pdfjsLib) {
+      const pdf = await pdfjsLib.getDocument({
+        data: bytes.slice()
+      }).promise;
+      let t = '';
+      for (let i = 1; i <= Math.min(pdf.numPages, 40) && t.length < limite; i++) {
+        const c = await (await pdf.getPage(i)).getTextContent();
+        t += c.items.map(it => it.str).join(' ') + '\n';
+      }
+      return t.replace(/[ \t]+/g, ' ').slice(0, limite);
+    }
+    if (tipo === 'docx') return (await mammoth.extractRawText({
+      arrayBuffer: bytes.slice().buffer
+    })).value.slice(0, limite);
+    if (tipo === 'planilha') {
+      const wb = XLSX.read(bytes, {
+        type: 'array'
+      });
+      return wb.SheetNames.map(n => `# ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n])).join('\n').slice(0, limite);
+    }
+    if (tipo === 'texto') return new TextDecoder().decode(bytes).slice(0, limite);
+  } catch (e) {
+    console.warn('[Relatórios] leitura:', e.message);
+  }
+  return '';
+}
+async function relGerarTextosIA({
+  apiKey,
+  projeto,
+  titulo,
+  referencia,
+  docs
+}) {
+  const corpo = docs.map(d => `### ANEXO ${d.n}: ${d.nome}\nPasta: ${d.pasta || '(raiz)'} | Tipo: ${relTipoLabel(d)} | Data: ${relFmtData(d.modificadoEm)}\n` + (d.texto || '(conteúdo não legível automaticamente — considere apenas o nome do arquivo)')).join('\n\n');
+  const prompt = `Você redige relatórios oficiais de execução da Belém Digital, empresa responsável pela implantação de sistemas para a Prefeitura de Belém.
+
+Dados do relatório:
+- Título: ${titulo}
+- Projeto/contrato em execução: ${projeto.nome}${projeto.contrato ? ` (Contrato ${projeto.contrato})` : ''}
+- Órgão/cliente: ${projeto.orgao || 'não informado'}
+- Objeto: ${projeto.objeto || 'não informado'}
+- Período/referência: ${referencia || 'não informado'}
+
+Abaixo estão os documentos que serão anexados ao relatório (atas de reunião, documentação de migração de dados, levantamentos de parametrização etc.).
+
+${corpo}
+
+Escreva os textos do relatório com base EXCLUSIVAMENTE nesses documentos. Retorne SOMENTE um JSON válido, sem markdown, com estas chaves:
+{
+  "sumarizacao": "Sumarização do assunto: 3 a 6 parágrafos, separados por \\n\\n, descrevendo o que foi executado no período, organizado por frente de trabalho (ex.: reuniões, migração de dados, parametrização), citando os anexos entre parênteses quando pertinente (ex.: \\"(Anexo 3)\\")",
+  "resumo": "Breve resumo executivo em 1 parágrafo de no máximo 6 linhas",
+  "documentos": [ { "n": 1, "descricao": "uma frase objetiva sobre o conteúdo do anexo" } ]
+}
+Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fatos, datas, nomes ou números que não estejam nos documentos; não use markdown, listas com símbolos nem emojis; inclua em "documentos" um item para cada anexo, na mesma numeração.`;
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: REL_MODELO_IA,
+      max_tokens: 8000,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    })
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (data.error) throw new Error(data.error.message);
+  let t = (data.content?.find(b => b.type === 'text')?.text || '').trim();
+  const ini = t.indexOf('{'),
+    fim = t.lastIndexOf('}');
+  if (ini === -1) throw new Error('A IA não retornou um texto no formato esperado.');
+  const ex = JSON.parse(t.slice(ini, fim + 1));
+  const descricoes = {};
+  (ex.documentos || []).forEach(d => {
+    const doc = docs.find(x => x.n === Number(d.n));
+    if (doc) descricoes[doc.id] = d.descricao || '';
+  });
+  return {
+    sumarizacao: ex.sumarizacao || '',
+    resumo: ex.resumo || '',
+    descricoes
+  };
+}
+async function relImagemDataUrl(src) {
+  const resp = await fetch(src);
+  if (!resp.ok) return null;
+  const blob = await resp.blob();
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result);
+    r.onerror = () => res(null);
+    r.readAsDataURL(blob);
+  });
+}
+function relImagemParaJpeg(bytesOuUrl) {
+  return new Promise((resolve, reject) => {
+    const url = typeof bytesOuUrl === 'string' ? bytesOuUrl : URL.createObjectURL(new Blob([bytesOuUrl]));
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      const escala = Math.min(1, 2400 / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * escala);
+      c.height = Math.round(img.height * escala);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      if (typeof bytesOuUrl !== 'string') URL.revokeObjectURL(url);
+      resolve({
+        dataUrl: c.toDataURL('image/jpeg', 0.85),
+        w: c.width,
+        h: c.height
+      });
+    };
+    img.onerror = () => reject(new Error('imagem inválida'));
+    img.src = url;
+  });
+}
+async function relAnexoParaPdf(tipo, bytes, nome) {
+  const {
+    jsPDF
+  } = window.jspdf;
+  if (tipo === 'pdf') return bytes;
+  if (tipo === 'imagem') {
+    const img = await relImagemParaJpeg(bytes);
+    const paisagem = img.w > img.h;
+    const doc = new jsPDF({
+      orientation: paisagem ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    const PW = paisagem ? 297 : 210,
+      PH = paisagem ? 210 : 297,
+      M = 12;
+    const k = Math.min((PW - 2 * M) / img.w, (PH - 2 * M) / img.h);
+    doc.addImage(img.dataUrl, 'JPEG', (PW - img.w * k) / 2, (PH - img.h * k) / 2, img.w * k, img.h * k);
+    return new Uint8Array(doc.output('arraybuffer'));
+  }
+  if (tipo === 'planilha') {
+    const wb = XLSX.read(bytes, {
+      type: 'array',
+      cellDates: true
+    });
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+    let primeira = true;
+    for (const nomeAba of wb.SheetNames) {
+      let linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], {
+        header: 1,
+        defval: '',
+        raw: false
+      });
+      linhas = linhas.filter(l => l.some(c => String(c).trim() !== ''));
+      if (!linhas.length) continue;
+      const nCols = Math.max(...linhas.map(l => {
+        let i = l.length;
+        while (i > 0 && String(l[i - 1]).trim() === '') i--;
+        return i;
+      }));
+      const truncado = linhas.length > 3000;
+      linhas = linhas.slice(0, 3000).map(l => Array.from({
+        length: nCols
+      }, (_, i) => relLimpar(l[i] ?? '')));
+      if (!primeira) doc.addPage();
+      primeira = false;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...REL_NAVY);
+      doc.text(relLimpar(`${nome} — aba "${nomeAba}"`), 10, 10);
+      doc.autoTable({
+        startY: 14,
+        head: [linhas[0]],
+        body: linhas.slice(1),
+        margin: {
+          left: 10,
+          right: 10
+        },
+        styles: {
+          fontSize: nCols > 14 ? 5.5 : 7,
+          cellPadding: 1,
+          overflow: 'linebreak'
+        },
+        headStyles: {
+          fillColor: REL_NAVY,
+          textColor: 255
+        }
+      });
+      if (truncado) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text('Aba truncada em 3.000 linhas no relatório — a versão completa está no repositório.', 10, doc.lastAutoTable.finalY + 6);
+      }
+    }
+    if (primeira) return null;
+    return new Uint8Array(doc.output('arraybuffer'));
+  }
+  if (tipo === 'docx' || tipo === 'texto') {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    const ML = 20,
+      CW = 170,
+      LIM = 280;
+    let y = 20;
+    const quebra = h => {
+      if (y + h > LIM) {
+        doc.addPage();
+        y = 20;
+      }
+    };
+    const paragrafo = (txt, {
+      tam = 10,
+      negrito = false,
+      recuo = 0,
+      apos = 2.5
+    } = {}) => {
+      const t = relLimpar(txt).trim();
+      if (!t) return;
+      doc.setFont('helvetica', negrito ? 'bold' : 'normal');
+      doc.setFontSize(tam);
+      doc.setTextColor(30);
+      const linhas = doc.splitTextToSize(t, CW - recuo);
+      const lh = tam * 0.42;
+      for (const l of linhas) {
+        quebra(lh);
+        doc.text(l, ML + recuo, y);
+        y += lh;
+      }
+      y += apos;
+    };
+    if (tipo === 'texto') {
+      new TextDecoder().decode(bytes).split(/\n/).forEach(l => paragrafo(l || ' ', {
+        apos: 0.5
+      }));
+    } else {
+      const {
+        value: html
+      } = await mammoth.convertToHtml({
+        arrayBuffer: bytes.slice().buffer
+      });
+      const corpo = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body;
+      for (const el of corpo.children) {
+        const tag = el.tagName.toLowerCase();
+        if (/^h[1-6]$/.test(tag)) {
+          y += 2;
+          paragrafo(el.textContent, {
+            tam: [15, 13, 12, 11, 10.5, 10][+tag[1] - 1],
+            negrito: true
+          });
+        } else if (tag === 'ul' || tag === 'ol') {
+          [...el.querySelectorAll(':scope > li')].forEach((li, i) => paragrafo(`${tag === 'ol' ? i + 1 + '.' : '-'}  ${li.textContent}`, {
+            recuo: 5,
+            apos: 1
+          }));
+          y += 1.5;
+        } else if (tag === 'table') {
+          const linhas = [...el.querySelectorAll('tr')].map(tr => [...tr.children].map(td => relLimpar(td.textContent.trim())));
+          if (linhas.length) {
+            doc.autoTable({
+              startY: y,
+              body: linhas,
+              margin: {
+                left: ML,
+                right: 20
+              },
+              theme: 'grid',
+              styles: {
+                fontSize: 8,
+                cellPadding: 1.2,
+                textColor: 30
+              }
+            });
+            y = doc.lastAutoTable.finalY + 4;
+          }
+        } else {
+          for (const im of el.querySelectorAll('img')) {
+            try {
+              const img = await relImagemParaJpeg(im.getAttribute('src'));
+              const w = Math.min(CW, img.w * 0.2646),
+                h = img.h * (w / img.w);
+              const hFinal = Math.min(h, LIM - 20);
+              quebra(hFinal);
+              doc.addImage(img.dataUrl, 'JPEG', ML, y, hFinal === h ? w : w * (hFinal / h), hFinal);
+              y += hFinal + 3;
+            } catch (e) {}
+          }
+          paragrafo(el.textContent);
+        }
+      }
+    }
+    return new Uint8Array(doc.output('arraybuffer'));
+  }
+  return null;
+}
+async function relMontarPdf({
+  projeto,
+  titulo,
+  referencia,
+  textos,
+  docs,
+  signatarios,
+  onEtapa
+}) {
+  const {
+    jsPDF
+  } = window.jspdf;
+  const {
+    PDFDocument,
+    StandardFonts,
+    rgb
+  } = window.PDFLib;
+  const anexos = [];
+  for (const d of docs) {
+    onEtapa?.(`Convertendo anexo ${d.n} de ${docs.length}: ${d.nome}`);
+    let pdf = null,
+      aviso = null;
+    try {
+      const bytes = d.bytes ? await relAnexoParaPdf(d.tipo, d.bytes, d.nome) : null;
+      if (bytes) pdf = await PDFDocument.load(bytes, {
+        ignoreEncryption: true
+      });else aviso = d.bytes ? 'Formato sem conversão automática para PDF.' : 'Não foi possível baixar o arquivo.';
+    } catch (e) {
+      console.warn('[Relatórios] anexo', d.nome, e);
+      aviso = 'Não foi possível converter o arquivo para PDF.';
+    }
+    anexos.push({
+      ...d,
+      pdf,
+      aviso,
+      paginas: pdf ? pdf.getPageCount() : 0
+    });
+  }
+  onEtapa?.('Montando capa, textos e assinaturas…');
+  const logoBranco = await relImagemDataUrl('belem-digital-branco.png').catch(() => null);
+  const logoAzul = await relImagemDataUrl('belem-digital-azul.png').catch(() => null);
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  const PW = 210,
+    PH = 297,
+    ML = 20,
+    MR = 20,
+    CW = PW - ML - MR,
+    TOPO = 34,
+    LIM = PH - 22;
+  const hoje = new Date();
+  const hojeExtenso = hoje.toLocaleDateString('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  let y = TOPO;
+  doc.setFillColor(...REL_NAVY);
+  doc.rect(0, 0, PW, 150, 'F');
+  doc.setFillColor(...REL_GREEN);
+  doc.rect(0, 150, PW, 3, 'F');
+  if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 22, 62, 62 * 115 / 444);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(150, 190, 240);
+  doc.text('RELATÓRIO DE EXECUÇÃO', ML, 78, {
+    charSpace: 0.8
+  });
+  doc.setFontSize(23);
+  doc.setTextColor(255, 255, 255);
+  const linhasTitulo = doc.splitTextToSize(relLimpar(projeto.nome), CW);
+  doc.text(linhasTitulo.slice(0, 3), ML, 92);
+  let yc = 92 + Math.min(3, linhasTitulo.length) * 9.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(13);
+  doc.setTextColor(200, 220, 245);
+  doc.text(doc.splitTextToSize(relLimpar(titulo + (referencia ? ` — ${referencia}` : '')), CW).slice(0, 2), ML, yc + 2);
+  const infos = [['Contrato', projeto.contrato], ['Órgão / Cliente', projeto.orgao], ['Objeto', projeto.objeto], ['Período de referência', referencia], ['Documentos anexados', `${docs.length} documento${docs.length !== 1 ? 's' : ''}`], ['Data de emissão', hojeExtenso]].filter(([, v]) => v);
+  yc = 170;
+  for (const [rotulo, valor] of infos) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 130, 150);
+    doc.text(rotulo.toUpperCase(), ML, yc, {
+      charSpace: 0.4
+    });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...REL_NAVY);
+    const lv = doc.splitTextToSize(relLimpar(valor), CW).slice(0, 2);
+    doc.text(lv, ML, yc + 5.5);
+    yc += 5.5 + lv.length * 5 + 3;
+    doc.setDrawColor(225, 230, 238);
+    doc.setLineWidth(0.2);
+    doc.line(ML, yc - 2.5, PW - MR, yc - 2.5);
+    yc += 2;
+  }
+  if (logoAzul) doc.addImage(logoAzul, 'PNG', ML, 272, 45, 45 * 87 / 585);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 130, 150);
+  doc.text('Prefeitura Municipal de Belém', PW - MR, 278, {
+    align: 'right'
+  });
+  doc.setFillColor(...REL_NAVY);
+  doc.rect(0, PH - 6, PW, 6, 'F');
+  const ENTRADAS_POR_PAG = 32;
+  const nEntradas = 5 + anexos.length;
+  const pagsSumario = Math.max(1, Math.ceil((nEntradas + 2) / ENTRADAS_POR_PAG));
+  for (let i = 0; i < pagsSumario; i++) doc.addPage();
+  const novaPagina = () => {
+    doc.addPage();
+    y = TOPO;
+  };
+  const garantir = h => {
+    if (y + h > LIM) novaPagina();
+  };
+  const tituloSecao = txt => {
+    garantir(18);
+    doc.setFillColor(235, 240, 250);
+    doc.roundedRect(ML, y, CW, 8, 1, 1, 'F');
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(ML, y, 1.6, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...REL_NAVY);
+    doc.text(txt, ML + 5, y + 5.5);
+    y += 14;
+  };
+  const paragrafos = txt => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(40, 45, 55);
+    relLimpar(txt).split(/\n\s*\n|\n/).map(p => p.trim()).filter(Boolean).forEach(p => {
+      const linhas = doc.splitTextToSize(p, CW);
+      linhas.forEach((l, i) => {
+        garantir(5.2);
+        if (i < linhas.length - 1) doc.text(l, ML, y, {
+          maxWidth: CW,
+          align: 'justify'
+        });else doc.text(l, ML, y);
+        y += 5.2;
+      });
+      y += 3;
+    });
+  };
+  const paginaSecao = {};
+  novaPagina();
+  paginaSecao.sumarizacao = doc.getNumberOfPages();
+  tituloSecao('1. SUMARIZAÇÃO DO ASSUNTO');
+  paragrafos(textos.sumarizacao || 'Não informado.');
+  y += 4;
+  garantir(30);
+  paginaSecao.resumo = doc.getNumberOfPages();
+  tituloSecao('2. RESUMO');
+  paragrafos(textos.resumo || 'Não informado.');
+  y += 4;
+  garantir(40);
+  paginaSecao.identificacao = doc.getNumberOfPages();
+  tituloSecao('3. IDENTIFICAÇÃO DOS DOCUMENTOS');
+  doc.autoTable({
+    startY: y,
+    margin: {
+      left: ML,
+      right: MR,
+      top: TOPO,
+      bottom: 24
+    },
+    head: [['Anexo', 'Documento', 'Pasta', 'Data', 'Tipo', 'Descrição']],
+    body: anexos.map(a => [String(a.n), relLimpar(a.nome), relLimpar(a.pasta || '—'), relFmtData(a.modificadoEm), relTipoLabel(a), relLimpar(textos.descricoes?.[a.id] || '')]),
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 1.6,
+      textColor: [40, 45, 55],
+      overflow: 'linebreak',
+      valign: 'top'
+    },
+    headStyles: {
+      fillColor: REL_NAVY,
+      textColor: 255,
+      fontStyle: 'bold'
+    },
+    alternateRowStyles: {
+      fillColor: [247, 249, 252]
+    },
+    columnStyles: {
+      0: {
+        cellWidth: 12,
+        halign: 'center'
+      },
+      1: {
+        cellWidth: 42
+      },
+      2: {
+        cellWidth: 26
+      },
+      3: {
+        cellWidth: 17
+      },
+      4: {
+        cellWidth: 15
+      }
+    }
+  });
+  y = doc.lastAutoTable.finalY + 10;
+  const sigs = (signatarios || []).filter(s => (s.nome || '').trim());
+  const altSigs = 22 + Math.ceil(Math.max(1, sigs.length) / 2) * 30;
+  if (y + Math.min(altSigs, 120) > LIM) novaPagina();
+  paginaSecao.assinaturas = doc.getNumberOfPages();
+  tituloSecao('4. ASSINATURAS');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(40, 45, 55);
+  doc.text(`Belém (PA), ${hojeExtenso}.`, PW - MR, y, {
+    align: 'right'
+  });
+  y += 22;
+  const colW = (CW - 10) / 2;
+  sigs.forEach((s, i) => {
+    const col = sigs.length === 1 ? 0.5 : i % 2;
+    if (i % 2 === 0 || sigs.length === 1) garantir(30);
+    const x = ML + col * (colW + 10);
+    doc.setDrawColor(60, 70, 90);
+    doc.setLineWidth(0.3);
+    doc.line(x + 6, y, x + colW - 6, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(30, 35, 45);
+    doc.text(relLimpar(s.nome), x + colW / 2, y + 5, {
+      align: 'center',
+      maxWidth: colW
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 110, 125);
+    doc.text(relLimpar(s.cargo || ''), x + colW / 2, y + 9.5, {
+      align: 'center',
+      maxWidth: colW
+    });
+    if (i % 2 === 1 || i === sigs.length - 1) y += 30;
+  });
+  const paginasFrente = doc.getNumberOfPages();
+  anexos.forEach(a => {
+    doc.addPage();
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(0, 0, PW, 105, 'F');
+    doc.setFillColor(...REL_GREEN);
+    doc.rect(0, 105, PW, 2.5, 'F');
+    if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 18, 46, 46 * 115 / 444);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(150, 190, 240);
+    doc.text('ANEXO', ML, 62, {
+      charSpace: 1
+    });
+    doc.setFontSize(44);
+    doc.setTextColor(255, 255, 255);
+    doc.text(String(a.n).padStart(2, '0'), ML, 84);
+    let ya = 124;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(...REL_NAVY);
+    const ln = doc.splitTextToSize(relLimpar(a.nome), CW).slice(0, 4);
+    doc.text(ln, ML, ya);
+    ya += ln.length * 7 + 6;
+    [['Pasta', a.pasta || '(raiz)'], ['Tipo', relTipoLabel(a)], ['Data', relFmtData(a.modificadoEm)], ['Páginas', a.paginas ? String(a.paginas) : '—']].forEach(([r, v]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 130, 150);
+      doc.text(r.toUpperCase(), ML, ya);
+      doc.setFontSize(10.5);
+      doc.setTextColor(40, 45, 55);
+      doc.text(relLimpar(v), ML + 28, ya);
+      ya += 7;
+    });
+    const desc = textos.descricoes?.[a.id];
+    if (desc) {
+      ya += 4;
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(70, 80, 95);
+      const ld = doc.splitTextToSize(relLimpar(desc), CW).slice(0, 8);
+      doc.text(ld, ML, ya);
+      ya += ld.length * 5;
+    }
+    if (a.aviso) {
+      ya += 8;
+      doc.setFillColor(255, 247, 230);
+      doc.roundedRect(ML, ya, CW, 20, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(150, 90, 0);
+      doc.text(relLimpar(a.aviso) + ' O documento original está disponível no repositório:', ML + 4, ya + 7, {
+        maxWidth: CW - 8
+      });
+      if (a.url) {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(30, 80, 160);
+        doc.textWithLink(relLimpar(a.url).slice(0, 95), ML + 4, ya + 14, {
+          url: a.url
+        });
+      }
+    }
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(0, PH - 6, PW, 6, 'F');
+  });
+  const inicioAnexo = {};
+  let pag = paginasFrente;
+  anexos.forEach(a => {
+    inicioAnexo[a.n] = pag + 1;
+    pag += 1 + a.paginas;
+  });
+  const totalPaginas = pag;
+  for (let p = 2; p <= paginasFrente; p++) {
+    doc.setPage(p);
+    doc.setFillColor(...REL_NAVY);
+    doc.rect(0, 0, PW, 20, 'F');
+    doc.setFillColor(...REL_GREEN);
+    doc.rect(0, 20, PW, 1.2, 'F');
+    if (logoBranco) doc.addImage(logoBranco, 'PNG', ML, 5, 38, 38 * 115 / 444);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('RELATÓRIO DE EXECUÇÃO', PW - MR, 9, {
+      align: 'right'
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(170, 200, 240);
+    doc.text(doc.splitTextToSize(relLimpar(projeto.nome + (referencia ? ` · ${referencia}` : '')), 110)[0], PW - MR, 14, {
+      align: 'right'
+    });
+    doc.setDrawColor(220, 225, 235);
+    doc.setLineWidth(0.3);
+    doc.line(ML, PH - 13, PW - MR, PH - 13);
+    doc.setFontSize(7);
+    doc.setTextColor(120, 130, 150);
+    doc.text('Belém Digital · Prefeitura Municipal de Belém · Relatório de Execução', ML, PH - 8);
+  }
+  const entradas = [{
+    t: '1. Sumarização do Assunto',
+    p: paginaSecao.sumarizacao
+  }, {
+    t: '2. Resumo',
+    p: paginaSecao.resumo
+  }, {
+    t: '3. Identificação dos Documentos',
+    p: paginaSecao.identificacao
+  }, {
+    t: '4. Assinaturas',
+    p: paginaSecao.assinaturas
+  }, {
+    t: 'ANEXOS',
+    p: anexos.length ? inicioAnexo[1] : null,
+    grupo: true
+  }, ...anexos.map(a => ({
+    t: `Anexo ${a.n} - ${a.nome}`,
+    p: inicioAnexo[a.n],
+    sub: true
+  }))];
+  let pSum = 2;
+  doc.setPage(pSum);
+  y = TOPO;
+  tituloSecao('SUMÁRIO');
+  entradas.forEach((e, i) => {
+    if (y > LIM - 4) {
+      pSum++;
+      doc.setPage(pSum);
+      y = TOPO;
+    }
+    if (e.grupo && !anexos.length) return;
+    const x = ML + (e.sub ? 6 : 0);
+    doc.setFont('helvetica', e.sub ? 'normal' : 'bold');
+    doc.setFontSize(e.sub ? 9.5 : 10.5);
+    doc.setTextColor(e.sub ? 60 : REL_NAVY[0], e.sub ? 65 : REL_NAVY[1], e.sub ? 75 : REL_NAVY[2]);
+    let txt = relLimpar(e.t);
+    while (doc.getTextWidth(txt) > CW - 30 && txt.length > 10) txt = txt.slice(0, -2);
+    if (txt !== relLimpar(e.t)) txt = txt.trimEnd() + '...';
+    doc.text(txt, x, y);
+    if (e.p) {
+      const num = String(e.p);
+      const xi = x + doc.getTextWidth(txt) + 2,
+        xf = PW - MR - doc.getTextWidth(num) - 2;
+      doc.setTextColor(170, 175, 185);
+      let pontos = '';
+      while (doc.getTextWidth(pontos + '.') < xf - xi) pontos += '.';
+      doc.text(pontos, xi, y);
+      doc.setTextColor(40, 45, 55);
+      doc.text(num, PW - MR, y, {
+        align: 'right'
+      });
+    }
+    y += e.sub ? 6.2 : 7.5;
+    if (e.grupo) y += 0.5;
+  });
+  onEtapa?.('Juntando os anexos ao relatório…');
+  const frente = await PDFDocument.load(doc.output('arraybuffer'));
+  const final = await PDFDocument.create();
+  final.setTitle(relLimpar(`${titulo} - ${projeto.nome}${referencia ? ' - ' + referencia : ''}`));
+  final.setAuthor('Belém Digital');
+  const copiar = async (origem, indices) => (await final.copyPages(origem, indices)).forEach(p => final.addPage(p));
+  await copiar(frente, Array.from({
+    length: paginasFrente
+  }, (_, i) => i));
+  for (let i = 0; i < anexos.length; i++) {
+    await copiar(frente, [paginasFrente + i]);
+    if (anexos[i].pdf) await copiar(anexos[i].pdf, anexos[i].pdf.getPageIndices());
+  }
+  const fonte = await final.embedFont(StandardFonts.Helvetica);
+  final.getPages().forEach((p, i) => {
+    if (i === 0) return;
+    const rot = p.getRotation().angle % 360;
+    if (rot !== 0) return;
+    const {
+      width
+    } = p.getSize();
+    const txt = `Página ${i + 1} de ${totalPaginas}`;
+    const w = fonte.widthOfTextAtSize(txt, 7.5);
+    const x = width - 20 * 2.835 - w;
+    if (i >= paginasFrente) p.drawRectangle({
+      x: x - 3,
+      y: 6,
+      width: w + 6,
+      height: 12,
+      color: rgb(1, 1, 1),
+      opacity: 0.85
+    });
+    p.drawText(txt, {
+      x,
+      y: i >= paginasFrente ? 9.5 : 8 * 2.835 - 2.5,
+      size: 7.5,
+      font: fonte,
+      color: rgb(0.4, 0.45, 0.52)
+    });
+  });
+  return await final.save();
+}
+function RelProjetoModal({
+  projeto,
+  onSalvar,
+  onFechar
+}) {
+  const [f, setF] = useState(() => ({
+    nome: '',
+    contrato: '',
+    orgao: '',
+    objeto: '',
+    link: '',
+    provedor: 'google',
+    signatarios: [{
+      nome: '',
+      cargo: ''
+    }],
+    ...(projeto || {})
+  }));
+  const [emailSA, setEmailSA] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => {
+    fetch('/api/relatorios?acao=info').then(r => r.ok ? r.json() : null).then(d => setEmailSA(d?.emailContaServico || null)).catch(() => {});
+  }, []);
+  const set = (k, v) => setF(o => ({
+    ...o,
+    [k]: v
+  }));
+  const setLink = v => setF(o => ({
+    ...o,
+    link: v,
+    provedor: /zoho/i.test(v) ? 'zoho' : /drive\.google|docs\.google/i.test(v) ? 'google' : o.provedor
+  }));
+  const setSig = (i, k, v) => setF(o => ({
+    ...o,
+    signatarios: o.signatarios.map((s, j) => j === i ? {
+      ...s,
+      [k]: v
+    } : s)
+  }));
+  const valido = f.nome.trim() && f.link.trim();
+  const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400';
+  async function salvar() {
+    if (!valido) return;
+    setSalvando(true);
+    try {
+      await onSalvar({
+        ...f,
+        nome: f.nome.trim(),
+        link: f.link.trim(),
+        signatarios: f.signatarios.filter(s => s.nome.trim())
+      });
+    } finally {
+      setSalvando(false);
+    }
+  }
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,0.55)'
+    },
+    onClick: onFechar
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("h2", {
+    className: "text-base font-black text-gray-800"
+  }, projeto?.id ? 'Editar projeto' : 'Novo projeto'), React.createElement("button", {
+    onClick: onFechar,
+    className: "p-1.5 rounded-lg hover:bg-gray-100"
+  }, React.createElement(X, {
+    className: "w-4 h-4 text-gray-500"
+  }))), React.createElement("div", {
+    className: "px-6 py-5 space-y-4 overflow-y-auto"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Nome do projeto / contrato em execu\xE7\xE3o *"), React.createElement("input", {
+    className: inp,
+    value: f.nome,
+    onChange: e => set('nome', e.target.value),
+    placeholder: "Ex.: Projeto Tribut\xE1rio Bel\xE9m"
+  })), React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "N\xBA do contrato"), React.createElement("input", {
+    className: inp,
+    value: f.contrato,
+    onChange: e => set('contrato', e.target.value),
+    placeholder: "Ex.: CT-2026-053"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "\xD3rg\xE3o / cliente"), React.createElement("input", {
+    className: inp,
+    value: f.orgao,
+    onChange: e => set('orgao', e.target.value),
+    placeholder: "Ex.: SEFIN"
+  }))), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Objeto (ajuda a IA a contextualizar)"), React.createElement("textarea", {
+    className: inp,
+    rows: 2,
+    value: f.objeto,
+    onChange: e => set('objeto', e.target.value),
+    placeholder: "Ex.: Implanta\xE7\xE3o do sistema integrado de administra\xE7\xE3o tribut\xE1ria"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Link da pasta *"), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("select", {
+    className: "border border-gray-200 rounded-lg px-2 text-sm",
+    value: f.provedor,
+    onChange: e => set('provedor', e.target.value)
+  }, React.createElement("option", {
+    value: "google"
+  }, "Google Drive"), React.createElement("option", {
+    value: "zoho"
+  }, "Zoho WorkDrive")), React.createElement("input", {
+    className: inp,
+    value: f.link,
+    onChange: e => setLink(e.target.value),
+    placeholder: f.provedor === 'zoho' ? 'https://workdrive.zoho.com/…/folders/…' : 'https://drive.google.com/drive/folders/…'
+  })), React.createElement("p", {
+    className: "text-[11px] text-gray-500 mt-1.5 leading-relaxed"
+  }, f.provedor === 'google' ? React.createElement(React.Fragment, null, "Compartilhe a pasta no Drive, como ", React.createElement("b", null, "Leitor"), ", com ", emailSA ? React.createElement("b", {
+    className: "select-all",
+    style: {
+      color: BLUE
+    }
+  }, emailSA) : 'o e-mail da conta de serviço do sistema', ". Subpastas (ex.: M\xEAs 1 a M\xEAs 12) s\xE3o lidas automaticamente.") : React.createElement(React.Fragment, null, "A pasta precisa estar acess\xEDvel para a conta Zoho integrada ao sistema. Subpastas s\xE3o lidas automaticamente."))), React.createElement("div", null, React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Signat\xE1rios do relat\xF3rio"), React.createElement("button", {
+    onClick: () => set('signatarios', [...f.signatarios, {
+      nome: '',
+      cargo: ''
+    }]),
+    className: "text-[11px] font-bold flex items-center gap-1",
+    style: {
+      color: BLUE
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-3.5 h-3.5"
+  }), " Adicionar")), React.createElement("div", {
+    className: "space-y-2 mt-1.5"
+  }, f.signatarios.map((s, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2"
+  }, React.createElement("input", {
+    className: inp,
+    value: s.nome,
+    onChange: e => setSig(i, 'nome', e.target.value),
+    placeholder: "Nome completo"
+  }), React.createElement("input", {
+    className: inp,
+    value: s.cargo,
+    onChange: e => setSig(i, 'cargo', e.target.value),
+    placeholder: "Cargo / fun\xE7\xE3o"
+  }), React.createElement("button", {
+    onClick: () => set('signatarios', f.signatarios.filter((_, j) => j !== i)),
+    className: "p-2 rounded-lg hover:bg-red-50 flex-shrink-0",
+    title: "Remover"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  }))))))), React.createElement("div", {
+    className: "flex justify-end gap-2 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("button", {
+    onClick: onFechar,
+    className: "px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100"
+  }, "Cancelar"), React.createElement("button", {
+    onClick: salvar,
+    disabled: !valido || salvando,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-40",
+    style: {
+      background: BLUE
+    }
+  }, salvando ? 'Salvando…' : 'Salvar projeto'))));
+}
+function RelEmitirModal({
+  projeto,
+  arquivos,
+  referenciaInicial,
+  currentUser,
+  apiKey,
+  addToast,
+  onFechar
+}) {
+  const [etapa, setEtapa] = useState('config');
+  const [titulo, setTitulo] = useState('Relatório de Execução');
+  const [referencia, setReferencia] = useState(referenciaInicial || '');
+  const [signatarios, setSignatarios] = useState(() => (projeto.signatarios?.length ? projeto.signatarios : [{
+    nome: '',
+    cargo: ''
+  }]).map(s => ({
+    ...s
+  })));
+  const [textos, setTextos] = useState({
+    sumarizacao: '',
+    resumo: '',
+    descricoes: {}
+  });
+  const [msg, setMsg] = useState('');
+  const [pct, setPct] = useState(0);
+  const [erros, setErros] = useState([]);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const bytesRef = useRef(new Map());
+  useEffect(() => () => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+  }, [pdfUrl]);
+  const docs = useMemo(() => arquivos.map((a, i) => ({
+    ...a,
+    n: i + 1,
+    tipo: relTipo(a)
+  })), [arquivos]);
+  const nomeArquivo = relLimpar(`${titulo} - ${projeto.nome}${referencia ? ' - ' + referencia : ''}`).replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
+  async function baixarTodos() {
+    const falhas = [];
+    for (const d of docs) {
+      if (bytesRef.current.has(d.id)) continue;
+      setMsg(`Baixando ${d.n} de ${docs.length}: ${d.nome}`);
+      try {
+        bytesRef.current.set(d.id, await relBaixar(projeto.id, d, (rec, tot) => tot && setPct((d.n - 1 + rec / tot) / docs.length * 100)));
+      } catch (e) {
+        falhas.push(`${d.nome}: ${e.message}`);
+        bytesRef.current.set(d.id, null);
+      }
+      setPct(d.n / docs.length * 100);
+    }
+    return falhas;
+  }
+  async function lerEGerar() {
+    setEtapa('lendo');
+    setPct(0);
+    setErros([]);
+    try {
+      setMsg('Carregando bibliotecas…');
+      await relCarregarLibs();
+      const falhas = await baixarTodos();
+      setErros(falhas);
+      if (!apiKey) {
+        addToast('Chave da IA não configurada — preencha os textos manualmente.');
+        setEtapa('revisao');
+        return;
+      }
+      setMsg('Lendo o conteúdo dos documentos…');
+      const limite = Math.max(2000, Math.min(12000, Math.floor(160000 / Math.max(1, docs.length))));
+      const comTexto = [];
+      for (const d of docs) {
+        const b = bytesRef.current.get(d.id);
+        comTexto.push({
+          ...d,
+          texto: b ? await relExtrairTexto(d.tipo, b, limite) : ''
+        });
+      }
+      setMsg('A IA está escrevendo a sumarização, o resumo e a descrição dos documentos…');
+      setTextos(await relGerarTextosIA({
+        apiKey,
+        projeto,
+        titulo,
+        referencia,
+        docs: comTexto
+      }));
+      setEtapa('revisao');
+    } catch (e) {
+      console.error('[Relatórios]', e);
+      addToast('❌ ' + e.message);
+      setEtapa(bytesRef.current.size ? 'revisao' : 'config');
+    }
+  }
+  async function emitir() {
+    setEtapa('montando');
+    setPct(0);
+    try {
+      await relCarregarLibs();
+      const pdf = await relMontarPdf({
+        projeto,
+        titulo,
+        referencia,
+        textos,
+        signatarios,
+        docs: docs.map(d => ({
+          ...d,
+          bytes: bytesRef.current.get(d.id) || null
+        })),
+        onEtapa: setMsg
+      });
+      const url = URL.createObjectURL(new Blob([pdf], {
+        type: 'application/pdf'
+      }));
+      setPdfUrl(url);
+      setEtapa('pronto');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeArquivo;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      db.collection(REL_COL).doc(projeto.id).set({
+        emissoes: firebase.firestore.FieldValue.arrayUnion({
+          em: new Date().toISOString(),
+          por: currentUser?.name || currentUser?.username || '',
+          titulo,
+          referencia,
+          qtdDocumentos: docs.length
+        }),
+        ultimoRascunho: {
+          titulo,
+          referencia,
+          sumarizacao: textos.sumarizacao,
+          resumo: textos.resumo
+        }
+      }, {
+        merge: true
+      }).catch(e => console.warn('[Relatórios] histórico:', e));
+    } catch (e) {
+      console.error('[Relatórios]', e);
+      addToast('❌ Falha ao montar o PDF: ' + e.message);
+      setEtapa('revisao');
+    }
+  }
+  const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400';
+  const ocupado = etapa === 'lendo' || etapa === 'montando';
+  return React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,0.55)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[94vh] flex flex-col"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b border-gray-100"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "text-base font-black text-gray-800"
+  }, "Emitir relat\xF3rio"), React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, projeto.nome, " \xB7 ", docs.length, " documento", docs.length !== 1 ? 's' : '')), !ocupado && React.createElement("button", {
+    onClick: onFechar,
+    className: "p-1.5 rounded-lg hover:bg-gray-100"
+  }, React.createElement(X, {
+    className: "w-4 h-4 text-gray-500"
+  }))), React.createElement("div", {
+    className: "px-6 py-5 overflow-y-auto space-y-4"
+  }, etapa === 'config' && React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "T\xEDtulo"), React.createElement("input", {
+    className: inp,
+    value: titulo,
+    onChange: e => setTitulo(e.target.value)
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Per\xEDodo / refer\xEAncia"), React.createElement("input", {
+    className: inp,
+    value: referencia,
+    onChange: e => setReferencia(e.target.value),
+    placeholder: "Ex.: Outubro/2026 ou M\xEAs 5"
+  }))), React.createElement("div", null, React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "Signat\xE1rios"), React.createElement("button", {
+    onClick: () => setSignatarios(s => [...s, {
+      nome: '',
+      cargo: ''
+    }]),
+    className: "text-[11px] font-bold flex items-center gap-1",
+    style: {
+      color: BLUE
+    }
+  }, React.createElement(UserPlus, {
+    className: "w-3.5 h-3.5"
+  }), " Adicionar")), React.createElement("div", {
+    className: "space-y-2 mt-1.5"
+  }, signatarios.map((s, i) => React.createElement("div", {
+    key: i,
+    className: "flex gap-2"
+  }, React.createElement("input", {
+    className: inp,
+    value: s.nome,
+    placeholder: "Nome completo",
+    onChange: e => setSignatarios(l => l.map((x, j) => j === i ? {
+      ...x,
+      nome: e.target.value
+    } : x))
+  }), React.createElement("input", {
+    className: inp,
+    value: s.cargo,
+    placeholder: "Cargo / fun\xE7\xE3o",
+    onChange: e => setSignatarios(l => l.map((x, j) => j === i ? {
+      ...x,
+      cargo: e.target.value
+    } : x))
+  }), React.createElement("button", {
+    onClick: () => setSignatarios(l => l.filter((_, j) => j !== i)),
+    className: "p-2 rounded-lg hover:bg-red-50 flex-shrink-0"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  })))))), React.createElement("div", {
+    className: "rounded-xl border border-gray-100 bg-gray-50 p-3"
+  }, React.createElement("p", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1.5"
+  }, "Anexos, nesta ordem"), React.createElement("ol", {
+    className: "text-xs text-gray-600 space-y-0.5 max-h-40 overflow-y-auto"
+  }, docs.map(d => React.createElement("li", {
+    key: d.id
+  }, React.createElement("b", null, d.n, "."), " ", d.pasta ? React.createElement("span", {
+    className: "text-gray-400"
+  }, d.pasta, " / ") : null, d.nome)))), React.createElement("p", {
+    className: "text-[11px] text-gray-500"
+  }, "O relat\xF3rio ter\xE1: capa \xB7 sum\xE1rio \xB7 1. sumariza\xE7\xE3o do assunto \xB7 2. resumo \xB7 3. identifica\xE7\xE3o dos documentos \xB7 4. assinaturas \xB7 anexos na \xEDntegra. Os textos s\xE3o escritos pela IA a partir dos documentos e voc\xEA pode ajust\xE1-los antes de emitir.")), ocupado && React.createElement("div", {
+    className: "py-10 text-center"
+  }, React.createElement("div", {
+    className: "w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4",
+    style: {
+      borderColor: BLUE,
+      borderTopColor: 'transparent'
+    }
+  }), React.createElement("p", {
+    className: "text-sm font-semibold text-gray-700"
+  }, msg), etapa === 'lendo' && pct > 0 && pct < 100 && React.createElement("div", {
+    className: "max-w-sm mx-auto mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden"
+  }, React.createElement("div", {
+    className: "h-full rounded-full transition-all",
+    style: {
+      width: `${pct}%`,
+      background: BLUE
+    }
+  }))), etapa === 'revisao' && React.createElement(React.Fragment, null, erros.length > 0 && React.createElement("div", {
+    className: "rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+  }, React.createElement("b", null, erros.length, " arquivo", erros.length !== 1 ? 's' : '', " n\xE3o p\xF4de ser baixado"), " \u2014 entrar\xE1", erros.length !== 1 ? 'ão' : '', " s\xF3 com a folha de rosto e o link:", React.createElement("ul", {
+    className: "mt-1 list-disc pl-4"
+  }, erros.map((e, i) => React.createElement("li", {
+    key: i
+  }, e)))), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "1. Sumariza\xE7\xE3o do assunto"), React.createElement("textarea", {
+    className: inp + ' leading-relaxed',
+    rows: 10,
+    value: textos.sumarizacao,
+    onChange: e => setTextos(t => ({
+      ...t,
+      sumarizacao: e.target.value
+    }))
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "2. Resumo"), React.createElement("textarea", {
+    className: inp + ' leading-relaxed',
+    rows: 4,
+    value: textos.resumo,
+    onChange: e => setTextos(t => ({
+      ...t,
+      resumo: e.target.value
+    }))
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "text-[11px] font-bold text-gray-500 uppercase tracking-wide"
+  }, "3. Descri\xE7\xE3o de cada documento"), React.createElement("div", {
+    className: "space-y-2 mt-1.5"
+  }, docs.map(d => React.createElement("div", {
+    key: d.id,
+    className: "flex gap-2 items-start"
+  }, React.createElement("span", {
+    className: "text-[11px] font-bold text-gray-400 w-24 flex-shrink-0 pt-2 truncate",
+    title: d.nome
+  }, "Anexo ", d.n), React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("p", {
+    className: "text-[11px] text-gray-500 truncate"
+  }, d.nome), React.createElement("input", {
+    className: inp,
+    value: textos.descricoes[d.id] || '',
+    onChange: e => setTextos(t => ({
+      ...t,
+      descricoes: {
+        ...t.descricoes,
+        [d.id]: e.target.value
+      }
+    }))
+  }))))))), etapa === 'pronto' && React.createElement("div", {
+    className: "py-8 text-center"
+  }, React.createElement(CheckCircle, {
+    className: "w-12 h-12 mx-auto mb-3",
+    style: {
+      color: GREEN
+    }
+  }), React.createElement("p", {
+    className: "text-sm font-bold text-gray-800"
+  }, "Relat\xF3rio emitido"), React.createElement("p", {
+    className: "text-xs text-gray-500 mt-1"
+  }, "O download come\xE7ou automaticamente."), React.createElement("div", {
+    className: "flex justify-center gap-2 mt-4"
+  }, React.createElement("a", {
+    href: pdfUrl,
+    download: nomeArquivo,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Download, {
+    className: "w-4 h-4"
+  }), " Baixar de novo"), React.createElement("a", {
+    href: pdfUrl,
+    target: "_blank",
+    rel: "noopener",
+    className: "px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 text-gray-700 flex items-center gap-1.5"
+  }, React.createElement(Eye, {
+    className: "w-4 h-4"
+  }), " Visualizar")))), React.createElement("div", {
+    className: "flex justify-between gap-2 px-6 py-4 border-t border-gray-100"
+  }, React.createElement("div", null, etapa === 'revisao' && apiKey && React.createElement("button", {
+    onClick: lerEGerar,
+    className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5"
+  }, React.createElement(RotateCcw, {
+    className: "w-4 h-4"
+  }), " Gerar textos de novo"), etapa === 'pronto' && React.createElement("button", {
+    onClick: () => setEtapa('revisao'),
+    className: "px-3 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5"
+  }, React.createElement(Edit2, {
+    className: "w-4 h-4"
+  }), " Ajustar textos e emitir de novo")), React.createElement("div", {
+    className: "flex gap-2"
+  }, !ocupado && React.createElement("button", {
+    onClick: onFechar,
+    className: "px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100"
+  }, "Fechar"), etapa === 'config' && React.createElement("button", {
+    onClick: lerEGerar,
+    disabled: !docs.length,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-40",
+    style: {
+      background: BLUE
+    }
+  }, "Ler documentos e gerar textos"), etapa === 'revisao' && React.createElement("button", {
+    onClick: emitir,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5",
+    style: {
+      background: GREEN
+    }
+  }, React.createElement(FilePdf, {
+    className: "w-4 h-4"
+  }), " Emitir PDF")))));
+}
+function RelatoriosExecucaoPage({
+  currentUser,
+  apiKey,
+  addToast
+}) {
+  const [projetos, setProjetos] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [selId, setSelId] = useState(null);
+  const [modalProjeto, setModalProjeto] = useState(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [filtro, setFiltro] = useState({
+    modo: 'todos',
+    de: '',
+    ate: '',
+    campo: 'modificadoEm',
+    pasta: ''
+  });
+  const [busca, setBusca] = useState('');
+  const [desmarcados, setDesmarcados] = useState(() => new Set());
+  const [emitindo, setEmitindo] = useState(false);
+  useEffect(() => {
+    const unsub = db.collection(REL_COL).onSnapshot(snap => {
+      const lista = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+      setProjetos(lista);
+      setCarregando(false);
+      setSelId(cur => cur && lista.some(p => p.id === cur) ? cur : lista[0]?.id || null);
+    }, err => {
+      console.error('[Relatórios]', err);
+      setCarregando(false);
+    });
+    return unsub;
+  }, []);
+  const projeto = projetos.find(p => p.id === selId) || null;
+  useEffect(() => {
+    setDesmarcados(new Set());
+    setFiltro(f => ({
+      ...f,
+      pasta: ''
+    }));
+    setBusca('');
+  }, [selId]);
+  const pastasTopo = useMemo(() => {
+    const s = new Set((projeto?.pastas || []).map(p => p.split('/')[0]));
+    return [...s].sort((a, b) => a.localeCompare(b, 'pt-BR', {
+      numeric: true
+    }));
+  }, [projeto]);
+  const todasPastas = useMemo(() => [...(projeto?.pastas || [])].sort((a, b) => a.localeCompare(b, 'pt-BR', {
+    numeric: true
+  })), [projeto]);
+  const filtrados = useMemo(() => {
+    let l = [...(projeto?.arquivos || [])];
+    if (filtro.modo === 'periodo') {
+      const de = filtro.de ? new Date(filtro.de + 'T00:00:00') : null;
+      const ate = filtro.ate ? new Date(filtro.ate + 'T23:59:59') : null;
+      l = l.filter(a => {
+        const d = a[filtro.campo] ? new Date(a[filtro.campo]) : null;
+        return d && (!de || d >= de) && (!ate || d <= ate);
+      });
+    } else if (filtro.modo === 'pasta' && filtro.pasta) {
+      l = l.filter(a => a.pasta === filtro.pasta || (a.pasta || '').startsWith(filtro.pasta + '/'));
+    }
+    if (busca.trim()) {
+      const b = busca.trim().toLowerCase();
+      l = l.filter(a => a.nome.toLowerCase().includes(b) || (a.pasta || '').toLowerCase().includes(b));
+    }
+    return l.sort(relComparar);
+  }, [projeto, filtro, busca]);
+  const selecionados = filtrados.filter(a => !desmarcados.has(a.id));
+  const referenciaSugerida = filtro.modo === 'pasta' && filtro.pasta ? filtro.pasta.split('/').pop() : filtro.modo === 'periodo' && (filtro.de || filtro.ate) ? `${filtro.de ? relFmtData(filtro.de + 'T12:00') : '…'} a ${filtro.ate ? relFmtData(filtro.ate + 'T12:00') : '…'}` : '';
+  async function salvarProjeto(dados) {
+    const {
+      id,
+      arquivos,
+      pastas,
+      emissoes,
+      ...campos
+    } = dados;
+    try {
+      if (id) {
+        const anterior = projetos.find(p => p.id === id);
+        const mudouPasta = anterior && (anterior.link !== campos.link || anterior.provedor !== campos.provedor);
+        await db.collection(REL_COL).doc(id).set({
+          ...campos,
+          atualizadoEm: new Date().toISOString(),
+          ...(mudouPasta ? {
+            arquivos: [],
+            pastas: [],
+            ultimaSync: null,
+            nomePasta: null
+          } : {})
+        }, {
+          merge: true
+        });
+        addToast('✅ Projeto atualizado.' + (mudouPasta ? ' Sincronize para carregar a nova pasta.' : ''));
+      } else {
+        const ref = await db.collection(REL_COL).add({
+          ...campos,
+          arquivos: [],
+          pastas: [],
+          criadoEm: new Date().toISOString(),
+          criadoPor: currentUser?.username || ''
+        });
+        setSelId(ref.id);
+        addToast('✅ Projeto cadastrado. Agora clique em Sincronizar.');
+      }
+      setModalProjeto(null);
+    } catch (e) {
+      addToast('❌ Erro ao salvar: ' + e.message);
+    }
+  }
+  async function excluirProjeto(p) {
+    if (!window.confirm(`Excluir o projeto "${p.nome}"?\n\nSó o cadastro no sistema é removido — os arquivos no Drive/WorkDrive não são afetados.`)) return;
+    try {
+      await db.collection(REL_COL).doc(p.id).delete();
+      addToast('Projeto excluído.');
+    } catch (e) {
+      addToast('❌ Erro ao excluir: ' + e.message);
+    }
+  }
+  async function sincronizar() {
+    if (!projeto) return;
+    setSincronizando(true);
+    try {
+      const resp = await fetch('/api/relatorios?acao=sincronizar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          projetoId: projeto.id,
+          usuario: currentUser?.username || ''
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+      addToast(`✅ ${data.arquivos.length} arquivo${data.arquivos.length !== 1 ? 's' : ''} sincronizado${data.arquivos.length !== 1 ? 's' : ''}.`);
+    } catch (e) {
+      addToast('❌ Falha ao sincronizar: ' + e.message);
+    } finally {
+      setSincronizando(false);
+    }
+  }
+  const alternar = id => setDesmarcados(s => {
+    const n = new Set(s);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const todosMarcados = filtrados.length > 0 && selecionados.length === filtrados.length;
+  const alternarTodos = () => setDesmarcados(todosMarcados ? new Set(filtrados.map(a => a.id)) : new Set());
+  return React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, React.createElement("div", {
+    className: "max-w-6xl mx-auto px-6 py-6 space-y-4"
+  }, React.createElement("div", {
+    className: "flex items-center justify-between gap-3 flex-wrap"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("div", {
+    className: "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(ScrollText, {
+    className: "w-5 h-5 text-white"
+  })), React.createElement("div", null, React.createElement("h1", {
+    className: "text-xl font-black text-gray-800"
+  }, "Relat\xF3rios de Execu\xE7\xE3o"), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, "Documenta\xE7\xE3o das implanta\xE7\xF5es a partir das pastas do Google Drive / Zoho WorkDrive"))), React.createElement("button", {
+    onClick: () => setModalProjeto({}),
+    className: "px-4 py-2 rounded-xl text-sm font-bold text-white flex items-center gap-1.5 shadow-sm",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }), " Novo projeto")), carregando ? React.createElement("p", {
+    className: "text-sm text-gray-400 py-10 text-center"
+  }, "Carregando projetos\u2026") : !projetos.length ? React.createElement("div", {
+    className: "bg-white rounded-2xl border border-dashed border-gray-300 py-14 text-center"
+  }, React.createElement(ScrollText, {
+    className: "w-10 h-10 mx-auto text-gray-300 mb-3"
+  }), React.createElement("p", {
+    className: "text-sm font-bold text-gray-700"
+  }, "Nenhum projeto cadastrado"), React.createElement("p", {
+    className: "text-xs text-gray-400 mt-1"
+  }, "Cadastre um projeto com o link da pasta de documenta\xE7\xE3o para come\xE7ar.")) : React.createElement("div", {
+    className: "grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 items-start"
+  }, React.createElement("div", {
+    className: "space-y-2"
+  }, projetos.map(p => {
+    const ativo = p.id === selId;
+    return React.createElement("button", {
+      key: p.id,
+      onClick: () => setSelId(p.id),
+      className: "w-full text-left rounded-xl border px-3.5 py-3 transition-all bg-white hover:shadow-sm",
+      style: {
+        borderColor: ativo ? BLUE : '#e5e7eb',
+        boxShadow: ativo ? `0 0 0 2px ${BLUE}33` : undefined
+      }
+    }, React.createElement("p", {
+      className: "text-sm font-bold text-gray-800 truncate"
+    }, p.nome), React.createElement("p", {
+      className: "text-[11px] text-gray-400 truncate"
+    }, [p.contrato, p.orgao].filter(Boolean).join(' · ') || (p.provedor === 'zoho' ? 'Zoho WorkDrive' : 'Google Drive')), React.createElement("p", {
+      className: "text-[10px] mt-1 font-semibold",
+      style: {
+        color: p.ultimaSync ? GREEN : '#b45309'
+      }
+    }, p.ultimaSync ? `${(p.arquivos || []).length} arquivos · sinc. ${relFmtData(p.ultimaSync)}` : 'Ainda não sincronizado'));
+  })), projeto && React.createElement("div", {
+    className: "space-y-3 min-w-0"
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-4"
+  }, React.createElement("div", {
+    className: "flex items-start justify-between gap-3 flex-wrap"
+  }, React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("h2", {
+    className: "text-base font-black text-gray-800"
+  }, projeto.nome), React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, [projeto.contrato && `Contrato ${projeto.contrato}`, projeto.orgao].filter(Boolean).join(' · ')), React.createElement("a", {
+    href: projeto.link,
+    target: "_blank",
+    rel: "noopener",
+    className: "text-[11px] font-semibold flex items-center gap-1 mt-1 truncate",
+    style: {
+      color: BLUE
+    }
+  }, React.createElement(ExternalLink, {
+    className: "w-3 h-3 flex-shrink-0"
+  }), projeto.provedor === 'zoho' ? 'Zoho WorkDrive' : 'Google Drive', projeto.nomePasta ? ` · ${projeto.nomePasta}` : ''), projeto.signatarios?.length > 0 && React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-1"
+  }, "Assinam: ", projeto.signatarios.map(s => s.nome + (s.cargo ? ` (${s.cargo})` : '')).join(', '))), React.createElement("div", {
+    className: "flex items-center gap-1.5"
+  }, React.createElement("button", {
+    onClick: () => setModalProjeto(projeto),
+    className: "p-2 rounded-lg hover:bg-gray-100",
+    title: "Editar projeto"
+  }, React.createElement(Edit2, {
+    className: "w-4 h-4 text-gray-500"
+  })), React.createElement("button", {
+    onClick: () => excluirProjeto(projeto),
+    className: "p-2 rounded-lg hover:bg-red-50",
+    title: "Excluir projeto"
+  }, React.createElement(Trash2, {
+    className: "w-4 h-4 text-red-400"
+  })), React.createElement("button", {
+    onClick: sincronizar,
+    disabled: sincronizando,
+    className: "px-3.5 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5 disabled:opacity-60",
+    style: {
+      background: GREEN
+    }
+  }, React.createElement(RotateCcw, {
+    className: `w-4 h-4 ${sincronizando ? 'animate-spin' : ''}`,
+    style: sincronizando ? {
+      animationDirection: 'reverse'
+    } : undefined
+  }), sincronizando ? 'Sincronizando…' : 'Sincronizar'))), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-2"
+  }, projeto.ultimaSync ? `Última sincronização: ${new Date(projeto.ultimaSync).toLocaleString('pt-BR')}${projeto.ultimaSyncPor ? ` por ${projeto.ultimaSyncPor}` : ''}` : 'A pasta ainda não foi sincronizada.', projeto.emissoes?.length ? ` · ${projeto.emissoes.length} relatório${projeto.emissoes.length !== 1 ? 's' : ''} emitido${projeto.emissoes.length !== 1 ? 's' : ''} (último: ${relFmtData(projeto.emissoes[projeto.emissoes.length - 1].em)})` : '')), projeto.ultimaSync && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200"
+  }, React.createElement("div", {
+    className: "p-4 border-b border-gray-100 space-y-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit"
+  }, [['todos', 'Todos'], ['pasta', 'Por pasta'], ['periodo', 'Por período']].map(([k, l]) => React.createElement("button", {
+    key: k,
+    onClick: () => setFiltro(f => ({
+      ...f,
+      modo: k
+    })),
+    className: "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+    style: filtro.modo === k ? {
+      background: '#fff',
+      color: BLUE,
+      boxShadow: '0 1px 2px rgba(0,0,0,.08)'
+    } : {
+      color: '#6b7280'
+    }
+  }, l))), React.createElement("div", {
+    className: "flex items-center gap-2 flex-wrap"
+  }, filtro.modo === 'pasta' && React.createElement("select", {
+    value: filtro.pasta,
+    onChange: e => setFiltro(f => ({
+      ...f,
+      pasta: e.target.value
+    })),
+    className: "border border-gray-200 rounded-lg px-3 py-2 text-sm min-w-[220px]"
+  }, React.createElement("option", {
+    value: ""
+  }, "Selecione a pasta\u2026"), pastasTopo.length !== todasPastas.length ? todasPastas.map(p => React.createElement("option", {
+    key: p,
+    value: p
+  }, p.split('/').length > 1 ? '  '.repeat(p.split('/').length - 1) + '└ ' + p.split('/').pop() : p)) : todasPastas.map(p => React.createElement("option", {
+    key: p,
+    value: p
+  }, p))), filtro.modo === 'periodo' && React.createElement(React.Fragment, null, React.createElement("select", {
+    value: filtro.campo,
+    onChange: e => setFiltro(f => ({
+      ...f,
+      campo: e.target.value
+    })),
+    className: "border border-gray-200 rounded-lg px-2 py-2 text-sm"
+  }, React.createElement("option", {
+    value: "modificadoEm"
+  }, "Data de modifica\xE7\xE3o"), React.createElement("option", {
+    value: "criadoEm"
+  }, "Data de cria\xE7\xE3o")), React.createElement("input", {
+    type: "date",
+    value: filtro.de,
+    onChange: e => setFiltro(f => ({
+      ...f,
+      de: e.target.value
+    })),
+    className: "border border-gray-200 rounded-lg px-2 py-2 text-sm"
+  }), React.createElement("span", {
+    className: "text-xs text-gray-400"
+  }, "at\xE9"), React.createElement("input", {
+    type: "date",
+    value: filtro.ate,
+    onChange: e => setFiltro(f => ({
+      ...f,
+      ate: e.target.value
+    })),
+    className: "border border-gray-200 rounded-lg px-2 py-2 text-sm"
+  })), React.createElement("div", {
+    className: "relative flex-1 min-w-[160px]"
+  }, React.createElement(Search, {
+    className: "w-4 h-4 text-gray-400 absolute left-2.5 top-2.5"
+  }), React.createElement("input", {
+    value: busca,
+    onChange: e => setBusca(e.target.value),
+    placeholder: "Buscar arquivo\u2026",
+    className: "w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm"
+  })))), React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    className: "text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100"
+  }, React.createElement("th", {
+    className: "px-4 py-2 w-8"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: todosMarcados,
+    onChange: alternarTodos
+  })), React.createElement("th", {
+    className: "px-2 py-2 text-left"
+  }, "Arquivo"), React.createElement("th", {
+    className: "px-2 py-2 text-left"
+  }, "Pasta"), React.createElement("th", {
+    className: "px-2 py-2 text-left"
+  }, "Tipo"), React.createElement("th", {
+    className: "px-2 py-2 text-left"
+  }, "Modificado"), React.createElement("th", {
+    className: "px-2 py-2 text-right"
+  }, "Tamanho"), React.createElement("th", {
+    className: "px-4 py-2 w-8"
+  }))), React.createElement("tbody", null, filtrados.map(a => {
+    const t = relTipo(a);
+    const marcado = !desmarcados.has(a.id);
+    return React.createElement("tr", {
+      key: a.id,
+      className: `border-b border-gray-50 hover:bg-gray-50 ${marcado ? '' : 'opacity-50'}`
+    }, React.createElement("td", {
+      className: "px-4 py-2"
+    }, React.createElement("input", {
+      type: "checkbox",
+      checked: marcado,
+      onChange: () => alternar(a.id)
+    })), React.createElement("td", {
+      className: "px-2 py-2 font-medium text-gray-800 max-w-[320px] truncate",
+      title: a.nome
+    }, a.nome), React.createElement("td", {
+      className: "px-2 py-2 text-xs text-gray-500 max-w-[180px] truncate",
+      title: a.pasta
+    }, a.pasta || '—'), React.createElement("td", {
+      className: "px-2 py-2"
+    }, React.createElement("span", {
+      className: "text-[10px] font-bold px-1.5 py-0.5 rounded",
+      style: {
+        color: REL_TIPO_COR[t],
+        background: REL_TIPO_COR[t] + '15'
+      }
+    }, relTipoLabel(a))), React.createElement("td", {
+      className: "px-2 py-2 text-xs text-gray-500 whitespace-nowrap"
+    }, relFmtData(a.modificadoEm)), React.createElement("td", {
+      className: "px-2 py-2 text-xs text-gray-500 text-right whitespace-nowrap"
+    }, relFmtTam(a.tamanho)), React.createElement("td", {
+      className: "px-4 py-2"
+    }, a.url && React.createElement("a", {
+      href: a.url,
+      target: "_blank",
+      rel: "noopener",
+      title: "Abrir no reposit\xF3rio"
+    }, React.createElement(ExternalLink, {
+      className: "w-3.5 h-3.5 text-gray-400 hover:text-blue-600"
+    }))));
+  }), !filtrados.length && React.createElement("tr", null, React.createElement("td", {
+    colSpan: 7,
+    className: "px-4 py-10 text-center text-sm text-gray-400"
+  }, (projeto.arquivos || []).length ? filtro.modo === 'pasta' && !filtro.pasta ? 'Selecione uma pasta.' : 'Nenhum arquivo neste filtro.' : 'A pasta está vazia.'))))), React.createElement("div", {
+    className: "flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 rounded-b-2xl flex-wrap"
+  }, React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, React.createElement("b", {
+    className: "text-gray-800"
+  }, selecionados.length), " de ", filtrados.length, " arquivo", filtrados.length !== 1 ? 's' : '', " selecionado", selecionados.length !== 1 ? 's' : '', " para o relat\xF3rio"), React.createElement("button", {
+    onClick: () => setEmitindo(true),
+    disabled: !selecionados.length,
+    className: "px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-1.5 disabled:opacity-40",
+    style: {
+      background: BLUE
+    }
+  }, React.createElement(FilePdf, {
+    className: "w-4 h-4"
+  }), " Gerar relat\xF3rio")))))), modalProjeto && React.createElement(RelProjetoModal, {
+    projeto: modalProjeto.id ? modalProjeto : null,
+    onSalvar: salvarProjeto,
+    onFechar: () => setModalProjeto(null)
+  }), emitindo && projeto && React.createElement(RelEmitirModal, {
+    projeto: projeto,
+    arquivos: selecionados,
+    referenciaInicial: referenciaSugerida,
+    currentUser: currentUser,
+    apiKey: apiKey,
+    addToast: addToast,
+    onFechar: () => setEmitindo(false)
+  }));
+}
 function App() {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [users, setUsers] = useState([]);
@@ -22833,6 +24656,7 @@ function App() {
   const [campanhaPessoas, setCampanhaPessoas] = useState([]);
   const [campanhaEventos, setCampanhaEventos] = useState([]);
   const [showCampanhaPage, setShowCampanhaPage] = useState(false);
+  const [showRelatoriosPage, setShowRelatoriosPage] = useState(false);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
   useEffect(() => {
     if (!showPlusMenu) return;
@@ -23105,6 +24929,9 @@ function App() {
   }), [filtered]);
   const [activeContractNumber, setActiveContractNumber] = useState(null);
   const [showNfListView, setShowNfListView] = useState(false);
+  useEffect(() => {
+    if (showContractsPage || showInstallmentsPage || showProposalsPage || showGdocPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showCampanhaPage || showAdmin || showForm || activeContractNumber) setShowRelatoriosPage(false);
+  }, [showContractsPage, showInstallmentsPage, showProposalsPage, showGdocPage, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, showProposalBI, showCronogramaPage, showCertidoesPage, showPropEmissao, showLeadsPage, showCampanhaPage, showAdmin, showForm, activeContractNumber]);
   const [contractSearch, setContractSearch] = useState('');
   const [statsYear, setStatsYear] = useState(String(new Date().getFullYear()));
   const [showOverduePanel, setShowOverduePanel] = useState(false);
@@ -23420,6 +25247,7 @@ function App() {
     setShowLeadsPage(false);
     setShowProposalBI(false);
     setShowCampanhaPage(false);
+    setShowRelatoriosPage(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
     } else {
@@ -24929,6 +26757,16 @@ function App() {
       setShowAdmin(false);
       setShowCertidoesPage(true);
     }
+  }), SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: ScrollText,
+    label: "Relat\xF3rios de Execu\xE7\xE3o",
+    active: showRelatoriosPage,
+    onClick: () => {
+      handleGoHome();
+      setShowContractsList(false);
+      setShowNfListView(false);
+      setShowRelatoriosPage(true);
+    }
   }), SYS.id === 'main' && currentUser.username === 'henriquecorreia' && React.createElement(SidebarBtn, {
     icon: Megaphone,
     label: "Campanha",
@@ -25135,7 +26973,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -25805,7 +27643,11 @@ function App() {
     className: "w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
   }), "Salvando\u2026") : React.createElement(React.Fragment, null, React.createElement(Send, {
     className: "w-4 h-4"
-  }), "Salvar Contrato")))), " "), showNfListView ? React.createElement(NfListView, {
+  }), "Salvar Contrato")))), " "), showRelatoriosPage && SYS.id === 'main' ? React.createElement(RelatoriosExecucaoPage, {
+    currentUser: currentUser,
+    apiKey: apiKey,
+    addToast: addToast
+  }) : showNfListView ? React.createElement(NfListView, {
     installments: contracts,
     statsYear: statsYear,
     contractMeta: contractMeta,

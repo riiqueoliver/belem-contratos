@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "firebase-admin": "^14.3.0"
+    "firebase-admin": "^14.3.0",
+    "google-auth-library": "^10.9.1"
   }
 }
