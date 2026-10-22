@@ -81,6 +81,9 @@ Assistência social — "Acolher, Cuidar e Transformar". Coleção `arcanjo_soci
   deixa `React` undefined e entrega tela branca. Está comentado no `build.js` — não "otimize" isso.
 - **`dist/` local desatualizado é normal.** A Vercel roda `node build.js` no deploy. Rodar o build
   localmente serve para conferir, não é requisito do push.
+- **A IA (Claude) é chamada por `/api/ia`**, nunca direto de `api.anthropic.com` no navegador. A chave fica só
+  na env `ANTHROPIC_API_KEY` da Vercel. Não volte a colocar chave no `index.html` — o repositório é público.
+  A Vercel limita a requisição a ~4,5 MB, então PDFs acima de ~3 MB não passam pela IA.
 - `node_modules/` está no `.gitignore` mas `node_modules/.package-lock.json` foi commitado antes disso
   e vive aparecendo como modificado. Ignore, ou remova do índice de uma vez.
 

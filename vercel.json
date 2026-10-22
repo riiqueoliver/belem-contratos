@@ -15,6 +15,9 @@
   "functions": {
     "api/relatorios.js": {
       "maxDuration": 60
+    },
+    "api/ia.js": {
+      "maxDuration": 300
     }
   }
 }

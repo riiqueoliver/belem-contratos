@@ -1758,14 +1758,9 @@ Regras:
 - Se não houver validade explícita, informe "emissao" (data de emissão/expedição) e "prazoDias" (ex.: "válida por 180 dias").
 - Datas sempre no formato AAAA-MM-DD. Use null quando não encontrar. NÃO invente valores.`;
       try {
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        const resp = await fetch('/api/ia', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-sonnet-5',
             max_tokens: 1024,
@@ -3811,14 +3806,9 @@ Regras:
             reader.onerror = rej;
             reader.readAsDataURL(pdfFile);
           });
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
               max_tokens: 2048,
@@ -6663,14 +6653,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         setAddFormPdfLoading(true);
         try {
           const base64Data = addForm.pdfBase64.split(',')[1];
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
               max_tokens: 256,
@@ -12184,14 +12169,9 @@ REGRAS DE INTERPRETAÇÃO:
 5. Se o documento não indicar mês de início de cada item, assuma sequencial (item pontual 1 no mês 1, item pontual 2 no mês 2, recorrente na sequência) e registre a premissa em "alertas".
 6. Se não houver alíquotas tributárias explícitas no contrato, retorne "tributos_identificados": [].
 Todos os valores monetários devem ser números (sem "R$" e sem separador de milhar).`;
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-sonnet-5',
               max_tokens: 16000,
@@ -12984,14 +12964,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           const mediaType = imagePreview.startsWith('data:image/png') ? 'image/png'
             : imagePreview.startsWith('data:image/jpg') || imagePreview.startsWith('data:image/jpeg') ? 'image/jpeg'
             : 'image/png';
-          const res = await fetch('https://api.anthropic.com/v1/messages', {
+          const res = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
               max_tokens: 1024,
@@ -15189,9 +15164,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 setNfQueue(q => q.map(f => f.id === item.id ? {...f, status:'analyzing'} : f));
                 try {
                   const b64 = item.pdfBase64.split(',')[1];
-                  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                  const resp = await fetch('/api/ia', {
                     method: 'POST',
-                    headers: {'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       model: 'claude-haiku-4-5-20251001', max_tokens: 512,
                       messages: [{ role: 'user', content: [
@@ -16314,14 +16289,9 @@ Escreva os textos do relatório com base EXCLUSIVAMENTE nesses documentos. Retor
 }
 Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fatos, datas, nomes ou números que não estejam nos documentos; não use markdown, listas com símbolos nem emojis; inclua em "documentos" um item para cada anexo, na mesma numeração.`;
 
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: REL_MODELO_IA, max_tokens: 8000, messages: [{ role:'user', content: prompt }] }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -17355,8 +17325,9 @@ Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fa
       const [proposals,         setProposals]         = useState([]);
       const [dbReady,           setDbReady]           = useState(false);
       // ── Somente local ──
-      const [apiKey,        setApiKey]        = useState(['sk-ant-api0','3-XN-Z03fVhtmwSzumQNSrbgmFA-EvYVltfrx4_SY5S8EWl4U4uU','X8PoyNFkaZEn6esGI5DfNJHkw_4YD1St4cnA-aDOEyQAA'].join(''));
-      const [apiKeyDraft,   setApiKeyDraft]   = useState('');
+      // A IA é chamada por /api/ia, que guarda a chave da Anthropic no servidor (env ANTHROPIC_API_KEY).
+      // 'apiKey' ficou só como sinal de que a IA está disponível para os módulos que já o verificam.
+      const apiKey = 'servidor';
       const [pdfFile,       setPdfFile]       = useState(null);
       const [pdfAnalyzing,  setPdfAnalyzing]  = useState(false);
       const [pdfResult,     setPdfResult]     = useState(null);
@@ -18086,13 +18057,6 @@ Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fa
       if (!currentUser && RESET_TOKEN_FROM_URL) return <ResetPasswordScreen token={RESET_TOKEN_FROM_URL} />;
       if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onUpdateUser={handleUpdateUser} onRegister={handleRegister} />;
 
-      function saveApiKey(key) {
-        const k = key.trim();
-        localStorage.setItem('belem-api-key', k);
-        setApiKey(k);
-        setApiKeyDraft('');
-      }
-
       async function handleAnalyzePdf() {
         if (!pdfFile || !apiKey) return;
         setPdfAnalyzing(true);
@@ -18104,14 +18068,9 @@ Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fa
             reader.onerror = rej;
             reader.readAsDataURL(pdfFile);
           });
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
               max_tokens: 1024,
@@ -18166,14 +18125,9 @@ Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fa
             reader.onerror = rej;
             reader.readAsDataURL(anexoPdfFile);
           });
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
               max_tokens: 2048,

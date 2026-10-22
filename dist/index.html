@@ -3044,13 +3044,10 @@ Regras:
 - Se não houver validade explícita, informe "emissao" (data de emissão/expedição) e "prazoDias" (ex.: "válida por 180 dias").
 - Datas sempre no formato AAAA-MM-DD. Use null quando não encontrar. NÃO invente valores.`;
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/ia', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
@@ -5600,13 +5597,10 @@ function ProposalModal({
         reader.onerror = rej;
         reader.readAsDataURL(pdfFile);
       });
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -9578,13 +9572,10 @@ function ContractDetailView({
     setAddFormPdfLoading(true);
     try {
       const base64Data = addForm.pdfBase64.split(',')[1];
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -17348,13 +17339,10 @@ REGRAS DE INTERPRETAÇÃO:
 5. Se o documento não indicar mês de início de cada item, assuma sequencial (item pontual 1 no mês 1, item pontual 2 no mês 2, recorrente na sequência) e registre a premissa em "alertas".
 6. Se não houver alíquotas tributárias explícitas no contrato, retorne "tributos_identificados": [].
 Todos os valores monetários devem ser números (sem "R$" e sem separador de milhar).`;
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-sonnet-5',
@@ -18470,13 +18458,10 @@ function GDocPage({
     setAnalyzing(true);
     try {
       const mediaType = imagePreview.startsWith('data:image/png') ? 'image/png' : imagePreview.startsWith('data:image/jpg') || imagePreview.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -21433,13 +21418,10 @@ function AdminDashboard({
         } : f));
         try {
           const b64 = item.pdfBase64.split(',')[1];
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          const resp = await fetch('/api/ia', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true'
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
@@ -22928,13 +22910,10 @@ Escreva os textos do relatório com base EXCLUSIVAMENTE nesses documentos. Retor
   "documentos": [ { "n": 1, "descricao": "uma frase objetiva sobre o conteúdo do anexo" } ]
 }
 Regras: português do Brasil formal, impessoal, terceira pessoa; não invente fatos, datas, nomes ou números que não estejam nos documentos; não use markdown, listas com símbolos nem emojis; inclua em "documentos" um item para cada anexo, na mesma numeração.`;
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await fetch('/api/ia', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       model: REL_MODELO_IA,
@@ -24617,8 +24596,7 @@ function App() {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [proposals, setProposals] = useState([]);
   const [dbReady, setDbReady] = useState(false);
-  const [apiKey, setApiKey] = useState(['sk-ant-api0', '3-XN-Z03fVhtmwSzumQNSrbgmFA-EvYVltfrx4_SY5S8EWl4U4uU', 'X8PoyNFkaZEn6esGI5DfNJHkw_4YD1St4cnA-aDOEyQAA'].join(''));
-  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const apiKey = 'servidor';
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfAnalyzing, setPdfAnalyzing] = useState(false);
   const [pdfResult, setPdfResult] = useState(null);
@@ -25436,12 +25414,6 @@ function App() {
     onUpdateUser: handleUpdateUser,
     onRegister: handleRegister
   });
-  function saveApiKey(key) {
-    const k = key.trim();
-    localStorage.setItem('belem-api-key', k);
-    setApiKey(k);
-    setApiKeyDraft('');
-  }
   async function handleAnalyzePdf() {
     if (!pdfFile || !apiKey) return;
     setPdfAnalyzing(true);
@@ -25453,13 +25425,10 @@ function App() {
         reader.onerror = rej;
         reader.readAsDataURL(pdfFile);
       });
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -25521,13 +25490,10 @@ function App() {
         reader.onerror = rej;
         reader.readAsDataURL(anexoPdfFile);
       });
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/ia', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
