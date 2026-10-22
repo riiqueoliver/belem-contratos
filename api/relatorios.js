@@ -57,7 +57,7 @@ async function baixar(req, res) {
     corpo = emCache.buf.subarray(inicio, fim + 1);
     total = emCache.buf.length;
   } else {
-    const resp = await baixarArquivo(provedor, arquivo, `${inicio}-${fim}`);
+    const resp = await baixarArquivo(provedor, arquivo, `${inicio}-${fim}`, dados.link);
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
       if (resp.status === 416) { corpo = Buffer.alloc(0); total = inicio; }
