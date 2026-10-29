@@ -17582,7 +17582,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
        Arcanjo's e Campanha ficam de fora: são dados pessoais sensíveis (LGPD).
     ═══════════════════════════════════════════════════════ */
     const IA_NOME    = SYS.id === 'gcsp' ? 'Assistente GCSP' : 'Assistente BD';
-    const IA_AVATAR  = '/assistente-ia.png';
+    const IA_AVATAR  = '/assistente-ia.jpg';
     const IA_MODELOS = ['claude-sonnet-5-5', 'claude-sonnet-5'];
     const IA_COL = {
       conversas:    COL('ia_conversas'),
@@ -17988,8 +17988,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
     function IaAvatar({ size = 36, className = '' }) {
       return (
         <span className={`inline-flex rounded-full overflow-hidden flex-shrink-0 ${className}`}
-              style={{ width: size, height: size, background: '#E6F7F5', boxShadow: 'inset 0 0 0 1px rgba(13,148,136,.25)' }}>
-          <img src={IA_AVATAR} alt={IA_NOME} className="w-full h-full object-cover" style={{ objectPosition: '55% 18%', transform: 'scale(1.6)', transformOrigin: '55% 22%' }} />
+              style={{ width: size, height: size, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(37,99,235,.25)' }}>
+          <img src={IA_AVATAR} alt={IA_NOME} className="w-full h-full object-cover" style={{ objectPosition: '38% 30%', transform: 'scale(1.75)', transformOrigin: '38% 34%' }} />
         </span>
       );
     }
@@ -18467,7 +18467,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           {aberto && (
             <div className="fixed z-[65] bottom-24 right-5 flex flex-col bg-slate-50 rounded-2xl border border-gray-200 overflow-hidden slide-in"
                  style={{ width: 'min(420px, calc(100vw - 2.5rem))', height: 'min(640px, calc(100vh - 8rem))', boxShadow: '0 20px 60px rgba(15,23,42,.28)' }}>
-              <div className="flex items-center gap-2 px-3 py-2.5 text-white" style={{ background: 'linear-gradient(135deg,#0D9488,#0B2B5E)' }}>
+              <div className="flex items-center gap-2 px-3 py-2.5 text-white" style={{ background: 'linear-gradient(135deg,#2563EB,#0B2B5E)' }}>
                 <IaAvatar size={34} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-black leading-tight">{IA_NOME}</p>
@@ -18485,7 +18485,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           )}
           <button onClick={() => setAberto(v => !v)} title={aberto ? 'Fechar assistente' : `${IA_NOME} — posso ajudar?`}
                   className="ia-pin fixed z-[65] bottom-5 right-5 w-16 h-16 rounded-full bg-white flex items-center justify-center transition-transform hover:scale-105"
-                  style={{ boxShadow: '0 8px 28px rgba(13,148,136,.45)', border: '3px solid #14B8A6' }}>
+                  style={{ boxShadow: '0 8px 28px rgba(37,99,235,.45)', border: '3px solid #2563EB' }}>
             {aberto ? <X className="w-6 h-6 text-teal-700" /> : <IaAvatar size={56} />}
             {!aberto && qtdAlertas > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
