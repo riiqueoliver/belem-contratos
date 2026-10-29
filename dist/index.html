@@ -16,6 +16,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <!-- bcrypt.js self-hospedado (hash de senha no cliente, sem depender de CDN externo em runtime) -->
   <script src="bcrypt.min.js"></script>
   <!-- Firebase Storage não utilizado: PDFs salvos diretamente no Firestore -->
@@ -4317,6 +4318,41 @@ function LoginScreen({
       setLoading(false);
     }
   }
+  async function entrarComGoogle() {
+    setLoading(true);
+    setError('');
+    try {
+      const provedor = new firebase.auth.GoogleAuthProvider();
+      provedor.setCustomParameters({
+        prompt: 'select_account'
+      });
+      const cred = await firebase.auth().signInWithPopup(provedor);
+      const idToken = await cred.user.getIdToken();
+      const resp = await fetch('/api/login-google', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          idToken,
+          sysId: SYS.id
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.user) {
+        iaGuardarPasse(data.iaPasse);
+        onLogin(data.user);
+        return;
+      }
+      await firebase.auth().signOut().catch(() => {});
+      setError(data.error || 'Não foi possível entrar com o Google.');
+      setLoading(false);
+    } catch (err) {
+      setLoading(false);
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      setError(err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found' ? 'O login com Google ainda não foi ativado no sistema.' : err.code === 'auth/unauthorized-domain' ? 'Este endereço não está autorizado para login com Google.' : err.code === 'auth/popup-blocked' ? 'O navegador bloqueou a janela do Google. Libere pop-ups para este site.' : 'Falha ao entrar com o Google. Tente novamente.');
+    }
+  }
   return React.createElement("div", {
     className: "min-h-screen flex items-center justify-center bg-slate-100 px-4"
   }, React.createElement("div", {
@@ -4407,6 +4443,33 @@ function LoginScreen({
       background: BLUE
     }
   }, loading ? 'Verificando...' : 'Entrar'), React.createElement("div", {
+    className: "flex items-center gap-3 text-[11px] text-gray-400"
+  }, React.createElement("span", {
+    className: "flex-1 h-px bg-gray-200"
+  }), "ou", React.createElement("span", {
+    className: "flex-1 h-px bg-gray-200"
+  })), React.createElement("button", {
+    type: "button",
+    onClick: entrarComGoogle,
+    disabled: loading,
+    className: "w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+  }, React.createElement("svg", {
+    viewBox: "0 0 48 48",
+    className: "w-5 h-5",
+    "aria-hidden": "true"
+  }, React.createElement("path", {
+    fill: "#FFC107",
+    d: "M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"
+  }), React.createElement("path", {
+    fill: "#FF3D00",
+    d: "M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+  }), React.createElement("path", {
+    fill: "#4CAF50",
+    d: "M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"
+  }), React.createElement("path", {
+    fill: "#1976D2",
+    d: "M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.2 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"
+  })), "Entrar com Google"), React.createElement("div", {
     className: "flex items-center justify-between pt-1"
   }, React.createElement("button", {
     type: "button",
@@ -27123,6 +27186,9 @@ function App() {
     const goArcanjo = showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || currentUser && ARCANJO_ONLY.has(currentUser.username);
     localStorage.removeItem(SYS.sessionKey);
     iaGuardarPasse(null);
+    try {
+      firebase.auth().signOut().catch(() => {});
+    } catch {}
     setCurrentUser(null);
     if (goArcanjo) window.location.replace('/moduloarcanjo');
   }
