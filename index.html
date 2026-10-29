@@ -17595,6 +17595,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
     const IA_FONTES = ['contratos','parcelas','propostas','gdocs','certidoes','cronogramas','oportunidades',
                        'orgaos','contatos','propostas_emitidas','usuarios'];
     const IA_MAX_PASSOS = 12;
+    const IA_DOC_TECNICO = /\b(dfd|etp|tr|termo de refer[eê]ncia|estudo t[eé]cnico|formaliza[cç][aã]o de demanda|edital|parecer|minuta)\b/i;
     const IA_SUGESTOES = [
       'Quais contratos e certidões vencem nos próximos 60 dias?',
       'Redija um GDoc ao NUSP solicitando RMS e empenho para pagamento de parceiro',
@@ -17781,6 +17782,30 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       throw new Error(erro);
     }
 
+    // Memória, base e documentos recentes mudam pouco: ficam em cache por 2 minutos
+    // (e são recarregados quando o próprio assistente salva algo).
+    const iaCache = { em: 0, valor: null, pendente: null };
+    function iaInvalidarContexto() { iaCache.em = 0; }
+    async function iaContexto() {
+      if (iaCache.valor && Date.now() - iaCache.em < 120000) return iaCache.valor;
+      if (!iaCache.pendente) {
+        iaCache.pendente = Promise.all([
+          db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(),
+          db.collection(IA_COL.conhecimento).limit(40).get(),
+          db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get(),
+        ]).then(([mem, base, docs]) => {
+          iaCache.valor = {
+            memorias: mem.docs.map(d => d.data()).reverse(),
+            base: base.docs.map(d => d.data()),
+            docsRecentes: docs.docs.map(d => ({ id: d.id, ...d.data() })),
+          };
+          iaCache.em = Date.now();
+          return iaCache.valor;
+        }).finally(() => { iaCache.pendente = null; });
+      }
+      return iaCache.pendente;
+    }
+
     async function iaExecutar(nome, e, ctx) {
       const { dados, usuario } = ctx;
       if (nome === 'consultar_dados') {
@@ -17835,6 +17860,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
         };
         const ref = await db.collection(IA_COL.documentos).add(doc);
+        iaInvalidarContexto();
         ctx.docs.push({ id: ref.id, tipo: doc.tipo, titulo: doc.titulo, numero: doc.numero });
         return { ok: true, id: ref.id };
       }
@@ -17854,6 +17880,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           criadoPor: usuario.username, criadoPorNome: usuario.name || usuario.username,
           criadoEm: firebase.firestore.FieldValue.serverTimestamp() });
         ctx.aprendizados.push(fato);
+        iaInvalidarContexto();
         return { ok: true };
       }
       if (nome === 'propor_gravacao') {
@@ -18093,6 +18120,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
       useEffect(() => { fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [mensagens.length, ocupado, status]);
       useEffect(() => () => { try { reconRef.current?.stop(); } catch {} }, []);
+      // Já busca memória e base ao abrir o chat, para a primeira mensagem não esperar por isso
+      useEffect(() => { iaContexto().catch(() => {}); }, []);
 
       const alertas = useMemo(() => iaAlertas(dados, 30), [dados.contractMeta, dados.contracts, dados.certidoes]);
       const primeiroNome = String(currentUser.name || currentUser.username).split(' ')[0];
@@ -18143,27 +18172,19 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         let lista = [...mensagens, msgUsuario];
         setMensagens(lista);
         try {
+          // Gravações da conversa não seguram a resposta: o Firestore aplica localmente na hora
           if (!id) {
-            const ref = await db.collection(IA_COL.conversas).add({
+            const ref = db.collection(IA_COL.conversas).doc();
+            ref.set({
               usuario: currentUser.username, titulo: texto.slice(0, 80), mensagens: [],
               criadoEm: firebase.firestore.FieldValue.serverTimestamp(), atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-            });
+            }).catch(err => console.warn('[Assistente] conversa:', err.message));
             id = ref.id; setConversaId(id);
           }
-          await salvarMensagens(id, lista);
+          salvarMensagens(id, lista).catch(err => console.warn('[Assistente] salvar:', err.message));
 
-          const [memSnap, baseSnap, docSnap] = await Promise.all([
-            db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(),
-            db.collection(IA_COL.conhecimento).limit(40).get(),
-            db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get(),
-          ]);
-          const system = iaSistema({
-            usuario: currentUser, pagina,
-            memorias: memSnap.docs.map(d => d.data()).reverse(),
-            base: baseSnap.docs.map(d => d.data()),
-            docsRecentes: docSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-            alertas: iaAlertas(dadosRef.current, 30),
-          });
+          const contexto = await iaContexto();
+          const system = iaSistema({ usuario: currentUser, pagina, ...contexto, alertas: iaAlertas(dadosRef.current, 30) });
 
           // Histórico em texto (as ferramentas de turnos anteriores não são reenviadas)
           const historico = [];
@@ -18178,11 +18199,13 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           while (historico.length && historico[0].role !== 'user') historico.shift();
 
           const ctx = { dados: dadosRef.current, usuario: currentUser, conversaId: id, docs: [], acoes: [], aprendizados: [] };
+          // Documento técnico pede o modelo completo; o resto vai no rápido
+          const qualidade = IA_DOC_TECNICO.test(texto) ? 'alta' : 'rapida';
           const msgs = historico;
           let textoFinal = '';
           for (let passo = 0; passo < IA_MAX_PASSOS; passo++) {
             ctx.dados = dadosRef.current;
-            const resp = await iaChamar({ max_tokens: 16000, system, messages: msgs, tools: IA_FERRAMENTAS });
+            const resp = await iaChamar({ max_tokens: 16000, system, messages: msgs, tools: IA_FERRAMENTAS, qualidade });
             const blocos = resp.content || [];
             const textos = blocos.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
             if (textos) textoFinal = textoFinal ? textoFinal + '\n\n' + textos : textos;

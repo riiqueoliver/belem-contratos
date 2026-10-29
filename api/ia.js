@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { model, max_tokens, messages, system, temperature, tools, tool_choice } = req.body || {};
+  const { model, max_tokens, messages, system, temperature, tools, tool_choice, qualidade } = req.body || {};
   if (typeof model !== 'string' || !model.startsWith('claude-') || !Array.isArray(messages)) {
     res.status(400).json({ error: { message: 'Requisição inválida.' } });
     return;
@@ -52,7 +52,7 @@ module.exports = async (req, res) => {
   if (!apiKey) {
     try {
       const r = await chamarGemini({ apiKey: geminiKey, max_tokens: Math.min(Number(max_tokens) || 1024, MAX_TOKENS),
-                                     messages, system, temperature, tools });
+                                     messages, system, temperature, tools, qualidade });
       if (r.diag) res.setHeader('X-IA-Tentativas', r.diag.join(' '));
       res.status(r.status).json(r.body);
     } catch (err) {

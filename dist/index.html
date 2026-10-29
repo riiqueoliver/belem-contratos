@@ -25122,6 +25122,7 @@ const IA_TIPOS_DOC = {
 };
 const IA_FONTES = ['contratos', 'parcelas', 'propostas', 'gdocs', 'certidoes', 'cronogramas', 'oportunidades', 'orgaos', 'contatos', 'propostas_emitidas', 'usuarios'];
 const IA_MAX_PASSOS = 12;
+const IA_DOC_TECNICO = /\b(dfd|etp|tr|termo de refer[eê]ncia|estudo t[eé]cnico|formaliza[cç][aã]o de demanda|edital|parecer|minuta)\b/i;
 const IA_SUGESTOES = ['Quais contratos e certidões vencem nos próximos 60 dias?', 'Redija um GDoc ao NUSP solicitando RMS e empenho para pagamento de parceiro', 'Elabore um ofício do NGCC', 'Monte um DFD para uma nova contratação'];
 function iaNorm(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -25451,6 +25452,34 @@ async function iaChamar(corpo) {
   }
   throw new Error(erro);
 }
+const iaCache = {
+  em: 0,
+  valor: null,
+  pendente: null
+};
+function iaInvalidarContexto() {
+  iaCache.em = 0;
+}
+async function iaContexto() {
+  if (iaCache.valor && Date.now() - iaCache.em < 120000) return iaCache.valor;
+  if (!iaCache.pendente) {
+    iaCache.pendente = Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.conhecimento).limit(40).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]).then(([mem, base, docs]) => {
+      iaCache.valor = {
+        memorias: mem.docs.map(d => d.data()).reverse(),
+        base: base.docs.map(d => d.data()),
+        docsRecentes: docs.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+      };
+      iaCache.em = Date.now();
+      return iaCache.valor;
+    }).finally(() => {
+      iaCache.pendente = null;
+    });
+  }
+  return iaCache.pendente;
+}
 async function iaExecutar(nome, e, ctx) {
   const {
     dados,
@@ -25562,6 +25591,7 @@ async function iaExecutar(nome, e, ctx) {
       criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     };
     const ref = await db.collection(IA_COL.documentos).add(doc);
+    iaInvalidarContexto();
     ctx.docs.push({
       id: ref.id,
       tipo: doc.tipo,
@@ -25598,6 +25628,7 @@ async function iaExecutar(nome, e, ctx) {
       criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     });
     ctx.aprendizados.push(fato);
+    iaInvalidarContexto();
     return {
       ok: true
     };
@@ -25963,6 +25994,9 @@ function AssistenteChat({
       reconRef.current?.stop();
     } catch {}
   }, []);
+  useEffect(() => {
+    iaContexto().catch(() => {});
+  }, []);
   const alertas = useMemo(() => iaAlertas(dados, 30), [dados.contractMeta, dados.contracts, dados.certidoes]);
   const primeiroNome = String(currentUser.name || currentUser.username).split(' ')[0];
   function alternarVoz() {
@@ -26059,27 +26093,23 @@ function AssistenteChat({
     setMensagens(lista);
     try {
       if (!id) {
-        const ref = await db.collection(IA_COL.conversas).add({
+        const ref = db.collection(IA_COL.conversas).doc();
+        ref.set({
           usuario: currentUser.username,
           titulo: texto.slice(0, 80),
           mensagens: [],
           criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
           atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }).catch(err => console.warn('[Assistente] conversa:', err.message));
         id = ref.id;
         setConversaId(id);
       }
-      await salvarMensagens(id, lista);
-      const [memSnap, baseSnap, docSnap] = await Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.conhecimento).limit(40).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]);
+      salvarMensagens(id, lista).catch(err => console.warn('[Assistente] salvar:', err.message));
+      const contexto = await iaContexto();
       const system = iaSistema({
         usuario: currentUser,
         pagina,
-        memorias: memSnap.docs.map(d => d.data()).reverse(),
-        base: baseSnap.docs.map(d => d.data()),
-        docsRecentes: docSnap.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        })),
+        ...contexto,
         alertas: iaAlertas(dadosRef.current, 30)
       });
       const historico = [];
@@ -26103,6 +26133,7 @@ function AssistenteChat({
         acoes: [],
         aprendizados: []
       };
+      const qualidade = IA_DOC_TECNICO.test(texto) ? 'alta' : 'rapida';
       const msgs = historico;
       let textoFinal = '';
       for (let passo = 0; passo < IA_MAX_PASSOS; passo++) {
@@ -26111,7 +26142,8 @@ function AssistenteChat({
           max_tokens: 16000,
           system,
           messages: msgs,
-          tools: IA_FERRAMENTAS
+          tools: IA_FERRAMENTAS,
+          qualidade
         });
         const blocos = resp.content || [];
         const textos = blocos.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
