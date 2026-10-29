@@ -4,6 +4,9 @@
 // Environment Variables). O navegador manda o corpo da requisição no mesmo
 // formato da API (model, max_tokens, messages, system) e recebe a resposta dela.
 //
+// Sem ANTHROPIC_API_KEY, a rota usa o Google Gemini (GEMINI_API_KEY, faixa gratuita
+// do AI Studio) e converte ida e volta para o formato da Anthropic — ver lib/gemini.js.
+//
 // Limitações conhecidas:
 //  • A Vercel aceita no máximo ~4,5 MB por requisição — PDFs maiores que ~3 MB
 //    (base64 incha ~33%) não passam por aqui.
@@ -14,6 +17,7 @@ const ORIGENS = [
   /^https:\/\/belem-contratos(-[a-z0-9-]+)?\.vercel\.app$/,
   /^http:\/\/localhost(:\d+)?$/,
 ];
+const { chamarGemini } = require('../lib/gemini');
 const MAX_TOKENS = 16000;
 
 function origemPermitida(req) {
@@ -32,14 +36,28 @@ module.exports = async (req, res) => {
     return;
   }
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: { message: 'ANTHROPIC_API_KEY não configurada nas variáveis de ambiente da Vercel.' } });
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey && !geminiKey) {
+    res.status(500).json({ error: { message: 'Nenhuma chave de IA configurada na Vercel: cadastre GEMINI_API_KEY (gratuita) ou ANTHROPIC_API_KEY.' } });
     return;
   }
 
   const { model, max_tokens, messages, system, temperature, tools, tool_choice } = req.body || {};
   if (typeof model !== 'string' || !model.startsWith('claude-') || !Array.isArray(messages)) {
     res.status(400).json({ error: { message: 'Requisição inválida.' } });
+    return;
+  }
+
+  // Sem chave da Anthropic, responde pelo Gemini (faixa gratuita), no mesmo formato
+  if (!apiKey) {
+    try {
+      const r = await chamarGemini({ apiKey: geminiKey, max_tokens: Math.min(Number(max_tokens) || 1024, MAX_TOKENS),
+                                     messages, system, temperature, tools });
+      res.status(r.status).json(r.body);
+    } catch (err) {
+      console.error('Erro em /api/ia (Gemini):', err);
+      res.status(502).json({ error: { message: 'Falha ao falar com o Gemini: ' + err.message } });
+    }
     return;
   }
   const corpo = { model, max_tokens: Math.min(Number(max_tokens) || 1024, MAX_TOKENS), messages };
