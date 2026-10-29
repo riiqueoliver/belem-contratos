@@ -147,6 +147,22 @@
                 white-space:normal; min-width:180px; max-width:300px; z-index:200;
                 box-shadow:0 6px 24px rgba(0,0,0,.28); pointer-events:none; }
     .obs-cell:hover .obs-tip { display:block; }
+    /* Assistente de IA */
+    .ia-md p { margin: 0 0 .5em; } .ia-md p:last-child { margin-bottom: 0; }
+    .ia-md h1, .ia-md h2, .ia-md h3, .ia-md h4 { font-weight: 800; margin: .6em 0 .3em; color: #0f172a; }
+    .ia-md h1 { font-size: 1.05rem; } .ia-md h2 { font-size: 1rem; } .ia-md h3, .ia-md h4 { font-size: .9rem; }
+    .ia-md ul { list-style: disc; padding-left: 1.25em; margin: .3em 0 .5em; } .ia-md ol { list-style: decimal; padding-left: 1.4em; margin: .3em 0 .5em; }
+    .ia-md li { margin: .15em 0; } .ia-md hr { margin: .7em 0; border-color: #e2e8f0; }
+    .ia-md table { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .8rem; }
+    .ia-md th, .ia-md td { border: 1px solid #cbd5e1; padding: .3em .5em; text-align: left; vertical-align: top; } .ia-md th { background: #f1f5f9; font-weight: 700; }
+    .ia-md blockquote { border-left: 3px solid #14B8A6; padding-left: .7em; color: #475569; margin: .4em 0; }
+    .ia-md code { background: #f1f5f9; border-radius: 4px; padding: 0 .3em; font-size: .85em; }
+    .ia-doc { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.55; } .ia-doc p { text-align: justify; } .ia-doc h1 { text-align: center; }
+    .ia-pontos { display: inline-flex; gap: 3px; } .ia-pontos i { width: 5px; height: 5px; border-radius: 50%; background: #14B8A6; animation: iaPonto 1s infinite ease-in-out; }
+    .ia-pontos i:nth-child(2) { animation-delay: .15s; } .ia-pontos i:nth-child(3) { animation-delay: .3s; }
+    @keyframes iaPonto { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+    .ia-pin { animation: iaFlutua 3.5s ease-in-out infinite; }
+    @keyframes iaFlutua { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
   </style>
 
   <script>
@@ -1239,6 +1255,33 @@ const Upload = ({
   y2: "21"
 }), React.createElement("path", {
   d: "M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"
+}));
+const IaMenuIcon = ({
+  className
+}) => React.createElement(SVG, {
+  className: className
+}, React.createElement("rect", {
+  x: "4",
+  y: "8",
+  width: "16",
+  height: "12",
+  rx: "4"
+}), React.createElement("path", {
+  d: "M12 8V4"
+}), React.createElement("circle", {
+  cx: "12",
+  cy: "3",
+  r: "1"
+}), React.createElement("circle", {
+  cx: "9",
+  cy: "14",
+  r: "1.2"
+}), React.createElement("circle", {
+  cx: "15",
+  cy: "14",
+  r: "1.2"
+}), React.createElement("path", {
+  d: "M2 13v3M22 13v3"
 }));
 const ScrollText = ({
   className
@@ -25056,6 +25099,1499 @@ function RelatoriosExecucaoPage({
     onFechar: () => setEmitindo(false)
   }));
 }
+const IA_NOME = SYS.id === 'gcsp' ? 'Assistente GCSP' : 'Assistente BD';
+const IA_AVATAR = '/assistente-ia.png';
+const IA_MODELOS = ['claude-sonnet-5-5', 'claude-sonnet-5'];
+const IA_COL = {
+  conversas: COL('ia_conversas'),
+  documentos: COL('ia_documentos'),
+  memoria: COL('ia_memoria'),
+  conhecimento: COL('ia_conhecimento')
+};
+const IA_TIPOS_DOC = {
+  gdoc: 'GDoc',
+  memorando: 'Memorando',
+  despacho: 'Despacho',
+  email: 'E-mail',
+  oficio: 'Ofício',
+  dfd: 'DFD',
+  etp: 'ETP',
+  tr: 'TR',
+  extrato: 'Extrato DOM',
+  outro: 'Documento'
+};
+const IA_FONTES = ['contratos', 'parcelas', 'propostas', 'gdocs', 'certidoes', 'cronogramas', 'oportunidades', 'orgaos', 'contatos', 'propostas_emitidas', 'usuarios'];
+const IA_MAX_PASSOS = 12;
+const IA_SUGESTOES = ['Quais contratos e certidões vencem nos próximos 60 dias?', 'Redija um GDoc ao NUSP solicitando RMS e empenho para pagamento de parceiro', 'Elabore um ofício do NGCC', 'Monte um DFD para uma nova contratação'];
+function iaNorm(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+function iaHojeExtenso() {
+  return new Date().toLocaleDateString('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+function iaDataCurta(v) {
+  try {
+    const d = v?.toDate ? v.toDate() : new Date(v);
+    return isNaN(d) ? '' : d.toLocaleDateString('pt-BR');
+  } catch {
+    return '';
+  }
+}
+function iaEnxugar(obj, prof = 0) {
+  if (obj == null) return obj;
+  if (typeof obj === 'string') return obj.length > 1500 ? obj.slice(0, 1500) + '…' : obj;
+  if (typeof obj !== 'object') return obj;
+  if (typeof obj.toDate === 'function') {
+    try {
+      return obj.toDate().toISOString().slice(0, 10);
+    } catch {
+      return null;
+    }
+  }
+  if (Array.isArray(obj)) return prof > 2 ? `[${obj.length} itens]` : obj.slice(0, 30).map(v => iaEnxugar(v, prof + 1));
+  if (prof > 3) return '…';
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (/password|senha|token|base64|^data$|pdfData|fotoUrl|imagem/i.test(k)) continue;
+    if (typeof v === 'string' && v.length > 5000) continue;
+    out[k] = iaEnxugar(v, prof + 1);
+  }
+  return out;
+}
+function iaFontes(d) {
+  const porNumero = {};
+  (d.contracts || []).forEach(c => {
+    (porNumero[c.contractNumber] = porNumero[c.contractNumber] || []).push(c);
+  });
+  const numeros = [...new Set([...Object.keys(d.contractMeta || {}), ...Object.keys(porNumero)])];
+  return {
+    contratos: () => numeros.map(n => {
+      const ps = porNumero[n] || [],
+        f = ps[0] || {};
+      return {
+        numero: n,
+        processo: f.processNumber,
+        cliente: f.client,
+        responsavel: f.responsible,
+        ...(d.contractMeta[n] || {}),
+        aditivos: (d.contractAdditives || {})[n] || [],
+        parcelasLancadas: ps.length
+      };
+    }),
+    parcelas: () => d.contracts || [],
+    propostas: () => d.proposals || [],
+    gdocs: () => d.gdocs || [],
+    certidoes: () => (d.certidoes || []).map(c => ({
+      ...c,
+      situacao: certStatus(c),
+      diasParaVencer: certDiasAte(c.expiryDate)
+    })),
+    cronogramas: () => d.cronogramas || [],
+    oportunidades: () => d.leads || [],
+    orgaos: () => d.orgaos || [],
+    contatos: () => d.contacts || [],
+    propostas_emitidas: () => d.propostasEmitidas || [],
+    usuarios: () => (d.users || []).map(u => ({
+      nome: u.name,
+      usuario: u.username,
+      perfil: u.role,
+      email: u.email,
+      telefone: u.phone,
+      funcional: u.funcional
+    }))
+  };
+}
+function iaAlertas(d, dias = 60) {
+  const out = [];
+  for (const c of iaFontes(d).contratos()) {
+    if (!c.endDate || /encerrad|cancelad|rescindid/i.test(c.situation || '')) continue;
+    const n = certDiasAte(String(c.endDate).slice(0, 10));
+    if (n !== null && n <= dias) out.push({
+      tipo: 'contrato',
+      referencia: `Contrato ${c.numero}`,
+      detalhe: c.object || c.unit || '',
+      vencimento: c.endDate,
+      dias: n
+    });
+  }
+  for (const c of d.certidoes || []) {
+    const n = certDiasAte(c.expiryDate);
+    if (n !== null && n <= dias) out.push({
+      tipo: 'certidão',
+      referencia: c.label || c.type || c.id,
+      vencimento: c.expiryDate,
+      dias: n
+    });
+  }
+  return out.sort((a, b) => a.dias - b.dias);
+}
+const IA_FERRAMENTAS = [{
+  name: 'consultar_dados',
+  description: 'Consulta os dados do sistema de gestão de contratos. Use antes de citar qualquer número, valor, data, órgão ou empresa. ' + 'Fontes: contratos (um registro por contrato, com dados cadastrais, vigência e aditivos), parcelas (notas fiscais/parcelas lançadas), ' + 'propostas, gdocs (processos GDoc cadastrados), certidoes (certidões da Belém Digital com validade), cronogramas (cronogramas financeiros), ' + 'oportunidades (leads do PNCP), orgaos, contatos, propostas_emitidas, usuarios.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      fonte: {
+        type: 'string',
+        enum: IA_FONTES
+      },
+      busca: {
+        type: 'string',
+        description: 'Termos para filtrar (todos precisam aparecer no registro). Ex.: "005/2026", "SEFIN", "DSF".'
+      },
+      limite: {
+        type: 'integer',
+        description: 'Máximo de registros (padrão 30, máximo 100).'
+      }
+    },
+    required: ['fonte']
+  }
+}, {
+  name: 'alertas_vencimentos',
+  description: 'Lista contratos com fim de vigência e certidões com validade vencida ou vencendo dentro do prazo informado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      dias: {
+        type: 'integer',
+        description: 'Horizonte em dias (padrão 60).'
+      }
+    }
+  }
+}, {
+  name: 'buscar_documentos',
+  description: 'Busca documentos já redigidos pelo assistente (GDocs, ofícios, e-mails, DFD, ETP, TR…). Sem "id", lista os que combinam; ' + 'com "id", devolve o texto completo. Use para seguir o padrão de documentos anteriores e para revisar um documento já feito.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string'
+      },
+      tipo: {
+        type: 'string',
+        enum: Object.keys(IA_TIPOS_DOC)
+      },
+      busca: {
+        type: 'string'
+      }
+    }
+  }
+}, {
+  name: 'consultar_base',
+  description: 'Pesquisa a base de conhecimento do NGCC (normas internas, modelos, contratos de referência, dados institucionais).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      busca: {
+        type: 'string'
+      }
+    },
+    required: ['busca']
+  }
+}, {
+  name: 'salvar_documento',
+  description: 'Salva um documento finalizado. Obrigatório para todo documento entregue ao usuário. O conteúdo vai completo, em Markdown ' + '(títulos com #, negrito com **, listas, tabelas com |). O documento aparece num cartão na conversa, com opções de copiar e baixar em Word.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo: {
+        type: 'string',
+        enum: Object.keys(IA_TIPOS_DOC)
+      },
+      titulo: {
+        type: 'string'
+      },
+      conteudo: {
+        type: 'string'
+      },
+      numero: {
+        type: 'string',
+        description: 'Número do documento, quando houver (ex.: "03/2026").'
+      },
+      contrato: {
+        type: 'string',
+        description: 'Número do contrato relacionado, quando houver.'
+      },
+      substitui: {
+        type: 'string',
+        description: 'Id do documento anterior, quando este for uma revisão dele.'
+      }
+    },
+    required: ['tipo', 'titulo', 'conteudo']
+  }
+}, {
+  name: 'proximo_numero',
+  description: 'Informa o próximo número livre para ofício, memorando ou despacho do NGCC no ano, a partir dos documentos já salvos e da memória.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo: {
+        type: 'string',
+        enum: ['oficio', 'memorando', 'despacho', 'gdoc']
+      },
+      ano: {
+        type: 'integer'
+      }
+    },
+    required: ['tipo']
+  }
+}, {
+  name: 'lembrar',
+  description: 'Registra um aprendizado duradouro: preferência de redação, correção feita pelo usuário, contato, número de documento emitido, fato do negócio. ' + 'Uma frase objetiva e autossuficiente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      fato: {
+        type: 'string'
+      },
+      categoria: {
+        type: 'string',
+        enum: ['preferencia', 'correcao', 'contato', 'numeracao', 'negocio', 'outro']
+      }
+    },
+    required: ['fato']
+  }
+}, {
+  name: 'propor_gravacao',
+  description: 'Propõe criar ou atualizar um registro do sistema. Nada é gravado até o usuário clicar em Confirmar no cartão exibido. ' + 'Coleções: gdocs (processos GDoc), propostas, contratos (dados cadastrais do contrato; id = número do contrato), certidoes (id da certidão; ex.: atualizar expiryDate AAAA-MM-DD), ' + 'oportunidades (id do lead; ex.: status). Exclusão não é permitida.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      colecao: {
+        type: 'string',
+        enum: ['gdocs', 'propostas', 'contratos', 'certidoes', 'oportunidades']
+      },
+      operacao: {
+        type: 'string',
+        enum: ['criar', 'atualizar']
+      },
+      id: {
+        type: 'string',
+        description: 'Obrigatório para atualizar.'
+      },
+      dados: {
+        type: 'object',
+        description: 'Campos a gravar, com os mesmos nomes usados no registro consultado.'
+      },
+      resumo: {
+        type: 'string',
+        description: 'Frase curta descrevendo a gravação, mostrada ao usuário.'
+      }
+    },
+    required: ['colecao', 'operacao', 'dados', 'resumo']
+  }
+}];
+function iaSistema({
+  usuario,
+  pagina,
+  memorias,
+  base,
+  docsRecentes,
+  alertas
+}) {
+  const blocoBase = base.length ? base.map(b => `### ${b.titulo || 'Sem título'}\n${String(b.conteudo || '').slice(0, 6000)}`).join('\n\n').slice(0, 40000) : '(vazia por enquanto — use consultar_base mesmo assim, ela pode ter sido carregada)';
+  return `Você é o ${IA_NOME}, assistente de IA do sistema de gestão de contratos ${SYS.id === 'gcsp' ? 'da GCSP – Gerência de Contratos, Suprimentos e Patrimônio' : 'da Belém Digital'}.
+Atende a equipe do Núcleo de Gestão Comercial e Contratual (NGCC) da Companhia de Transformação Digital do Município de Belém – Belém Digital, empresa pública municipal (CNPJ 04.850.095/0001-93, Av. Nazaré, nº 708, Nazaré, Belém/PA).
+
+Usuário: ${usuario.name || usuario.username} (${usuario.username}, perfil ${usuario.role || 'user'}${usuario.funcional ? ', ' + usuario.funcional : ''}).
+Hoje: ${iaHojeExtenso()}. Página aberta no sistema: ${pagina || 'Início'}.
+
+O que você faz:
+- redige GDocs (memorandos e despachos para o GDoc da Prefeitura), e-mails, ofícios do NGCC e extratos para o Diário Oficial;
+- elabora DFD, ETP e TR com rigor técnico e jurídico, prontos para resistir à análise do controle interno;
+- consulta contratos, parcelas, propostas, certidões, cronogramas e oportunidades, e avisa vencimentos;
+- grava informações no sistema, sempre com a confirmação do usuário.
+
+Referência legal: Lei 13.303/2016 e Regulamento Interno de Licitações e Contratos (RILC) da Belém Digital; Lei 14.133/2021 subsidiariamente; LGPD (Lei 13.709/2018); LC 101/2000.
+
+Regras:
+1. Nunca invente número de contrato, processo, empenho, valor, data, CNPJ ou dotação. Consulte com as ferramentas; o que não existir no sistema vai entre [colchetes] para o usuário preencher.
+2. Todo documento entregue vai por salvar_documento, com o texto completo. Na resposta, não repita o documento: ele aparece num cartão logo abaixo. Diga em poucas frases o que fez e o que o usuário deve conferir. Ao revisar um documento, salve a nova versão com "substitui".
+3. Antes de numerar ofício, memorando ou despacho, use proximo_numero. Ao emitir um número, registre com lembrar (categoria numeracao).
+4. Gravações em dados do sistema: use propor_gravacao. Nunca proponha exclusão.
+5. Aprenda: quando o usuário corrigir algo, disser uma preferência ou informar um fato duradouro, registre com lembrar. Antes de redigir um tipo de documento, veja com buscar_documentos como os anteriores foram feitos e siga o padrão.
+6. Estilo: português formal, claro e objetivo. Documentos oficiais com título centralizado, local e data por extenso ("Belém (PA), ${iaHojeExtenso()}."), parágrafos numerados quando couber, fecho "Atenciosamente," e assinatura com nome e cargo do usuário.
+7. Se a demanda for ambígua a ponto de mudar o documento, pergunte antes — no máximo três perguntas objetivas. Se dá para fazer com uma suposição razoável, faça e diga qual foi.
+8. Dados pessoais: use só o necessário para a tarefa.
+9. Respostas no chat são curtas e diretas, em Markdown simples.
+
+Memória — aprendizados anteriores:
+${memorias.length ? memorias.map(m => `- ${m.fato}`).join('\n') : '(nenhum ainda)'}
+
+Base de conhecimento:
+${blocoBase}
+
+Documentos redigidos recentemente:
+${docsRecentes.length ? docsRecentes.map(x => `- [${x.id}] ${IA_TIPOS_DOC[x.tipo] || x.tipo}${x.numero ? ' nº ' + x.numero : ''} – ${x.titulo} (${iaDataCurta(x.criadoEm)}, ${x.criadoPorNome || x.criadoPor || ''})`).join('\n') : '(nenhum ainda)'}
+
+Alertas de vencimento (próximos 30 dias):
+${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido há ${-a.dias} dia(s)` : `vence em ${a.dias} dia(s)`} (${a.vencimento})`).join('\n') : '(nenhum)'}`;
+}
+async function iaChamar(corpo) {
+  let erro = '';
+  for (const model of IA_MODELOS) {
+    const resp = await fetch('/api/ia', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ...corpo,
+        model
+      })
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (resp.ok) return json;
+    erro = json?.error?.message || `Erro HTTP ${resp.status}`;
+    if (resp.status !== 404 && !/model/i.test(erro)) break;
+  }
+  throw new Error(erro);
+}
+async function iaExecutar(nome, e, ctx) {
+  const {
+    dados,
+    usuario
+  } = ctx;
+  if (nome === 'consultar_dados') {
+    const gerar = iaFontes(dados)[e.fonte];
+    if (!gerar) return {
+      erro: 'Fonte desconhecida: ' + e.fonte
+    };
+    let itens = gerar();
+    const termos = iaNorm(e.busca).split(/\s+/).filter(Boolean);
+    if (termos.length) itens = itens.filter(it => {
+      const t = iaNorm(JSON.stringify(it));
+      return termos.every(x => t.includes(x));
+    });
+    const limite = Math.min(Math.max(Number(e.limite) || 30, 1), 100);
+    const saida = [];
+    let tamanho = 0;
+    for (const it of itens.slice(0, limite)) {
+      const enx = iaEnxugar(it);
+      tamanho += JSON.stringify(enx).length;
+      if (tamanho > 60000) break;
+      saida.push(enx);
+    }
+    return {
+      total: itens.length,
+      exibidos: saida.length,
+      itens: saida
+    };
+  }
+  if (nome === 'alertas_vencimentos') return {
+    alertas: iaAlertas(dados, Number(e.dias) || 60)
+  };
+  if (nome === 'buscar_documentos') {
+    if (e.id) {
+      const d = await db.collection(IA_COL.documentos).doc(e.id).get();
+      return d.exists ? {
+        id: d.id,
+        ...iaEnxugar({
+          ...d.data(),
+          conteudo: undefined
+        }),
+        conteudo: d.data().conteudo
+      } : {
+        erro: 'Documento não encontrado.'
+      };
+    }
+    const snap = await db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).get();
+    const termos = iaNorm(e.busca).split(/\s+/).filter(Boolean);
+    const lista = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })).filter(x => !e.tipo || x.tipo === e.tipo).filter(x => {
+      const t = iaNorm(`${x.titulo} ${x.numero || ''} ${x.contrato || ''} ${x.conteudo}`);
+      return termos.every(y => t.includes(y));
+    }).slice(0, 20).map(x => ({
+      id: x.id,
+      tipo: x.tipo,
+      numero: x.numero || '',
+      titulo: x.titulo,
+      contrato: x.contrato || '',
+      data: iaDataCurta(x.criadoEm),
+      autor: x.criadoPorNome || x.criadoPor
+    }));
+    return {
+      encontrados: lista.length,
+      documentos: lista
+    };
+  }
+  if (nome === 'consultar_base') {
+    const snap = await db.collection(IA_COL.conhecimento).get();
+    const termos = iaNorm(e.busca).split(/\s+/).filter(t => t.length > 2);
+    const pontuar = x => {
+      const t = iaNorm(`${x.titulo} ${x.conteudo}`);
+      return termos.reduce((s, y) => s + (t.includes(y) ? 1 : 0), 0);
+    };
+    const achados = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })).map(x => ({
+      x,
+      p: pontuar(x)
+    })).filter(o => o.p > 0).sort((a, b) => b.p - a.p).slice(0, 5).map(({
+      x
+    }) => ({
+      id: x.id,
+      titulo: x.titulo,
+      conteudo: String(x.conteudo || '').slice(0, 12000)
+    }));
+    return achados.length ? {
+      resultados: achados
+    } : {
+      resultados: [],
+      aviso: snap.empty ? 'A base de conhecimento ainda está vazia.' : 'Nada encontrado para esses termos.'
+    };
+  }
+  if (nome === 'salvar_documento') {
+    const doc = {
+      tipo: IA_TIPOS_DOC[e.tipo] ? e.tipo : 'outro',
+      titulo: String(e.titulo || 'Documento').slice(0, 300),
+      conteudo: String(e.conteudo || ''),
+      numero: e.numero || '',
+      contrato: e.contrato || '',
+      substitui: e.substitui || '',
+      criadoPor: usuario.username,
+      criadoPorNome: usuario.name || usuario.username,
+      conversaId: ctx.conversaId || '',
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    const ref = await db.collection(IA_COL.documentos).add(doc);
+    ctx.docs.push({
+      id: ref.id,
+      tipo: doc.tipo,
+      titulo: doc.titulo,
+      numero: doc.numero
+    });
+    return {
+      ok: true,
+      id: ref.id
+    };
+  }
+  if (nome === 'proximo_numero') {
+    const ano = Number(e.ano) || new Date().getFullYear();
+    const snap = await db.collection(IA_COL.documentos).where('tipo', '==', e.tipo).get();
+    const usados = snap.docs.map(d => d.data().numero || '').map(n => String(n).match(/(\d+)\s*\/\s*(\d{4})/)).filter(m => m && Number(m[2]) === ano).map(m => Number(m[1]));
+    const maior = usados.length ? Math.max(...usados) : 0;
+    return {
+      ano,
+      maiorNumeroSalvo: maior,
+      proximo: `${String(maior + 1).padStart(2, '0')}/${ano}`,
+      aviso: 'Confira também a memória: números emitidos fora do assistente podem estar registrados lá. Na dúvida, confirme com o usuário.'
+    };
+  }
+  if (nome === 'lembrar') {
+    const fato = String(e.fato || '').trim();
+    if (!fato) return {
+      erro: 'Fato vazio.'
+    };
+    await db.collection(IA_COL.memoria).add({
+      fato: fato.slice(0, 1000),
+      categoria: e.categoria || 'outro',
+      criadoPor: usuario.username,
+      criadoPorNome: usuario.name || usuario.username,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    ctx.aprendizados.push(fato);
+    return {
+      ok: true
+    };
+  }
+  if (nome === 'propor_gravacao') {
+    if (e.operacao === 'atualizar' && !e.id) return {
+      erro: 'Para atualizar, informe o id do registro.'
+    };
+    ctx.acoes.push({
+      id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
+      colecao: e.colecao,
+      operacao: e.operacao,
+      alvo: e.id || '',
+      dados: e.dados || {},
+      resumo: e.resumo || '',
+      status: 'pendente'
+    });
+    return {
+      ok: true,
+      situacao: 'Exibido ao usuário para confirmação. Ainda não foi gravado.'
+    };
+  }
+  return {
+    erro: 'Ferramenta desconhecida: ' + nome
+  };
+}
+const IA_STATUS_FERRAMENTA = {
+  consultar_dados: e => `Consultando ${String(e.fonte || 'dados').replace('_', ' ')}…`,
+  alertas_vencimentos: () => 'Verificando vencimentos…',
+  buscar_documentos: () => 'Buscando documentos anteriores…',
+  consultar_base: () => 'Pesquisando a base de conhecimento…',
+  salvar_documento: e => `Salvando ${IA_TIPOS_DOC[e.tipo] || 'documento'}…`,
+  proximo_numero: () => 'Conferindo a numeração…',
+  lembrar: () => 'Registrando aprendizado…',
+  propor_gravacao: () => 'Preparando gravação…'
+};
+async function iaAplicarGravacao(a) {
+  const dados = {
+    ...a.dados
+  };
+  delete dados.id;
+  if (a.colecao === 'gdocs') {
+    if (a.operacao === 'criar') return (await db.collection(COL('gdocs')).add(dados)).id;
+    await db.collection(COL('gdocs')).doc(a.alvo).update(dados);
+    return a.alvo;
+  }
+  if (a.colecao === 'propostas') {
+    if (a.operacao === 'criar') {
+      const ref = db.collection(COL('proposals')).doc();
+      await ref.set({
+        ...dados,
+        id: ref.id
+      });
+      return ref.id;
+    }
+    await db.collection(COL('proposals')).doc(a.alvo).update(dados);
+    return a.alvo;
+  }
+  if (a.colecao === 'contratos') {
+    const numero = a.alvo || dados.contractNumber;
+    if (!numero) throw new Error('Número do contrato não informado.');
+    await db.collection(COL('contractMeta')).doc(String(numero)).set(dados, {
+      merge: true
+    });
+    return numero;
+  }
+  if (a.colecao === 'certidoes' && a.operacao === 'atualizar') {
+    await db.collection(COL('certidoes')).doc(a.alvo).update(dados);
+    return a.alvo;
+  }
+  if (a.colecao === 'oportunidades' && a.operacao === 'atualizar') {
+    await db.collection(COL('leads')).doc(a.alvo).update(dados);
+    return a.alvo;
+  }
+  throw new Error('Operação não permitida para esta coleção.');
+}
+function iaMdHtml(md) {
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\w)/g, '$1<em>$2</em>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const linhas = String(md || '').replace(/\r/g, '').split('\n');
+  const ehSep = r => /^[\s|:-]+$/.test(r) && r.includes('-');
+  const celulas = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  let html = '',
+    i = 0;
+  while (i < linhas.length) {
+    const l = linhas[i];
+    if (!l.trim()) {
+      i++;
+      continue;
+    }
+    if (/^\s*\|/.test(l)) {
+      const rows = [];
+      while (i < linhas.length && /^\s*\|/.test(linhas[i])) rows.push(linhas[i++]);
+      const temCab = rows.length > 1 && ehSep(rows[1]);
+      html += '<table>' + rows.filter(r => !ehSep(r)).map((r, k) => '<tr>' + celulas(r).map(c => temCab && k === 0 ? `<th>${inline(c)}</th>` : `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</table>';
+      continue;
+    }
+    const h = l.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {
+      html += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`;
+      i++;
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) {
+      html += '<hr>';
+      i++;
+      continue;
+    }
+    if (/^\s*>/.test(l)) {
+      const q = [];
+      while (i < linhas.length && /^\s*>/.test(linhas[i])) q.push(linhas[i++].replace(/^\s*>\s?/, ''));
+      html += `<blockquote>${q.map(inline).join('<br>')}</blockquote>`;
+      continue;
+    }
+    const lista = l.match(/^(\s*)([-*•]|\d+[.)])\s+/);
+    if (lista) {
+      const ordenada = /\d/.test(lista[2]);
+      let itens = '';
+      while (i < linhas.length) {
+        const m = linhas[i].match(/^(\s*)([-*•]|\d+[.)])\s+(.*)$/);
+        if (!m) break;
+        const recuo = m[1].length >= 2 ? ' style="margin-left:1.25em"' : '';
+        itens += `<li${recuo}>${inline(m[3])}</li>`;
+        i++;
+      }
+      html += ordenada ? `<ol>${itens}</ol>` : `<ul>${itens}</ul>`;
+      continue;
+    }
+    const p = [];
+    while (i < linhas.length && linhas[i].trim() && !/^\s*(\||#{1,4}\s|>|[-*•]\s|\d+[.)]\s|-{3,}\s*$)/.test(linhas[i])) p.push(linhas[i++]);
+    if (!p.length) p.push(linhas[i++]);
+    html += `<p>${p.map(inline).join('<br>')}</p>`;
+  }
+  return html;
+}
+const IA_CSS_DOC = 'body{font-family:Arial,sans-serif;font-size:12pt;line-height:1.5;color:#111}' + 'h1,h2,h3,h4{font-family:Arial,sans-serif;color:#0B2B5E}h1{font-size:15pt;text-align:center}h2{font-size:13pt}h3{font-size:12pt}' + 'p{text-align:justify;margin:0 0 8pt}table{border-collapse:collapse;width:100%;margin:6pt 0}' + 'td,th{border:1px solid #555;padding:4pt 6pt;font-size:11pt;vertical-align:top}th{background:#E8EEF7}blockquote{margin:6pt 24pt;font-style:italic}';
+function iaBaixarWord(titulo, md) {
+  const logo = window.location.origin + '/belem-digital-azul.png';
+  const nome = String(titulo || 'documento').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
+  const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' + `<head><meta charset="utf-8"><title>${nome}</title><style>${IA_CSS_DOC}</style></head><body>` + `<p style="text-align:center"><img src="${logo}" width="240" alt="Belém Digital"></p>${iaMdHtml(md)}</body></html>`;
+  const url = URL.createObjectURL(new Blob(['﻿', html], {
+    type: 'application/msword'
+  }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome + '.doc';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function iaCopiar(md) {
+  const html = iaMdHtml(md);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const texto = tmp.innerText || md;
+  try {
+    if (window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([`<div style="font-family:Arial;font-size:12pt">${html}</div>`], {
+          type: 'text/html'
+        }),
+        'text/plain': new Blob([texto], {
+          type: 'text/plain'
+        })
+      })]);
+    } else await navigator.clipboard.writeText(texto);
+    return true;
+  } catch {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+function IaAvatar({
+  size = 36,
+  className = ''
+}) {
+  return React.createElement("span", {
+    className: `inline-flex rounded-full overflow-hidden flex-shrink-0 ${className}`,
+    style: {
+      width: size,
+      height: size,
+      background: '#E6F7F5',
+      boxShadow: 'inset 0 0 0 1px rgba(13,148,136,.25)'
+    }
+  }, React.createElement("img", {
+    src: IA_AVATAR,
+    alt: IA_NOME,
+    className: "w-full h-full object-cover",
+    style: {
+      objectPosition: '55% 18%',
+      transform: 'scale(1.6)',
+      transformOrigin: '55% 22%'
+    }
+  }));
+}
+function IaMarkdown({
+  md,
+  className = ''
+}) {
+  return React.createElement("div", {
+    className: `ia-md ${className}`,
+    dangerouslySetInnerHTML: {
+      __html: iaMdHtml(md)
+    }
+  });
+}
+function IaDocCard({
+  doc,
+  abertoInicial,
+  addToast
+}) {
+  const [aberto, setAberto] = useState(!!abertoInicial);
+  const [conteudo, setConteudo] = useState(null);
+  useEffect(() => {
+    if (!aberto || conteudo !== null) return;
+    db.collection(IA_COL.documentos).doc(doc.id).get().then(d => setConteudo(d.exists ? d.data().conteudo || '' : '(documento não encontrado)')).catch(err => setConteudo('Erro ao carregar: ' + err.message));
+  }, [aberto]);
+  async function obter() {
+    if (conteudo !== null) return conteudo;
+    const d = await db.collection(IA_COL.documentos).doc(doc.id).get();
+    const c = d.exists ? d.data().conteudo || '' : '';
+    setConteudo(c);
+    return c;
+  }
+  return React.createElement("div", {
+    className: "mt-2 rounded-xl border border-teal-200 bg-white overflow-hidden"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 px-3 py-2",
+    style: {
+      background: '#F0FDFA'
+    }
+  }, React.createElement("span", {
+    className: "text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded text-white",
+    style: {
+      background: '#0D9488'
+    }
+  }, IA_TIPOS_DOC[doc.tipo] || 'Documento'), React.createElement("span", {
+    className: "text-xs font-bold text-gray-800 flex-1 truncate",
+    title: doc.titulo
+  }, doc.numero ? `nº ${doc.numero} – ` : '', doc.titulo), React.createElement("button", {
+    onClick: () => setAberto(v => !v),
+    className: "text-[11px] font-semibold text-teal-700 hover:underline"
+  }, aberto ? 'Ocultar' : 'Ver'), React.createElement("button", {
+    onClick: async () => {
+      const ok = await iaCopiar(await obter());
+      addToast?.(ok ? '📋 Documento copiado — cole no GDoc, e-mail ou Word.' : '❌ Não foi possível copiar.');
+    },
+    className: "text-[11px] font-semibold text-teal-700 hover:underline"
+  }, "Copiar"), React.createElement("button", {
+    onClick: async () => iaBaixarWord(doc.titulo, await obter()),
+    className: "text-[11px] font-semibold text-teal-700 hover:underline"
+  }, "Word")), aberto && React.createElement("div", {
+    className: "px-4 py-3 max-h-[480px] overflow-y-auto border-t border-teal-100"
+  }, conteudo === null ? React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Carregando\u2026") : React.createElement(IaMarkdown, {
+    md: conteudo,
+    className: "ia-doc"
+  })));
+}
+function IaAcaoCard({
+  acao,
+  onDecidir
+}) {
+  const [ocupado, setOcupado] = useState(false);
+  const rotulo = {
+    gdocs: 'GDoc',
+    propostas: 'Proposta',
+    contratos: 'Contrato',
+    certidoes: 'Certidão',
+    oportunidades: 'Oportunidade'
+  }[acao.colecao] || acao.colecao;
+  return React.createElement("div", {
+    className: "mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"
+  }, React.createElement("p", {
+    className: "text-[10px] font-black uppercase tracking-wider text-amber-700 mb-1"
+  }, "Grava\xE7\xE3o no sistema \xB7 ", acao.operacao === 'criar' ? 'novo registro' : 'atualização', " \xB7 ", rotulo, acao.alvo ? ` ${acao.alvo}` : ''), React.createElement("p", {
+    className: "text-xs text-gray-800 mb-1.5"
+  }, acao.resumo), React.createElement("div", {
+    className: "text-[11px] text-gray-600 bg-white/70 rounded-lg px-2 py-1.5 mb-2 max-h-40 overflow-y-auto"
+  }, Object.entries(acao.dados || {}).map(([k, v]) => React.createElement("div", {
+    key: k
+  }, React.createElement("span", {
+    className: "font-semibold"
+  }, k, ":"), " ", typeof v === 'object' ? JSON.stringify(v) : String(v)))), acao.status === 'pendente' ? React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    disabled: ocupado,
+    onClick: async () => {
+      setOcupado(true);
+      await onDecidir(acao, true);
+      setOcupado(false);
+    },
+    className: "px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50",
+    style: {
+      background: GREEN
+    }
+  }, ocupado ? 'Gravando…' : 'Confirmar'), React.createElement("button", {
+    disabled: ocupado,
+    onClick: () => onDecidir(acao, false),
+    className: "px-3 py-1 rounded-lg text-xs font-bold text-gray-600 bg-white border border-gray-200"
+  }, "Descartar")) : React.createElement("p", {
+    className: `text-[11px] font-bold ${acao.status === 'gravado' ? 'text-green-700' : acao.status === 'erro' ? 'text-red-600' : 'text-gray-500'}`
+  }, acao.status === 'gravado' ? '✔ Gravado no sistema' : acao.status === 'erro' ? `Erro: ${acao.erro || ''}` : 'Descartado'));
+}
+const iaChaveConversa = u => `${SYS.prefix}ia-conversa-${u}`;
+function iaLerConversaAtiva(u) {
+  try {
+    return localStorage.getItem(iaChaveConversa(u)) || null;
+  } catch {
+    return null;
+  }
+}
+function iaGravarConversaAtiva(u, id) {
+  try {
+    id ? localStorage.setItem(iaChaveConversa(u), id) : localStorage.removeItem(iaChaveConversa(u));
+  } catch {}
+}
+function AssistenteChat({
+  currentUser,
+  dados,
+  pagina,
+  compacto,
+  addToast,
+  conversaId,
+  setConversaId
+}) {
+  const [mensagens, setMensagens] = useState([]);
+  const [entrada, setEntrada] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [status, setStatus] = useState('');
+  const [ouvindo, setOuvindo] = useState(false);
+  const fimRef = useRef(null);
+  const dadosRef = useRef(dados);
+  const reconRef = useRef(null);
+  const textoRef = useRef(null);
+  dadosRef.current = dados;
+  useEffect(() => {
+    if (!conversaId) {
+      setMensagens([]);
+      return;
+    }
+    return db.collection(IA_COL.conversas).doc(conversaId).onSnapshot(d => {
+      if (d.exists && d.data().usuario === currentUser.username) setMensagens(d.data().mensagens || []);else {
+        setMensagens([]);
+        setConversaId(null);
+      }
+    }, () => setMensagens([]));
+  }, [conversaId]);
+  useEffect(() => {
+    fimRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end'
+    });
+  }, [mensagens.length, ocupado, status]);
+  useEffect(() => () => {
+    try {
+      reconRef.current?.stop();
+    } catch {}
+  }, []);
+  const alertas = useMemo(() => iaAlertas(dados, 30), [dados.contractMeta, dados.contracts, dados.certidoes]);
+  const primeiroNome = String(currentUser.name || currentUser.username).split(' ')[0];
+  function alternarVoz() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      addToast?.('🎙️ Este navegador não aceita ditado. Use o Chrome ou o Edge.');
+      return;
+    }
+    if (ouvindo) {
+      try {
+        reconRef.current?.stop();
+      } catch {}
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    const base = entrada ? entrada.replace(/\s*$/, ' ') : '';
+    rec.onresult = ev => {
+      let txt = '';
+      for (let k = 0; k < ev.results.length; k++) txt += ev.results[k][0].transcript;
+      setEntrada(base + txt.trim());
+    };
+    rec.onerror = ev => {
+      if (ev.error !== 'aborted' && ev.error !== 'no-speech') addToast?.('🎙️ Ditado: ' + ev.error);
+    };
+    rec.onend = () => setOuvindo(false);
+    reconRef.current = rec;
+    rec.start();
+    setOuvindo(true);
+  }
+  async function salvarMensagens(id, lista) {
+    const enxuta = lista.slice(-80).map(m => ({
+      ...m,
+      texto: String(m.texto || '').slice(0, 30000)
+    }));
+    await db.collection(IA_COL.conversas).doc(id).set({
+      mensagens: enxuta,
+      atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    }, {
+      merge: true
+    });
+  }
+  async function decidirAcao(msgIdx, acao, confirmar) {
+    let novo = {
+      status: 'descartado'
+    };
+    if (confirmar) {
+      try {
+        const id = await iaAplicarGravacao(acao);
+        novo = {
+          status: 'gravado',
+          gravadoId: String(id || '')
+        };
+        addToast?.('✅ Gravado no sistema.');
+      } catch (err) {
+        novo = {
+          status: 'erro',
+          erro: err.message
+        };
+        addToast?.('❌ ' + err.message);
+      }
+    }
+    const lista = mensagens.map((m, i) => i !== msgIdx ? m : {
+      ...m,
+      acoes: (m.acoes || []).map(a => a.id === acao.id ? {
+        ...a,
+        ...novo
+      } : a)
+    });
+    setMensagens(lista);
+    if (conversaId) await salvarMensagens(conversaId, lista).catch(() => {});
+  }
+  async function enviar(textoForcado) {
+    const texto = String(textoForcado ?? entrada).trim();
+    if (!texto || ocupado) return;
+    if (ouvindo) {
+      try {
+        reconRef.current?.stop();
+      } catch {}
+    }
+    setEntrada('');
+    setOcupado(true);
+    setStatus('Pensando…');
+    let id = conversaId;
+    const msgUsuario = {
+      role: 'user',
+      texto,
+      em: Date.now(),
+      pagina: pagina || ''
+    };
+    let lista = [...mensagens, msgUsuario];
+    setMensagens(lista);
+    try {
+      if (!id) {
+        const ref = await db.collection(IA_COL.conversas).add({
+          usuario: currentUser.username,
+          titulo: texto.slice(0, 80),
+          mensagens: [],
+          criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+          atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        id = ref.id;
+        setConversaId(id);
+      }
+      await salvarMensagens(id, lista);
+      const [memSnap, baseSnap, docSnap] = await Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.conhecimento).limit(40).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]);
+      const system = iaSistema({
+        usuario: currentUser,
+        pagina,
+        memorias: memSnap.docs.map(d => d.data()).reverse(),
+        base: baseSnap.docs.map(d => d.data()),
+        docsRecentes: docSnap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        })),
+        alertas: iaAlertas(dadosRef.current, 30)
+      });
+      const historico = [];
+      for (const m of lista.slice(-24)) {
+        let t = m.texto || '';
+        if (m.docs?.length) t += '\n\n[Documentos salvos nesta resposta: ' + m.docs.map(x => `${x.titulo} (id ${x.id})`).join('; ') + ']';
+        if (m.acoes?.length) t += '\n\n[Gravações propostas: ' + m.acoes.map(a => `${a.resumo} → ${a.status}`).join('; ') + ']';
+        if (!t.trim()) continue;
+        const ult = historico[historico.length - 1];
+        if (ult && ult.role === m.role) ult.content += '\n\n' + t;else historico.push({
+          role: m.role,
+          content: t
+        });
+      }
+      while (historico.length && historico[0].role !== 'user') historico.shift();
+      const ctx = {
+        dados: dadosRef.current,
+        usuario: currentUser,
+        conversaId: id,
+        docs: [],
+        acoes: [],
+        aprendizados: []
+      };
+      const msgs = historico;
+      let textoFinal = '';
+      for (let passo = 0; passo < IA_MAX_PASSOS; passo++) {
+        ctx.dados = dadosRef.current;
+        const resp = await iaChamar({
+          max_tokens: 16000,
+          system,
+          messages: msgs,
+          tools: IA_FERRAMENTAS
+        });
+        const blocos = resp.content || [];
+        const textos = blocos.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+        if (textos) textoFinal = textoFinal ? textoFinal + '\n\n' + textos : textos;
+        if (resp.stop_reason !== 'tool_use') {
+          if (resp.stop_reason === 'max_tokens') textoFinal += '\n\n_(A resposta atingiu o limite de tamanho. Peça para eu continuar.)_';
+          break;
+        }
+        msgs.push({
+          role: 'assistant',
+          content: blocos
+        });
+        const resultados = [];
+        for (const b of blocos.filter(x => x.type === 'tool_use')) {
+          setStatus((IA_STATUS_FERRAMENTA[b.name] || (() => 'Trabalhando…'))(b.input || {}));
+          let saida;
+          try {
+            saida = await iaExecutar(b.name, b.input || {}, ctx);
+          } catch (err) {
+            saida = {
+              erro: err.message
+            };
+          }
+          resultados.push({
+            type: 'tool_result',
+            tool_use_id: b.id,
+            content: JSON.stringify(saida),
+            ...(saida && saida.erro ? {
+              is_error: true
+            } : {})
+          });
+        }
+        msgs.push({
+          role: 'user',
+          content: resultados
+        });
+        setStatus('Escrevendo…');
+        if (passo === IA_MAX_PASSOS - 1) textoFinal += '\n\n_(Parei depois de muitas etapas. Diga se devo continuar.)_';
+      }
+      const msgIA = {
+        role: 'assistant',
+        texto: textoFinal || (ctx.docs.length ? 'Pronto.' : '(sem resposta)'),
+        em: Date.now(),
+        docs: ctx.docs,
+        acoes: ctx.acoes,
+        aprendizados: ctx.aprendizados
+      };
+      lista = [...lista, msgIA];
+      setMensagens(lista);
+      await salvarMensagens(id, lista);
+    } catch (err) {
+      console.error('[Assistente]', err);
+      const msgErro = {
+        role: 'assistant',
+        texto: `Não consegui concluir: ${err.message}`,
+        em: Date.now(),
+        erro: true
+      };
+      lista = [...lista, msgErro];
+      setMensagens(lista);
+      if (id) await salvarMensagens(id, lista).catch(() => {});
+    } finally {
+      setOcupado(false);
+      setStatus('');
+      setTimeout(() => textoRef.current?.focus(), 50);
+    }
+  }
+  const ultimoIdxIA = mensagens.map(m => m.role).lastIndexOf('assistant');
+  return React.createElement("div", {
+    className: "flex flex-col h-full min-h-0"
+  }, React.createElement("div", {
+    className: `flex-1 overflow-y-auto ${compacto ? 'px-3 py-3' : 'px-6 py-5'} space-y-4`
+  }, mensagens.length === 0 && React.createElement("div", {
+    className: `flex flex-col items-center text-center ${compacto ? 'pt-2' : 'pt-8'}`
+  }, React.createElement("img", {
+    src: IA_AVATAR,
+    alt: IA_NOME,
+    className: compacto ? 'w-24 mb-2' : 'w-36 mb-3'
+  }), React.createElement("p", {
+    className: "text-sm font-bold text-gray-800"
+  }, "Ol\xE1, ", primeiroNome, "! Sou o ", IA_NOME, "."), React.createElement("p", {
+    className: "text-xs text-gray-500 mt-1 max-w-sm"
+  }, "Redijo GDocs, e-mails, of\xEDcios, DFD, ETP e TR, consulto os dados do sistema e aviso vencimentos. Escreva ou fale o que precisa."), alertas.length > 0 && React.createElement("div", {
+    className: "mt-3 w-full max-w-md text-left rounded-xl border border-red-100 bg-red-50 px-3 py-2"
+  }, React.createElement("p", {
+    className: "text-[10px] font-black uppercase tracking-wider text-red-600 mb-1"
+  }, "Aten\xE7\xE3o \xB7 pr\xF3ximos 30 dias"), alertas.slice(0, 5).map((a, k) => React.createElement("p", {
+    key: k,
+    className: "text-xs text-gray-700"
+  }, "\u2022 ", a.referencia, " \u2014 ", a.dias < 0 ? `vencido há ${-a.dias} dia(s)` : a.dias === 0 ? 'vence hoje' : `vence em ${a.dias} dia(s)`)), alertas.length > 5 && React.createElement("p", {
+    className: "text-[11px] text-gray-500 mt-0.5"
+  }, "e mais ", alertas.length - 5, ".")), React.createElement("div", {
+    className: `mt-4 grid gap-2 w-full ${compacto ? 'grid-cols-1' : 'grid-cols-2 max-w-2xl'}`
+  }, IA_SUGESTOES.map(s => React.createElement("button", {
+    key: s,
+    onClick: () => enviar(s),
+    className: "text-left text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-teal-300 hover:bg-teal-50 text-gray-700 transition-colors"
+  }, s)))), mensagens.map((m, idx) => m.role === 'user' ? React.createElement("div", {
+    key: idx,
+    className: "flex justify-end"
+  }, React.createElement("div", {
+    className: "max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm text-white whitespace-pre-wrap",
+    style: {
+      background: BLUE
+    }
+  }, m.texto)) : React.createElement("div", {
+    key: idx,
+    className: "flex gap-2 items-start"
+  }, React.createElement(IaAvatar, {
+    size: compacto ? 28 : 34
+  }), React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("div", {
+    className: `rounded-2xl rounded-tl-md px-3.5 py-2 text-sm ${m.erro ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-white text-gray-800 border border-gray-100 shadow-sm'}`
+  }, React.createElement(IaMarkdown, {
+    md: m.texto
+  })), (m.docs || []).map(d => React.createElement(IaDocCard, {
+    key: d.id,
+    doc: d,
+    abertoInicial: idx === ultimoIdxIA && !compacto,
+    addToast: addToast
+  })), (m.acoes || []).map(a => React.createElement(IaAcaoCard, {
+    key: a.id,
+    acao: a,
+    onDecidir: (ac, ok) => decidirAcao(idx, ac, ok)
+  })), m.aprendizados?.length > 0 && React.createElement("p", {
+    className: "mt-1 text-[10px] text-teal-700"
+  }, "\uD83E\uDDE0 Aprendi: ", m.aprendizados.join(' · '))))), ocupado && React.createElement("div", {
+    className: "flex gap-2 items-center"
+  }, React.createElement(IaAvatar, {
+    size: compacto ? 28 : 34
+  }), React.createElement("div", {
+    className: "rounded-2xl px-3.5 py-2 bg-white border border-gray-100 shadow-sm text-xs text-gray-500 flex items-center gap-2"
+  }, React.createElement("span", {
+    className: "ia-pontos"
+  }, React.createElement("i", null), React.createElement("i", null), React.createElement("i", null)), status)), React.createElement("div", {
+    ref: fimRef
+  })), React.createElement("div", {
+    className: `border-t border-gray-100 bg-white ${compacto ? 'p-2' : 'px-6 py-3'}`
+  }, React.createElement("div", {
+    className: "flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-2 py-1.5 focus-within:border-teal-400 focus-within:bg-white transition-colors"
+  }, React.createElement("textarea", {
+    ref: textoRef,
+    value: entrada,
+    onChange: ev => setEntrada(ev.target.value),
+    onKeyDown: ev => {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        enviar();
+      }
+    },
+    rows: compacto ? 2 : 3,
+    placeholder: ouvindo ? 'Ouvindo… fale sua demanda' : 'Escreva sua demanda… (Enter envia, Shift+Enter quebra linha)',
+    className: "flex-1 resize-none bg-transparent text-sm outline-none px-1.5 py-1 max-h-48"
+  }), React.createElement("button", {
+    onClick: alternarVoz,
+    title: ouvindo ? 'Parar ditado' : 'Falar',
+    className: `w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${ouvindo ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:bg-gray-200'}`
+  }, React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    className: "w-5 h-5",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "12",
+    rx: "3"
+  }), React.createElement("path", {
+    d: "M5 10v1a7 7 0 0 0 14 0v-1"
+  }), React.createElement("line", {
+    x1: "12",
+    y1: "18",
+    x2: "12",
+    y2: "22"
+  }))), React.createElement("button", {
+    onClick: () => enviar(),
+    disabled: ocupado || !entrada.trim(),
+    title: "Enviar",
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white disabled:opacity-40",
+    style: {
+      background: '#0D9488'
+    }
+  }, React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    className: "w-4 h-4",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.4",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, React.createElement("line", {
+    x1: "22",
+    y1: "2",
+    x2: "11",
+    y2: "13"
+  }), React.createElement("polygon", {
+    points: "22 2 15 22 11 13 2 9 22 2"
+  })))), !compacto && React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-1.5 px-1"
+  }, "O assistente pode errar: confira valores, n\xFAmeros e fundamentos antes de protocolar. Grava\xE7\xF5es no sistema s\xF3 acontecem com a sua confirma\xE7\xE3o.")));
+}
+function AssistentePage({
+  currentUser,
+  dados,
+  addToast
+}) {
+  const [aba, setAba] = useState('conversa');
+  const [conversaId, setConversaIdS] = useState(() => iaLerConversaAtiva(currentUser.username));
+  const [conversas, setConversas] = useState([]);
+  const [documentos, setDocumentos] = useState([]);
+  const [memorias, setMemorias] = useState([]);
+  const [baseQtd, setBaseQtd] = useState(null);
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [buscaDoc, setBuscaDoc] = useState('');
+  const setConversaId = id => {
+    setConversaIdS(id);
+    iaGravarConversaAtiva(currentUser.username, id);
+  };
+  useEffect(() => db.collection(IA_COL.conversas).where('usuario', '==', currentUser.username).onSnapshot(snap => {
+    setConversas(snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })).sort((a, b) => (b.atualizadoEm?.seconds || 0) - (a.atualizadoEm?.seconds || 0)));
+  }, () => {}), []);
+  useEffect(() => {
+    if (aba === 'documentos') return db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).onSnapshot(s => setDocumentos(s.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }))), () => {});
+    if (aba === 'memoria') {
+      db.collection(IA_COL.conhecimento).get().then(s => setBaseQtd(s.size)).catch(() => setBaseQtd(0));
+      return db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').onSnapshot(s => setMemorias(s.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }))), () => {});
+    }
+  }, [aba]);
+  const docsFiltrados = documentos.filter(d => !filtroTipo || d.tipo === filtroTipo).filter(d => {
+    const t = iaNorm(buscaDoc).split(/\s+/).filter(Boolean);
+    const s = iaNorm(`${d.titulo} ${d.numero} ${d.contrato} ${d.criadoPorNome}`);
+    return t.every(x => s.includes(x));
+  });
+  return React.createElement("div", {
+    className: "flex flex-col min-h-0 overflow-hidden",
+    style: {
+      height: 'calc(100vh - 56px)'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-3 px-6 py-3 bg-white border-b border-gray-200"
+  }, React.createElement(IaAvatar, {
+    size: 44
+  }), React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("h1", {
+    className: "text-base font-black text-gray-900"
+  }, IA_NOME), React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, "Agente de IA do NGCC \xB7 documentos, consultas, vencimentos e grava\xE7\xF5es no sistema")), React.createElement("div", {
+    className: "flex rounded-xl bg-gray-100 p-1 text-xs font-bold"
+  }, [['conversa', 'Conversa'], ['documentos', 'Documentos gerados'], ['memoria', 'Memória e base']].map(([k, r]) => React.createElement("button", {
+    key: k,
+    onClick: () => setAba(k),
+    className: `px-3 py-1.5 rounded-lg transition-colors ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`
+  }, r)))), aba === 'conversa' && React.createElement("div", {
+    className: "flex-1 flex min-h-0"
+  }, React.createElement("aside", {
+    className: "w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0"
+  }, React.createElement("div", {
+    className: "p-3"
+  }, React.createElement("button", {
+    onClick: () => setConversaId(null),
+    className: "w-full px-3 py-2 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5",
+    style: {
+      background: '#0D9488'
+    }
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  }), " Nova conversa")), React.createElement("p", {
+    className: "px-4 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400"
+  }, "Hist\xF3rico"), React.createElement("div", {
+    className: "flex-1 overflow-y-auto px-2 pb-3 space-y-0.5"
+  }, conversas.length === 0 && React.createElement("p", {
+    className: "px-2 text-xs text-gray-400"
+  }, "Nenhuma conversa ainda."), conversas.map(c => React.createElement("div", {
+    key: c.id,
+    className: `group flex items-center rounded-lg ${c.id === conversaId ? 'bg-teal-50' : 'hover:bg-gray-50'}`
+  }, React.createElement("button", {
+    onClick: () => setConversaId(c.id),
+    className: "flex-1 text-left px-2 py-1.5 min-w-0"
+  }, React.createElement("p", {
+    className: `text-xs truncate ${c.id === conversaId ? 'font-bold text-teal-800' : 'text-gray-700'}`
+  }, c.titulo || 'Conversa'), React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, iaDataCurta(c.atualizadoEm))), React.createElement("button", {
+    title: "Apagar conversa",
+    onClick: async () => {
+      if (!confirm('Apagar esta conversa do histórico? Os documentos gerados continuam salvos.')) return;
+      await db.collection(IA_COL.conversas).doc(c.id).delete();
+      if (c.id === conversaId) setConversaId(null);
+    },
+    className: "opacity-0 group-hover:opacity-100 px-2 text-gray-400 hover:text-red-500"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5"
+  })))))), React.createElement("div", {
+    className: "flex-1 min-w-0 flex flex-col bg-slate-50"
+  }, React.createElement("div", {
+    className: "flex-1 min-h-0 max-w-4xl w-full mx-auto flex flex-col"
+  }, React.createElement(AssistenteChat, {
+    currentUser: currentUser,
+    dados: dados,
+    pagina: `Módulo ${IA_NOME}`,
+    addToast: addToast,
+    conversaId: conversaId,
+    setConversaId: setConversaId
+  })))), aba === 'documentos' && React.createElement("div", {
+    className: "flex-1 overflow-y-auto px-6 py-5"
+  }, React.createElement("div", {
+    className: "max-w-5xl mx-auto"
+  }, React.createElement("div", {
+    className: "flex flex-wrap items-center gap-2 mb-4"
+  }, React.createElement("input", {
+    value: buscaDoc,
+    onChange: e => setBuscaDoc(e.target.value),
+    placeholder: "Buscar por t\xEDtulo, n\xFAmero, contrato ou autor",
+    className: "flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:border-teal-400"
+  }), React.createElement("select", {
+    value: filtroTipo,
+    onChange: e => setFiltroTipo(e.target.value),
+    className: "px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white"
+  }, React.createElement("option", {
+    value: ""
+  }, "Todos os tipos"), Object.entries(IA_TIPOS_DOC).map(([k, r]) => React.createElement("option", {
+    key: k,
+    value: k
+  }, r))), React.createElement("span", {
+    className: "text-xs text-gray-500"
+  }, docsFiltrados.length, " documento(s)")), docsFiltrados.length === 0 && React.createElement("p", {
+    className: "text-sm text-gray-400 text-center py-10"
+  }, "Nenhum documento gerado ainda. Pe\xE7a um na aba Conversa."), React.createElement("div", {
+    className: "space-y-2"
+  }, docsFiltrados.map(d => React.createElement("div", {
+    key: d.id
+  }, React.createElement("p", {
+    className: "text-[10px] text-gray-400 px-1"
+  }, iaDataCurta(d.criadoEm), " \xB7 ", d.criadoPorNome || d.criadoPor, d.contrato ? ` · Contrato ${d.contrato}` : '', d.substitui ? ' · revisão' : ''), React.createElement(IaDocCard, {
+    doc: d,
+    addToast: addToast
+  })))))), aba === 'memoria' && React.createElement("div", {
+    className: "flex-1 overflow-y-auto px-6 py-5"
+  }, React.createElement("div", {
+    className: "max-w-4xl mx-auto space-y-5"
+  }, React.createElement("div", {
+    className: "rounded-2xl border border-gray-200 bg-white p-4"
+  }, React.createElement("h2", {
+    className: "text-sm font-black text-gray-900 mb-1"
+  }, "Base de conhecimento"), React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, baseQtd === null ? 'Carregando…' : baseQtd === 0 ? 'Vazia. A base com as informações do NGCC será carregada na próxima etapa.' : `${baseQtd} item(ns) carregado(s). O assistente consulta a base em todas as conversas.`)), React.createElement("div", {
+    className: "rounded-2xl border border-gray-200 bg-white p-4"
+  }, React.createElement("h2", {
+    className: "text-sm font-black text-gray-900 mb-1"
+  }, "O que o assistente aprendeu (", memorias.length, ")"), React.createElement("p", {
+    className: "text-xs text-gray-500 mb-3"
+  }, "Prefer\xEAncias, corre\xE7\xF5es e fatos registrados nas conversas. Vale para todos os usu\xE1rios. Apague o que estiver errado."), memorias.length === 0 && React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Nada ainda."), React.createElement("div", {
+    className: "divide-y divide-gray-100"
+  }, memorias.map(m => React.createElement("div", {
+    key: m.id,
+    className: "flex items-start gap-3 py-2"
+  }, React.createElement("span", {
+    className: "text-[10px] font-bold uppercase text-teal-700 bg-teal-50 rounded px-1.5 py-0.5 mt-0.5"
+  }, m.categoria || 'outro'), React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("p", {
+    className: "text-sm text-gray-800"
+  }, m.fato), React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, iaDataCurta(m.criadoEm), " \xB7 ", m.criadoPorNome || m.criadoPor)), React.createElement("button", {
+    title: "Apagar",
+    onClick: async () => {
+      if (confirm('Apagar este aprendizado?')) await db.collection(IA_COL.memoria).doc(m.id).delete();
+    },
+    className: "text-gray-300 hover:text-red-500"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  })))))))));
+}
+function AssistentePin({
+  currentUser,
+  dados,
+  pagina,
+  addToast,
+  onAbrirModulo
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [conversaId, setConversaIdS] = useState(() => iaLerConversaAtiva(currentUser.username));
+  const setConversaId = id => {
+    setConversaIdS(id);
+    iaGravarConversaAtiva(currentUser.username, id);
+  };
+  useEffect(() => {
+    if (aberto) setConversaIdS(iaLerConversaAtiva(currentUser.username));
+  }, [aberto]);
+  const qtdAlertas = useMemo(() => iaAlertas(dados, 30).length, [dados.contractMeta, dados.contracts, dados.certidoes]);
+  return React.createElement(React.Fragment, null, aberto && React.createElement("div", {
+    className: "fixed z-[65] bottom-24 right-5 flex flex-col bg-slate-50 rounded-2xl border border-gray-200 overflow-hidden slide-in",
+    style: {
+      width: 'min(420px, calc(100vw - 2.5rem))',
+      height: 'min(640px, calc(100vh - 8rem))',
+      boxShadow: '0 20px 60px rgba(15,23,42,.28)'
+    }
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 px-3 py-2.5 text-white",
+    style: {
+      background: 'linear-gradient(135deg,#0D9488,#0B2B5E)'
+    }
+  }, React.createElement(IaAvatar, {
+    size: 34
+  }), React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("p", {
+    className: "text-sm font-black leading-tight"
+  }, IA_NOME), React.createElement("p", {
+    className: "text-[10px] text-white/70 truncate"
+  }, "Voc\xEA est\xE1 em: ", pagina)), React.createElement("button", {
+    title: "Nova conversa",
+    onClick: () => setConversaId(null),
+    className: "w-8 h-8 rounded-lg hover:bg-white/15 flex items-center justify-center"
+  }, React.createElement(Plus, {
+    className: "w-4 h-4"
+  })), React.createElement("button", {
+    title: "Abrir o m\xF3dulo completo",
+    onClick: () => {
+      setAberto(false);
+      onAbrirModulo();
+    },
+    className: "w-8 h-8 rounded-lg hover:bg-white/15 flex items-center justify-center"
+  }, React.createElement(Maximize2, {
+    className: "w-4 h-4"
+  })), React.createElement("button", {
+    title: "Fechar",
+    onClick: () => setAberto(false),
+    className: "w-8 h-8 rounded-lg hover:bg-white/15 flex items-center justify-center"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "flex-1 min-h-0"
+  }, React.createElement(AssistenteChat, {
+    compacto: true,
+    currentUser: currentUser,
+    dados: dados,
+    pagina: pagina,
+    addToast: addToast,
+    conversaId: conversaId,
+    setConversaId: setConversaId
+  }))), React.createElement("button", {
+    onClick: () => setAberto(v => !v),
+    title: aberto ? 'Fechar assistente' : `${IA_NOME} — posso ajudar?`,
+    className: "ia-pin fixed z-[65] bottom-5 right-5 w-16 h-16 rounded-full bg-white flex items-center justify-center transition-transform hover:scale-105",
+    style: {
+      boxShadow: '0 8px 28px rgba(13,148,136,.45)',
+      border: '3px solid #14B8A6'
+    }
+  }, aberto ? React.createElement(X, {
+    className: "w-6 h-6 text-teal-700"
+  }) : React.createElement(IaAvatar, {
+    size: 56
+  }), !aberto && qtdAlertas > 0 && React.createElement("span", {
+    className: "absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white",
+    style: {
+      background: '#ef4444'
+    }
+  }, qtdAlertas > 9 ? '9+' : qtdAlertas)));
+}
 function App() {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [users, setUsers] = useState([]);
@@ -25112,6 +26648,7 @@ function App() {
   const [campanhaEventos, setCampanhaEventos] = useState([]);
   const [showCampanhaPage, setShowCampanhaPage] = useState(false);
   const [showRelatoriosPage, setShowRelatoriosPage] = useState(false);
+  const [showAssistentePage, setShowAssistentePage] = useState(false);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
   useEffect(() => {
     if (!showPlusMenu) return;
@@ -25703,6 +27240,7 @@ function App() {
     setShowProposalBI(false);
     setShowCampanhaPage(false);
     setShowRelatoriosPage(false);
+    setShowAssistentePage(false);
     if (ARCANJO_ONLY.has(currentUser?.username)) {
       setShowArcanjoPage(true);
     } else {
@@ -25834,6 +27372,9 @@ function App() {
       if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`);
     }).catch(() => {});
   }, [dbReady, currentUser, leadSync]);
+  useEffect(() => {
+    if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showCampanhaPage) setShowAssistentePage(false);
+  }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage, showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, showCampanhaPage]);
   if (!dbReady) return React.createElement("div", {
     className: "min-h-screen flex flex-col items-center justify-center gap-5",
     style: {
@@ -26801,6 +28342,27 @@ function App() {
   const horaAgora = new Date().getHours();
   const saudacao = !emArcanjo ? 'Olá' : horaAgora < 12 ? 'Bom dia' : horaAgora < 18 ? 'Boa tarde' : 'Boa noite';
   const userInitials = (currentUser.name || currentUser.username).split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  const dadosIA = {
+    contracts,
+    contractMeta,
+    contractAdditives,
+    proposals,
+    gdocs,
+    certidoes,
+    cronogramas,
+    leads,
+    orgaos,
+    contacts,
+    propostasEmitidas,
+    users
+  };
+  const paginaAtual = showForm ? 'Cadastro de contrato' : activeContractNumber ? `Contrato ${activeContractNumber}` : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas' : showGdocPage ? 'GDoc' : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas' : showLeadsPage ? 'Oportunidades' : showPropEmissao ? 'Emitir Proposta' : showCertidoesPage ? 'Certidões' : showCronogramaPage ? 'Cronograma Financeiro' : showInstallmentsPage ? 'Parcelas' : showContractsPage ? 'Contratos' : showAdmin ? 'Painel Admin' : 'Início';
+  function abrirAssistente() {
+    handleGoHome();
+    setShowContractsList(false);
+    setShowNfListView(false);
+    setShowAssistentePage(true);
+  }
   function SidebarBtn({
     icon: Icon,
     label,
@@ -27210,6 +28772,11 @@ function App() {
       setShowNfListView(false);
       setShowRelatoriosPage(true);
     }
+  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: IaMenuIcon,
+    label: IA_NOME,
+    active: showAssistentePage,
+    onClick: abrirAssistente
   }), SYS.id === 'main' && currentUser.username === 'henriquecorreia' && React.createElement(SidebarBtn, {
     icon: Megaphone,
     label: "Campanha",
@@ -27416,7 +28983,7 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+    className: showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
   }, showForm && React.createElement("div", {
     className: "bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden slide-in"
   }, React.createElement("div", {
@@ -28086,7 +29653,11 @@ function App() {
     className: "w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
   }), "Salvando\u2026") : React.createElement(React.Fragment, null, React.createElement(Send, {
     className: "w-4 h-4"
-  }), "Salvar Contrato")))), " "), showRelatoriosPage && SYS.id === 'main' ? React.createElement(RelatoriosExecucaoPage, {
+  }), "Salvar Contrato")))), " "), showAssistentePage ? React.createElement(AssistentePage, {
+    currentUser: currentUser,
+    dados: dadosIA,
+    addToast: addToast
+  }) : showRelatoriosPage && SYS.id === 'main' ? React.createElement(RelatoriosExecucaoPage, {
     currentUser: currentUser,
     apiKey: apiKey,
     addToast: addToast
@@ -29184,13 +30755,19 @@ function App() {
     }
   }, "Gerenciar contratos ", React.createElement(ChevronRight, {
     className: "w-3 h-3"
-  }))))))), showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes ? React.createElement("div", {
+  }))))))), showAssistentePage ? null : showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes ? React.createElement("div", {
     className: "text-center text-[10px] text-gray-400 pb-4"
   }, React.createElement("p", null, "Desenvolvido por ", React.createElement("span", {
     className: "font-semibold text-gray-500"
   }, "Neotrix"), " \xB7 2026")) : React.createElement("div", {
     className: "text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2"
-  }, React.createElement("p", null, SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)')))));
+  }, React.createElement("p", null, SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)')))), !showAssistentePage && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(AssistentePin, {
+    currentUser: currentUser,
+    dados: dadosIA,
+    pagina: paginaAtual,
+    addToast: addToast,
+    onAbrirModulo: abrirAssistente
+  }));
 }
 const IS_PAINEL_TV = typeof window !== 'undefined' && /^\/gcsp\/painel\/?$/i.test(window.location.pathname || '');
 ReactDOM.createRoot(document.getElementById('root')).render(IS_PAINEL_TV ? React.createElement(PainelTV, null) : React.createElement(App, null));

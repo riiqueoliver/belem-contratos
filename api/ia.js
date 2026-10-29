@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { model, max_tokens, messages, system, temperature } = req.body || {};
+  const { model, max_tokens, messages, system, temperature, tools, tool_choice } = req.body || {};
   if (typeof model !== 'string' || !model.startsWith('claude-') || !Array.isArray(messages)) {
     res.status(400).json({ error: { message: 'Requisição inválida.' } });
     return;
@@ -45,6 +45,9 @@ module.exports = async (req, res) => {
   const corpo = { model, max_tokens: Math.min(Number(max_tokens) || 1024, MAX_TOKENS), messages };
   if (system) corpo.system = system;
   if (temperature !== undefined) corpo.temperature = temperature;
+  // Ferramentas do Assistente de IA (o laço de execução roda no navegador)
+  if (Array.isArray(tools) && tools.length) corpo.tools = tools;
+  if (tool_choice) corpo.tool_choice = tool_choice;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
