@@ -10,6 +10,7 @@
 // scripts/migrate-hash-passwords.js essa ramificação deixa de ser usada.
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../lib/firebaseAdmin');
+const { emitirPasse } = require('../lib/baseIA');
 
 const BCRYPT_RE = /^\$2[aby]\$/;
 
@@ -49,7 +50,11 @@ module.exports = async (req, res) => {
       return;
     }
 
-    res.status(200).json({ user });
+    // Passe assinado que libera a base privada do Assistente de IA (validado em /api/ia)
+    let iaPasse = null;
+    try { iaPasse = emitirPasse(user.username, sysId === 'gcsp' ? 'gcsp' : 'main'); } catch (e) { console.warn('iaPasse:', e.message); }
+
+    res.status(200).json({ user, iaPasse });
   } catch (err) {
     console.error('Erro em /api/login:', err);
     res.status(500).json({ error: 'Erro interno ao autenticar.' });

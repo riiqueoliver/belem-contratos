@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Base privada do Assistente de IA:
+    // só o servidor (Admin SDK) acessa.
+    match /{colecao}/{document=**} {
+      allow read, write: if !(colecao in
+        ['ia_base_privada',
+         'gcsp_ia_base_privada']);
+    }
+  }
+}

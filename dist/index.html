@@ -4306,6 +4306,7 @@ function LoginScreen({
       });
       const data = await resp.json().catch(() => ({}));
       if (resp.ok && data.user) {
+        iaGuardarPasse(data.iaPasse);
         onLogin(data.user);
       } else {
         setError(data.error || 'Usuário ou senha incorretos.');
@@ -25124,6 +25125,28 @@ const IA_FONTES = ['contratos', 'parcelas', 'propostas', 'gdocs', 'certidoes', '
 const IA_MAX_PASSOS = 12;
 const IA_DOC_TECNICO = /\b(dfd|etp|tr|termo de refer[eê]ncia|estudo t[eé]cnico|formaliza[cç][aã]o de demanda|edital|parecer|minuta)\b/i;
 const IA_SUGESTOES = ['Quais contratos e certidões vencem nos próximos 60 dias?', 'Redija um GDoc ao NUSP solicitando RMS e empenho para pagamento de parceiro', 'Elabore um ofício do NGCC', 'Monte um DFD para uma nova contratação'];
+const IA_PASSE_KEY = SYS.prefix + 'ia-passe';
+function iaGuardarPasse(p) {
+  try {
+    p ? localStorage.setItem(IA_PASSE_KEY, p) : localStorage.removeItem(IA_PASSE_KEY);
+  } catch {}
+}
+function iaLerPasse() {
+  try {
+    return localStorage.getItem(IA_PASSE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+function iaBaseDisponivel() {
+  const p = iaLerPasse();
+  if (SYS.id !== 'main' || !p) return false;
+  try {
+    return JSON.parse(atob(p.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))).exp > Date.now();
+  } catch {
+    return false;
+  }
+}
 function iaNorm(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
@@ -25283,7 +25306,7 @@ const IA_FERRAMENTAS = [{
   }
 }, {
   name: 'consultar_base',
-  description: 'Pesquisa a base de conhecimento do NGCC (normas internas, modelos, contratos de referência, dados institucionais).',
+  description: 'Pesquisa a base privada do NGCC: os documentos de trabalho da Belém Digital (contratos, parcerias, propostas, RFPs, ' + 'DFD/ETP/TR, ofícios, apostilamentos, cronogramas, planilhas de valores, atas, extratos do DOM). Devolve os trechos mais relevantes ' + 'com o nome do documento. Use termos específicos (nº do contrato, empresa, órgão, assunto) e refaça com outros termos se vier pouco.',
   input_schema: {
     type: 'object',
     properties: {
@@ -25390,11 +25413,11 @@ function iaSistema({
   usuario,
   pagina,
   memorias,
-  base,
+  baseOk,
   docsRecentes,
   alertas
 }) {
-  const blocoBase = base.length ? base.map(b => `### ${b.titulo || 'Sem título'}\n${String(b.conteudo || '').slice(0, 6000)}`).join('\n\n').slice(0, 40000) : '(vazia por enquanto — use consultar_base mesmo assim, ela pode ter sido carregada)';
+  const blocoBase = baseOk ? 'Disponível pela ferramenta consultar_base (documentos internos e sigilosos do NGCC). Consulte sempre que a demanda envolver contratos, parceiros, valores, processos ou documentos anteriores.' : 'Indisponível nesta sessão (o usuário precisa sair e entrar de novo no sistema para liberar).';
   return `Você é o ${IA_NOME}, assistente de IA do sistema de gestão de contratos ${SYS.id === 'gcsp' ? 'da GCSP – Gerência de Contratos, Suprimentos e Patrimônio' : 'da Belém Digital'}.
 Atende a equipe do Núcleo de Gestão Comercial e Contratual (NGCC) da Companhia de Transformação Digital do Município de Belém – Belém Digital, empresa pública municipal (CNPJ 04.850.095/0001-93, Av. Nazaré, nº 708, Nazaré, Belém/PA).
 
@@ -25423,7 +25446,7 @@ Regras:
 Memória — aprendizados anteriores:
 ${memorias.length ? memorias.map(m => `- ${m.fato}`).join('\n') : '(nenhum ainda)'}
 
-Base de conhecimento:
+Base privada do NGCC:
 ${blocoBase}
 
 Documentos redigidos recentemente:
@@ -25442,7 +25465,8 @@ async function iaChamar(corpo) {
       },
       body: JSON.stringify({
         ...corpo,
-        model
+        model,
+        passe: iaLerPasse() || undefined
       })
     });
     const json = await resp.json().catch(() => ({}));
@@ -25463,10 +25487,9 @@ function iaInvalidarContexto() {
 async function iaContexto() {
   if (iaCache.valor && Date.now() - iaCache.em < 120000) return iaCache.valor;
   if (!iaCache.pendente) {
-    iaCache.pendente = Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.conhecimento).limit(40).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]).then(([mem, base, docs]) => {
+    iaCache.pendente = Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]).then(([mem, docs]) => {
       iaCache.valor = {
         memorias: mem.docs.map(d => d.data()).reverse(),
-        base: base.docs.map(d => d.data()),
         docsRecentes: docs.docs.map(d => ({
           id: d.id,
           ...d.data()
@@ -25551,30 +25574,10 @@ async function iaExecutar(nome, e, ctx) {
     };
   }
   if (nome === 'consultar_base') {
-    const snap = await db.collection(IA_COL.conhecimento).get();
-    const termos = iaNorm(e.busca).split(/\s+/).filter(t => t.length > 2);
-    const pontuar = x => {
-      const t = iaNorm(`${x.titulo} ${x.conteudo}`);
-      return termos.reduce((s, y) => s + (t.includes(y) ? 1 : 0), 0);
-    };
-    const achados = snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    })).map(x => ({
-      x,
-      p: pontuar(x)
-    })).filter(o => o.p > 0).sort((a, b) => b.p - a.p).slice(0, 5).map(({
-      x
-    }) => ({
-      id: x.id,
-      titulo: x.titulo,
-      conteudo: String(x.conteudo || '').slice(0, 12000)
-    }));
-    return achados.length ? {
-      resultados: achados
+    return ctx.resultadoCifrado ? {
+      __bruto: ctx.resultadoCifrado
     } : {
-      resultados: [],
-      aviso: snap.empty ? 'A base de conhecimento ainda está vazia.' : 'Nada encontrado para esses termos.'
+      erro: 'Base indisponível nesta sessão.'
     };
   }
   if (nome === 'salvar_documento') {
@@ -25659,7 +25662,7 @@ const IA_STATUS_FERRAMENTA = {
   consultar_dados: e => `Consultando ${String(e.fonte || 'dados').replace('_', ' ')}…`,
   alertas_vencimentos: () => 'Verificando vencimentos…',
   buscar_documentos: () => 'Buscando documentos anteriores…',
-  consultar_base: () => 'Pesquisando a base de conhecimento…',
+  consultar_base: e => `Pesquisando a base do NGCC${e.busca ? ': ' + String(e.busca).slice(0, 40) : ''}…`,
   salvar_documento: e => `Salvando ${IA_TIPOS_DOC[e.tipo] || 'documento'}…`,
   proximo_numero: () => 'Conferindo a numeração…',
   lembrar: () => 'Registrando aprendizado…',
@@ -26110,6 +26113,7 @@ function AssistenteChat({
         usuario: currentUser,
         pagina,
         ...contexto,
+        baseOk: iaBaseDisponivel(),
         alertas: iaAlertas(dadosRef.current, 30)
       });
       const historico = [];
@@ -26142,8 +26146,8 @@ function AssistenteChat({
           max_tokens: 16000,
           system,
           messages: msgs,
-          tools: IA_FERRAMENTAS,
-          qualidade
+          qualidade,
+          tools: iaBaseDisponivel() ? IA_FERRAMENTAS : IA_FERRAMENTAS.filter(f => f.name !== 'consultar_base')
         });
         const blocos = resp.content || [];
         const textos = blocos.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
@@ -26161,7 +26165,10 @@ function AssistenteChat({
           setStatus((IA_STATUS_FERRAMENTA[b.name] || (() => 'Trabalhando…'))(b.input || {}));
           let saida;
           try {
-            saida = await iaExecutar(b.name, b.input || {}, ctx);
+            saida = await iaExecutar(b.name, b.input || {}, {
+              ...ctx,
+              resultadoCifrado: b.resultadoCifrado
+            });
           } catch (err) {
             saida = {
               erro: err.message
@@ -26170,7 +26177,7 @@ function AssistenteChat({
           resultados.push({
             type: 'tool_result',
             tool_use_id: b.id,
-            content: JSON.stringify(saida),
+            content: saida && saida.__bruto ? saida.__bruto : JSON.stringify(saida),
             ...(saida && saida.erro ? {
               is_error: true
             } : {})
@@ -26379,7 +26386,16 @@ function AssistentePage({
       ...d.data()
     }))), () => {});
     if (aba === 'memoria') {
-      db.collection(IA_COL.conhecimento).get().then(s => setBaseQtd(s.size)).catch(() => setBaseQtd(0));
+      if (!iaBaseDisponivel()) setBaseQtd(-1);else fetch('/api/ia', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          acao: 'resumo_base',
+          passe: iaLerPasse()
+        })
+      }).then(r => r.json()).then(j => setBaseQtd(j.documentos || 0)).catch(() => setBaseQtd(0));
       return db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').onSnapshot(s => setMemorias(s.docs.map(d => ({
         id: d.id,
         ...d.data()
@@ -26506,7 +26522,7 @@ function AssistentePage({
     className: "text-sm font-black text-gray-900 mb-1"
   }, "Base de conhecimento"), React.createElement("p", {
     className: "text-xs text-gray-500"
-  }, baseQtd === null ? 'Carregando…' : baseQtd === 0 ? 'Vazia. A base com as informações do NGCC será carregada na próxima etapa.' : `${baseQtd} item(ns) carregado(s). O assistente consulta a base em todas as conversas.`)), React.createElement("div", {
+  }, baseQtd === null ? 'Carregando…' : baseQtd === -1 ? 'Indisponível nesta sessão: saia e entre de novo no sistema para liberar a base privada.' : baseQtd === 0 ? 'Vazia ou indisponível no momento.' : `${baseQtd} documentos internos do NGCC. Ficam guardados só no servidor: o assistente consulta e usa as informações, mas ninguém abre ou baixa os arquivos pelo sistema.`)), React.createElement("div", {
     className: "rounded-2xl border border-gray-200 bg-white p-4"
   }, React.createElement("h2", {
     className: "text-sm font-black text-gray-900 mb-1"
@@ -27106,6 +27122,7 @@ function App() {
   function handleLogout() {
     const goArcanjo = showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || currentUser && ARCANJO_ONLY.has(currentUser.username);
     localStorage.removeItem(SYS.sessionKey);
+    iaGuardarPasse(null);
     setCurrentUser(null);
     if (goArcanjo) window.location.replace('/moduloarcanjo');
   }
