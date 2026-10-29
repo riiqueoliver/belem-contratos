@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
     try {
       const r = await chamarGemini({ apiKey: geminiKey, max_tokens: Math.min(Number(max_tokens) || 1024, MAX_TOKENS),
                                      messages, system, temperature, tools });
+      if (r.diag) res.setHeader('X-IA-Tentativas', r.diag.join(' '));
       res.status(r.status).json(r.body);
     } catch (err) {
       console.error('Erro em /api/ia (Gemini):', err);
