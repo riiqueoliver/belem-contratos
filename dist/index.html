@@ -209,6 +209,17 @@
     .ia-md blockquote { border-left: 3px solid #14B8A6; padding-left: .7em; color: #475569; margin: .4em 0; }
     .ia-md code { background: #f1f5f9; border-radius: 4px; padding: 0 .3em; font-size: .85em; }
     .ia-centro { display: block; text-align: center; } .ia-direita { display: block; text-align: right; }
+    /* Preview em PDF dos documentos do assistente (mesma cara do Word oficial: Arial 12, justificado) */
+    .ia-pdf { font-size: 12pt; line-height: 1.45; color: #000; background: #fff; width: 604px; box-sizing: border-box; overflow-wrap: break-word; }
+    .ia-pdf, .ia-pdf * { font-family: Arial, Helvetica, sans-serif !important; }
+    .ia-pdf p { margin: 0 0 8pt; text-align: justify; }
+    .ia-pdf h1 { font-size: 13pt; font-weight: 700; text-align: center; margin: 4pt 0 10pt; }
+    .ia-pdf h2 { font-size: 12pt; font-weight: 700; margin: 10pt 0 6pt; } .ia-pdf h3, .ia-pdf h4 { font-size: 12pt; font-weight: 700; margin: 8pt 0 4pt; }
+    .ia-pdf ul { list-style: disc; padding-left: 18pt; margin: 0 0 8pt; } .ia-pdf ol { list-style: decimal; padding-left: 20pt; margin: 0 0 8pt; }
+    .ia-pdf li { margin: 0 0 3pt; text-align: justify; } .ia-pdf hr { border: 0; border-top: 1px solid #999; margin: 8pt 0; }
+    .ia-pdf table { border-collapse: collapse; width: calc(100% - 2px); margin: 4pt 0 10pt; font-size: 10pt; }
+    .ia-pdf th, .ia-pdf td { border: 1px solid #555; padding: 3pt 5pt; text-align: left; vertical-align: top; } .ia-pdf th { background: #e5e7eb; font-weight: 700; }
+    .ia-pdf blockquote { margin: 4pt 0 8pt 18pt; font-style: italic; }
     .ia-doc { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.55; } .ia-doc p { text-align: justify; } .ia-doc h1 { text-align: center; }
     .ia-pontos { display: inline-flex; gap: 3px; } .ia-pontos i { width: 5px; height: 5px; border-radius: 50%; background: #14B8A6; animation: iaPonto 1s infinite ease-in-out; }
     .ia-pontos i:nth-child(2) { animation-delay: .15s; } .ia-pontos i:nth-child(3) { animation-delay: .3s; }
@@ -25603,6 +25614,78 @@ async function iaBaixarWord(titulo, md) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+function iaHtml2pdf() {
+  if (window.html2pdf) return Promise.resolve(window.html2pdf);
+  return new Promise((ok, falha) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = () => window.html2pdf ? ok(window.html2pdf) : falha(new Error('Gerador de PDF não carregou.'));
+    s.onerror = () => falha(new Error('Não foi possível carregar o gerador de PDF.'));
+    document.head.appendChild(s);
+  });
+}
+let iaLogosModelo = null;
+async function iaLogosDoModelo() {
+  if (iaLogosModelo) return iaLogosModelo;
+  const JSZip = await iaJSZip();
+  const resp = await fetch('/modelo-documento-bd.docx');
+  if (!resp.ok) throw new Error('Modelo do documento não encontrado.');
+  const zip = await JSZip.loadAsync(await resp.arrayBuffer());
+  const png = async n => 'data:image/png;base64,' + (await zip.file(n).async('base64'));
+  iaLogosModelo = {
+    prefeitura: await png('word/media/image1.png'),
+    bd: await png('word/media/image2.png')
+  };
+  return iaLogosModelo;
+}
+async function iaGerarPdf(titulo, md) {
+  const [html2pdf, logos] = await Promise.all([iaHtml2pdf(), iaLogosDoModelo()]);
+  const el = document.createElement('div');
+  el.className = 'ia-pdf';
+  el.innerHTML = iaMdHtml(md);
+  el.querySelectorAll('h1, h2, h3, h4').forEach(h => {
+    const prox = h.nextElementSibling;
+    if (!prox) return;
+    const bloco = document.createElement('div');
+    bloco.className = 'ia-pdf-bloco';
+    h.before(bloco);
+    bloco.append(h, prox);
+  });
+  const pdf = await html2pdf().set({
+    margin: [3.6, 3, 2.2, 2],
+    filename: String(titulo || 'documento').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) + '.pdf',
+    image: {
+      type: 'jpeg',
+      quality: 0.96
+    },
+    html2canvas: {
+      scale: 2,
+      backgroundColor: '#ffffff'
+    },
+    jsPDF: {
+      unit: 'cm',
+      format: 'a4',
+      orientation: 'portrait'
+    },
+    pagebreak: {
+      mode: ['css', 'legacy'],
+      avoid: ['.ia-pdf-bloco', 'p', 'li', 'tr', 'h1', 'h2', 'h3', 'h4', 'blockquote']
+    }
+  }).from(el).toPdf().get('pdf');
+  const total = pdf.internal.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    pdf.setPage(p);
+    pdf.addImage(logos.bd, 'PNG', 6.37, 1.06, 3.34, 0.5);
+    pdf.addImage(logos.prefeitura, 'PNG', 10.05, 0.48, 4.82, 1.67);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(90);
+    pdf.text(`Belém Digital · Companhia de Transformação Digital do Município de Belém   |   Página ${p} de ${total}`, 10.5, 28.7, {
+      align: 'center'
+    });
+  }
+  return pdf.output('datauristring');
+}
 async function iaCopiar(md) {
   const html = iaMdHtml(md);
   const tmp = document.createElement('div');
@@ -25677,6 +25760,8 @@ function IaDocCard({
   const [mensagem, setMensagem] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [excluido, setExcluido] = useState(false);
+  const [pdf, setPdf] = useState(null);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
   const podeExcluir = currentUser && (currentUser.role === 'admin' || !doc.criadoPor || doc.criadoPor === currentUser.username);
   const opcoes = usuarios.filter(u => u.username && u.username !== currentUser?.username && !ARCANJO_ONLY.has(u.username)).filter((u, i, arr) => arr.findIndex(x => x.username === u.username) === i).sort((a, b) => String(a.nome || a.name || a.username).localeCompare(String(b.nome || b.name || b.username)));
   async function enviar() {
@@ -25736,7 +25821,12 @@ function IaDocCard({
   }
   return React.createElement("div", {
     className: "mt-2 rounded-xl border border-teal-200 bg-white overflow-hidden"
-  }, React.createElement("div", {
+  }, pdf && ReactDOM.createPortal(React.createElement(PdfViewer, {
+    open: true,
+    pdfSrc: pdf,
+    title: doc.titulo,
+    onClose: () => setPdf(null)
+  }), document.body), React.createElement("div", {
     className: "flex items-center gap-2 px-3 py-2",
     style: {
       background: '#F0FDFA'
@@ -25759,6 +25849,18 @@ function IaDocCard({
     },
     className: "text-[11px] font-semibold text-teal-700 hover:underline"
   }, "Copiar"), React.createElement("button", {
+    disabled: gerandoPdf,
+    onClick: async () => {
+      setGerandoPdf(true);
+      try {
+        setPdf(await iaGerarPdf(doc.titulo, await obter()));
+      } catch (e) {
+        addToast?.('❌ Não foi possível gerar o PDF: ' + e.message);
+      }
+      setGerandoPdf(false);
+    },
+    className: "text-[11px] font-semibold text-teal-700 hover:underline disabled:opacity-50"
+  }, gerandoPdf ? 'Gerando PDF…' : 'Ver PDF'), React.createElement("button", {
     onClick: async () => {
       try {
         await iaBaixarWord(doc.titulo, await obter());
