@@ -314,6 +314,31 @@ const SYSTEMS = {
 const SYS_ID = typeof window !== 'undefined' && /^\/gcsp(\/|$)/i.test(window.location.pathname || '') ? 'gcsp' : 'main';
 const SYS = SYSTEMS[SYS_ID];
 const COL = name => SYS.prefix + name;
+const SESSAO_INATIVIDADE_MS = 30 * 60 * 1000;
+const SESSAO_ATIVIDADE_KEY = SYS.sessionKey + '-atividade';
+function ultimaAtividade() {
+  try {
+    const v = Number(localStorage.getItem(SESSAO_ATIVIDADE_KEY));
+    return v > 0 ? v : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+function sessaoExpirada() {
+  return Date.now() - ultimaAtividade() >= SESSAO_INATIVIDADE_MS;
+}
+function encerrarSessaoLocal() {
+  try {
+    localStorage.removeItem(SYS.sessionKey);
+    localStorage.removeItem(SESSAO_ATIVIDADE_KEY);
+  } catch {}
+  try {
+    iaGuardarPasse(null);
+  } catch {}
+  try {
+    firebase.auth().signOut().catch(() => {});
+  } catch {}
+}
 const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
 const RESET_TOKEN_FROM_URL = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('resetToken') : null;
 const GCSP_MODULES = [{
@@ -4290,6 +4315,15 @@ function LoginScreen({
   const [showForgot, setShowForgot] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [googleNegado, setGoogleNegado] = useState(null);
+  const [avisoSessao] = useState(() => {
+    try {
+      const m = sessionStorage.getItem('sessao-motivo');
+      sessionStorage.removeItem('sessao-motivo');
+      return m;
+    } catch {
+      return null;
+    }
+  });
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
@@ -4443,7 +4477,9 @@ function LoginScreen({
     className: "w-4 h-4"
   }) : React.createElement(Eye, {
     className: "w-4 h-4"
-  })))), error && React.createElement("p", {
+  })))), avisoSessao === 'inatividade' && !error && React.createElement("p", {
+    className: "text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+  }, "\uD83D\uDD12 Sua sess\xE3o foi encerrada ap\xF3s 30 minutos sem uso. Entre novamente."), error && React.createElement("p", {
     className: "text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
   }, error), googleNegado && React.createElement("div", {
     className: "text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900"
@@ -26835,6 +26871,14 @@ function App() {
   const [anexoResult, setAnexoResult] = useState(null);
   useEffect(() => {
     if (sessionId && users.length > 0 && !currentUser) {
+      if (sessaoExpirada()) {
+        encerrarSessaoLocal();
+        try {
+          sessionStorage.setItem('sessao-motivo', 'inatividade');
+        } catch {}
+        setSessionId(null);
+        return;
+      }
       const u = users.find(u => u.id === sessionId);
       if (u) {
         setCurrentUser(u);
@@ -27231,28 +27275,54 @@ function App() {
   }, [showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, currentUser]);
   useEffect(() => {
     if (!currentUser) return;
-    const TIMEOUT_MS = 15 * 60 * 1000;
-    const WARN_MS = 14 * 60 * 1000;
-    let logoutTimer, warnTimer;
-    function reset() {
-      clearTimeout(logoutTimer);
-      clearTimeout(warnTimer);
-      warnTimer = setTimeout(() => addToast('⚠ Sua sessão expira em 1 minuto por inatividade.'), WARN_MS);
-      logoutTimer = setTimeout(() => {
-        localStorage.removeItem(SYS.sessionKey);
-        setCurrentUser(null);
-        addToast('🔒 Sessão encerrada por inatividade. Faça login novamente.');
-      }, TIMEOUT_MS);
+    let avisado = false;
+    let ultimaGravacao = 0;
+    function atividade() {
+      const agora = Date.now();
+      if (agora - ultimaGravacao < 15000) return;
+      ultimaGravacao = agora;
+      avisado = false;
+      try {
+        localStorage.setItem(SESSAO_ATIVIDADE_KEY, String(agora));
+      } catch {}
     }
-    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    events.forEach(ev => window.addEventListener(ev, reset, {
+    function verificar() {
+      if (!localStorage.getItem(SYS.sessionKey)) {
+        setCurrentUser(null);
+        return;
+      }
+      const parado = Date.now() - ultimaAtividade();
+      if (parado >= SESSAO_INATIVIDADE_MS) {
+        encerrarSessaoLocal();
+        try {
+          sessionStorage.setItem('sessao-motivo', 'inatividade');
+        } catch {}
+        setCurrentUser(null);
+      } else if (parado >= SESSAO_INATIVIDADE_MS - 60000 && !avisado) {
+        avisado = true;
+        addToast('⚠ Sua sessão será encerrada em 1 minuto por falta de uso.');
+      }
+    }
+    ultimaGravacao = 0;
+    atividade();
+    const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
+    eventos.forEach(ev => window.addEventListener(ev, atividade, {
       passive: true
     }));
-    reset();
+    const intervalo = setInterval(verificar, 20000);
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') verificar();
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    const aoMudarStorage = e => {
+      if (e.key === SYS.sessionKey && !e.newValue) setCurrentUser(null);
+    };
+    window.addEventListener('storage', aoMudarStorage);
     return () => {
-      clearTimeout(logoutTimer);
-      clearTimeout(warnTimer);
-      events.forEach(ev => window.removeEventListener(ev, reset));
+      clearInterval(intervalo);
+      eventos.forEach(ev => window.removeEventListener(ev, atividade));
+      document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('storage', aoMudarStorage);
     };
   }, [currentUser]);
   async function handleUpdateUser(updated) {

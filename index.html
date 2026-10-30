@@ -266,6 +266,19 @@
     const SYS_ID = (typeof window !== 'undefined' && /^\/gcsp(\/|$)/i.test(window.location.pathname || '')) ? 'gcsp' : 'main';
     const SYS = SYSTEMS[SYS_ID];
     const COL = name => SYS.prefix + name;   // nome de coleção com prefixo do sistema
+
+    // Sessão: encerra após 30 min sem uso em nenhuma aba do sistema (ver efeito no App)
+    const SESSAO_INATIVIDADE_MS = 30 * 60 * 1000;
+    const SESSAO_ATIVIDADE_KEY  = SYS.sessionKey + '-atividade';
+    function ultimaAtividade() {
+      try { const v = Number(localStorage.getItem(SESSAO_ATIVIDADE_KEY)); return v > 0 ? v : Date.now(); } catch { return Date.now(); }
+    }
+    function sessaoExpirada() { return Date.now() - ultimaAtividade() >= SESSAO_INATIVIDADE_MS; }
+    function encerrarSessaoLocal() {
+      try { localStorage.removeItem(SYS.sessionKey); localStorage.removeItem(SESSAO_ATIVIDADE_KEY); } catch {}
+      try { iaGuardarPasse(null); } catch {}
+      try { firebase.auth().signOut().catch(() => {}); } catch {}
+    }
     // Link direto para o módulo privado de Campanha: /campanha
     const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
     // Token de redefinição de senha vindo do link enviado por e-mail (?resetToken=...)
@@ -2819,6 +2832,8 @@ Regras:
       const [showForgot,   setShowForgot]   = useState(false);
       const [showRegister, setShowRegister] = useState(false);
       const [googleNegado, setGoogleNegado] = useState(null);   // { email, nome } quando a conta Google não tem acesso
+      // Aviso de que a sessão anterior foi encerrada por falta de uso (mostrado uma vez)
+      const [avisoSessao] = useState(() => { try { const m = sessionStorage.getItem('sessao-motivo'); sessionStorage.removeItem('sessao-motivo'); return m; } catch { return null; } });
 
       async function handleSubmit(e) {
         e.preventDefault();
@@ -2908,6 +2923,7 @@ Regras:
                   </button>
                 </div>
               </div>
+              {avisoSessao === 'inatividade' && !error && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">🔒 Sua sessão foi encerrada após 30 minutos sem uso. Entre novamente.</p>}
               {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
               {googleNegado && (
                 <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900">
@@ -18684,6 +18700,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       // ── Restore session quando users chegarem do Firestore ──
       useEffect(() => {
         if (sessionId && users.length > 0 && !currentUser) {
+          // Sessão parada há mais de 30 min (ex.: navegador fechado) não volta sozinha
+          if (sessaoExpirada()) { encerrarSessaoLocal(); try { sessionStorage.setItem('sessao-motivo', 'inatividade'); } catch {} setSessionId(null); return; }
           const u = users.find(u => u.id === sessionId);
           if (u) {
             setCurrentUser(u);
@@ -19043,33 +19061,49 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         }
       }, [showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, currentUser]);
 
-      // ── Auto-logout por inatividade (5 minutos) ──────────────
+      // ── Logout por inatividade: 30 min sem mexer no sistema ──────
+      // A última atividade fica no localStorage, então vale para todas as abas do sistema:
+      // usar qualquer aba mantém a sessão viva em todas, e o logout de uma encerra as outras.
       useEffect(() => {
         if (!currentUser) return;
-        const TIMEOUT_MS = 15 * 60 * 1000; // 15 min → logout
-        const WARN_MS    = 14 * 60 * 1000; // 14 min → aviso
-        let logoutTimer, warnTimer;
+        let avisado = false;
+        let ultimaGravacao = 0;
 
-        function reset() {
-          clearTimeout(logoutTimer);
-          clearTimeout(warnTimer);
-          warnTimer   = setTimeout(() =>
-            addToast('⚠ Sua sessão expira em 1 minuto por inatividade.'), WARN_MS);
-          logoutTimer = setTimeout(() => {
-            localStorage.removeItem(SYS.sessionKey);
+        function atividade() {
+          const agora = Date.now();
+          if (agora - ultimaGravacao < 15000) return;   // grava no máximo a cada 15 s
+          ultimaGravacao = agora;
+          avisado = false;
+          try { localStorage.setItem(SESSAO_ATIVIDADE_KEY, String(agora)); } catch {}
+        }
+        function verificar() {
+          if (!localStorage.getItem(SYS.sessionKey)) { setCurrentUser(null); return; }   // saiu em outra aba
+          const parado = Date.now() - ultimaAtividade();
+          if (parado >= SESSAO_INATIVIDADE_MS) {
+            encerrarSessaoLocal();
+            try { sessionStorage.setItem('sessao-motivo', 'inatividade'); } catch {}
             setCurrentUser(null);
-            addToast('🔒 Sessão encerrada por inatividade. Faça login novamente.');
-          }, TIMEOUT_MS);
+          } else if (parado >= SESSAO_INATIVIDADE_MS - 60000 && !avisado) {
+            avisado = true;
+            addToast('⚠ Sua sessão será encerrada em 1 minuto por falta de uso.');
+          }
         }
 
-        const events = ['mousemove','mousedown','keydown','scroll','touchstart','click'];
-        events.forEach(ev => window.addEventListener(ev, reset, { passive: true }));
-        reset(); // inicia o contador ao logar
+        ultimaGravacao = 0; atividade();   // conta a partir do login
+        const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
+        eventos.forEach(ev => window.addEventListener(ev, atividade, { passive: true }));
+        const intervalo = setInterval(verificar, 20000);
+        // Ao voltar para a aba (ou o computador acordar), confere na hora
+        const aoVoltar = () => { if (document.visibilityState === 'visible') verificar(); };
+        document.addEventListener('visibilitychange', aoVoltar);
+        const aoMudarStorage = e => { if (e.key === SYS.sessionKey && !e.newValue) setCurrentUser(null); };
+        window.addEventListener('storage', aoMudarStorage);
 
         return () => {
-          clearTimeout(logoutTimer);
-          clearTimeout(warnTimer);
-          events.forEach(ev => window.removeEventListener(ev, reset));
+          clearInterval(intervalo);
+          eventos.forEach(ev => window.removeEventListener(ev, atividade));
+          document.removeEventListener('visibilitychange', aoVoltar);
+          window.removeEventListener('storage', aoMudarStorage);
         };
       }, [currentUser]);
       async function handleUpdateUser(updated) {
