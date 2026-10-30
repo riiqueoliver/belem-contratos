@@ -6692,39 +6692,89 @@ function InstallmentsPage({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [stepFilter, setStepFilter] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
   const isAdmin = currentUser?.role === 'admin';
+  const soma = arr => arr.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+  function situacao(c) {
+    const st = contractStatus(c);
+    if (st === 'completed') return {
+      key: 'paid',
+      label: 'Paga',
+      cor: GREEN,
+      det: c.paymentDate ? `em ${new Date(c.paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''
+    };
+    if (st === 'waiting') {
+      const d = c.nfDate ? paymentDaysLeft(c.nfDate) : null;
+      if (d !== null && d < 0) return {
+        key: 'late',
+        label: 'Pagamento vencido',
+        cor: '#dc2626',
+        det: `há ${-d} dia${-d !== 1 ? 's' : ''}`
+      };
+      return {
+        key: 'waiting',
+        label: 'Aguardando pagamento',
+        cor: '#d97706',
+        det: d === null ? '' : d === 0 ? 'vence hoje' : `vence em ${d} dia${d !== 1 ? 's' : ''}`
+      };
+    }
+    if (st === 'overdue') return {
+      key: 'late',
+      label: 'Etapa atrasada',
+      cor: '#dc2626',
+      det: ''
+    };
+    if (st === 'due-today') return {
+      key: 'open',
+      label: 'Etapa vence hoje',
+      cor: '#d97706',
+      det: ''
+    };
+    return {
+      key: 'open',
+      label: 'No prazo',
+      cor: '#64748b',
+      det: ''
+    };
+  }
   const nfsInYear = useMemo(() => contracts.filter(c => c.nfDate && c.nfDate.slice(0, 4) === statsYear), [contracts, statsYear]);
   const kpi = useMemo(() => {
-    const faturado = nfsInYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
-    const pagas = nfsInYear.filter(c => contractStatus(c) === 'completed');
-    const aguardando = nfsInYear.filter(c => contractStatus(c) === 'waiting');
-    const atrasadas = nfsInYear.filter(c => contractStatus(c) === 'overdue');
-    const pago = pagas.reduce((s, c) => s + parseBRL(c.billingValue), 0);
+    const sit = nfsInYear.map(c => ({
+      c,
+      s: situacao(c)
+    }));
+    const pagas = sit.filter(x => x.s.key === 'paid').map(x => x.c);
+    const abertas = sit.filter(x => x.s.key !== 'paid').map(x => x.c);
+    const atrasadas = sit.filter(x => x.s.key === 'late').map(x => x.c);
+    const faturado = soma(nfsInYear);
     return {
       total: nfsInYear.length,
       faturado,
       pagas: pagas.length,
-      pagoVal: pago,
-      aguardando: aguardando.length,
-      atrasadas: atrasadas.length
+      pagoVal: soma(pagas),
+      abertas: abertas.length,
+      abertoVal: soma(abertas),
+      atrasadas: atrasadas.length,
+      atrasadoVal: soma(atrasadas),
+      aguardando: sit.filter(x => x.s.key === 'waiting').length,
+      porEtapa: STEPS.map(st => abertas.filter(c => c.currentStep === st.id).length)
     };
   }, [nfsInYear]);
   const groups = useMemo(() => {
     const cns = [...new Set(nfsInYear.map(c => c.contractNumber).filter(Boolean))].sort();
     return cns.map(cn => {
       const meta = contractMeta[cn] || {};
-      const nfs = nfsInYear.filter(c => c.contractNumber === cn).sort((a, b) => (a.nfDate || '') < (b.nfDate || '') ? -1 : 1);
+      const nfs = nfsInYear.filter(c => c.contractNumber === cn).sort((a, b) => (a.refMonth || a.nfDate || '') < (b.refMonth || b.nfDate || '') ? -1 : 1);
       const sigla = getUnitSigla(meta.unit || '');
-      const total = nfs.reduce((s, c) => s + parseBRL(c.billingValue), 0);
       return {
         cn,
         meta,
         nfs,
         sigla,
-        total
+        total: soma(nfs)
       };
     });
   }, [nfsInYear, contractMeta]);
@@ -6732,17 +6782,18 @@ function InstallmentsPage({
     const q = search.toLowerCase();
     return groups.map(g => {
       const nfs = g.nfs.filter(c => {
-        const st = contractStatus(c);
-        const matchStatus = statusFilter === 'all' || st === statusFilter;
-        const matchQ = !q || (c.nfNumber || '').toLowerCase().includes(q) || (c.refMonth || '').toLowerCase().includes(q) || g.cn.toLowerCase().includes(q) || (g.meta.contractorName || '').toLowerCase().includes(q) || (g.meta.object || '').toLowerCase().includes(q) || (g.sigla || '').toLowerCase().includes(q);
-        return matchStatus && matchQ;
+        const k = situacao(c).key;
+        const matchStatus = statusFilter === 'all' || statusFilter === 'open' && k !== 'paid' || k === statusFilter;
+        const matchStep = stepFilter === null || k !== 'paid' && c.currentStep === stepFilter;
+        const matchQ = !q || (c.nfNumber || '').toLowerCase().includes(q) || (c.refMonth || '').toLowerCase().includes(q) || (c.gdoc || '').toLowerCase().includes(q) || g.cn.toLowerCase().includes(q) || (g.meta.contractorName || '').toLowerCase().includes(q) || (g.meta.object || '').toLowerCase().includes(q) || (g.sigla || '').toLowerCase().includes(q);
+        return matchStatus && matchStep && matchQ;
       });
       return {
         ...g,
         nfs
       };
     }).filter(g => g.nfs.length > 0);
-  }, [groups, search, statusFilter]);
+  }, [groups, search, statusFilter, stepFilter]);
   function startEdit(c) {
     setEditingId(c.id);
     setEditDraft({
@@ -6767,17 +6818,21 @@ function InstallmentsPage({
     label: 'Todas',
     count: kpi.total
   }, {
-    key: 'completed',
-    label: 'Pagas',
-    count: kpi.pagas
+    key: 'open',
+    label: 'Em aberto',
+    count: kpi.abertas
+  }, {
+    key: 'late',
+    label: 'Atrasadas',
+    count: kpi.atrasadas
   }, {
     key: 'waiting',
-    label: 'Aguardando Pgto.',
+    label: 'Aguardando pagamento',
     count: kpi.aguardando
   }, {
-    key: 'overdue',
-    label: 'Em Atraso',
-    count: kpi.atrasadas
+    key: 'paid',
+    label: 'Pagas',
+    count: kpi.pagas
   }];
   function fmtMonth(ym) {
     if (!ym) return '—';
@@ -6785,10 +6840,11 @@ function InstallmentsPage({
     const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return `${MONTHS[(parseInt(m, 10) || 1) - 1]}/${y}`;
   }
+  const COLS = 'lg:grid-cols-[90px_110px_130px_minmax(0,1fr)_190px_150px_56px]';
   return React.createElement("div", {
-    className: "fade-in space-y-5"
+    className: "fade-in space-y-6"
   }, React.createElement("div", {
-    className: "flex items-center justify-between flex-wrap gap-3"
+    className: "flex items-end justify-between flex-wrap gap-3"
   }, React.createElement("div", null, React.createElement("h1", {
     className: "text-2xl font-black tracking-tight",
     style: {
@@ -6796,8 +6852,8 @@ function InstallmentsPage({
     }
   }, "Parcelas"), React.createElement("p", {
     className: "text-xs text-gray-400 mt-0.5"
-  }, kpi.total, " NF", kpi.total !== 1 ? 's' : '', " emitida", kpi.total !== 1 ? 's' : '', " em ", statsYear, " \xB7 faturado ", fmtCurrencyShort(kpi.faturado))), React.createElement("div", {
-    className: "flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm"
+  }, kpi.total, " NF", kpi.total !== 1 ? 's' : '', " emitida", kpi.total !== 1 ? 's' : '', " em ", statsYear, " \xB7 ", groups.length, " contrato", groups.length !== 1 ? 's' : '')), React.createElement("div", {
+    className: "flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white"
   }, React.createElement("span", {
     className: "text-[10px] text-gray-400 font-medium"
   }, "exerc\xEDcio:"), React.createElement("select", {
@@ -6811,191 +6867,228 @@ function InstallmentsPage({
     key: y,
     value: y
   }, y))))), React.createElement("div", {
-    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+    className: "bg-white rounded-2xl border border-gray-100 grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100"
   }, [{
-    label: 'Total NFs',
-    value: kpi.total,
-    color: BLUE,
-    key: 'all'
+    label: `Faturado em ${statsYear}`,
+    value: fmtCurrencyShort(kpi.faturado),
+    sub: `${kpi.total} NF${kpi.total !== 1 ? 's' : ''}`
   }, {
-    label: 'Aguardando Pgto.',
-    value: kpi.aguardando,
-    color: '#b45309',
-    key: 'waiting'
+    label: 'Recebido',
+    value: fmtCurrencyShort(kpi.pagoVal),
+    sub: kpi.faturado > 0 ? `${kpi.pagas} paga${kpi.pagas !== 1 ? 's' : ''} · ${(kpi.pagoVal / kpi.faturado * 100).toFixed(0)}% do faturado` : '—'
   }, {
-    label: 'Em Atraso',
-    value: kpi.atrasadas,
-    color: '#dc2626',
-    key: 'overdue'
+    label: 'A receber',
+    value: fmtCurrencyShort(kpi.abertoVal),
+    sub: `${kpi.abertas} parcela${kpi.abertas !== 1 ? 's' : ''} em aberto`
   }, {
-    label: 'Pagas',
-    value: kpi.pagas,
-    color: GREEN,
-    key: 'completed'
+    label: 'Atrasadas',
+    value: String(kpi.atrasadas),
+    alert: kpi.atrasadas > 0,
+    sub: kpi.atrasadas ? `${fmtCurrencyShort(kpi.atrasadoVal)} parado${kpi.atrasadas !== 1 ? 's' : ''}` : 'Nada atrasado'
   }].map(k => React.createElement("div", {
-    key: k.key,
-    onClick: () => setStatusFilter(k.key),
-    className: `bg-white rounded-2xl px-4 py-3 border shadow-sm cursor-pointer hover:shadow-md transition-all ${statusFilter === k.key ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100'}`
+    key: k.label,
+    className: "px-5 py-4"
   }, React.createElement("p", {
-    className: "text-2xl font-black leading-none",
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400"
+  }, k.label), React.createElement("p", {
+    className: "text-xl font-black mt-1 leading-tight",
     style: {
-      color: k.color
+      color: k.alert ? '#dc2626' : BLUE
     }
   }, k.value), React.createElement("p", {
-    className: "text-xs font-semibold text-gray-400 mt-1"
-  }, k.label)))), React.createElement("div", {
-    className: "flex flex-col sm:flex-row gap-3 items-stretch sm:items-center"
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, k.sub)))), kpi.abertas > 0 && React.createElement("div", null, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2"
+  }, "Parcelas em aberto, por etapa"), React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-2"
+  }, STEPS.map((st, i) => {
+    const on = stepFilter === st.id;
+    return React.createElement("button", {
+      key: st.id,
+      onClick: () => setStepFilter(on ? null : st.id),
+      className: `text-left rounded-xl border px-4 py-3 transition-colors ${on ? 'bg-white' : 'bg-white border-gray-100 hover:border-gray-300'}`,
+      style: on ? {
+        borderColor: BLUE,
+        boxShadow: `0 0 0 1px ${BLUE}`
+      } : {}
+    }, React.createElement("p", {
+      className: "text-[10px] font-semibold text-gray-400"
+    }, i + 1, ". ", st.name), React.createElement("p", {
+      className: "text-lg font-black leading-tight",
+      style: {
+        color: kpi.porEtapa[i] ? BLUE : '#cbd5e1'
+      }
+    }, kpi.porEtapa[i]));
+  }))), React.createElement("div", {
+    className: "flex flex-col lg:flex-row gap-3 lg:items-center"
   }, React.createElement("div", {
-    className: "relative flex-1"
+    className: "flex gap-1.5 flex-wrap"
+  }, STATUS_FILTERS.map(f => {
+    const on = statusFilter === f.key;
+    return React.createElement("button", {
+      key: f.key,
+      onClick: () => setStatusFilter(f.key),
+      className: `px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${on ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`,
+      style: on ? {
+        background: BLUE
+      } : {}
+    }, f.label, " ", React.createElement("span", {
+      className: on ? 'opacity-70' : 'text-gray-400'
+    }, f.count));
+  }), stepFilter !== null && React.createElement("button", {
+    onClick: () => setStepFilter(null),
+    className: "px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-200 bg-gray-50 text-gray-600 flex items-center gap-1"
+  }, "Etapa: ", STEPS.find(s => s.id === stepFilter)?.name, " ", React.createElement(X, {
+    className: "w-3 h-3"
+  }))), React.createElement("div", {
+    className: "relative lg:ml-auto lg:w-80"
   }, React.createElement(Search, {
     className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
   }), React.createElement("input", {
     value: search,
     onChange: e => setSearch(e.target.value),
-    placeholder: "Buscar por NF, compet\xEAncia, contrato, \xF3rg\xE3o ou contratada\u2026",
-    className: "w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    placeholder: "Buscar NF, compet\xEAncia, contrato ou GDoc\u2026",
+    className: "w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
     style: {
       '--tw-ring-color': BLUE + '40'
     }
-  })), React.createElement("div", {
-    className: "flex items-center gap-2 flex-wrap"
-  }, STATUS_FILTERS.map(f => React.createElement("button", {
-    key: f.key,
-    onClick: () => setStatusFilter(f.key),
-    className: `text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all ${statusFilter === f.key ? 'text-white border-transparent shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`,
-    style: statusFilter === f.key ? {
-      background: BLUE,
-      borderColor: BLUE
-    } : {}
-  }, f.label, " ", React.createElement("span", {
-    className: `ml-1 ${statusFilter === f.key ? 'opacity-80' : 'text-gray-400'}`
-  }, f.count))))), filtered.length === 0 ? React.createElement("div", {
+  }))), filtered.length === 0 ? React.createElement("div", {
     className: "bg-white rounded-2xl border border-gray-100 p-12 text-center"
   }, React.createElement("p", {
     className: "text-sm font-semibold text-gray-400"
   }, "Nenhuma NF encontrada"), React.createElement("p", {
     className: "text-xs text-gray-300 mt-1"
   }, "Tente ajustar os filtros ou o ano")) : React.createElement("div", {
-    className: "space-y-4"
-  }, filtered.map(({
+    className: "bg-white rounded-2xl border border-gray-100 overflow-hidden"
+  }, React.createElement("div", {
+    className: `hidden lg:grid ${COLS} gap-4 px-5 py-2.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400`
+  }, React.createElement("span", null, "Compet\xEAncia"), React.createElement("span", null, "NF"), React.createElement("span", {
+    className: "text-right"
+  }, "Valor"), React.createElement("span", null, "Etapa"), React.createElement("span", null, "Situa\xE7\xE3o"), React.createElement("span", null, "GDoc"), React.createElement("span", null)), filtered.map(({
     cn,
     meta,
     nfs,
     sigla,
     total
   }) => React.createElement("div", {
-    key: cn,
-    className: "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
-  }, React.createElement("div", {
-    className: "px-5 py-3.5 flex items-center justify-between gap-3 flex-wrap",
-    style: {
-      background: '#f8fafc',
-      borderBottom: '1px solid #e2e8f0'
-    }
-  }, React.createElement("div", {
-    className: "flex items-center gap-2.5 min-w-0"
+    key: cn
+  }, React.createElement("button", {
+    onClick: () => onOpenContract(cn),
+    className: "w-full flex items-center gap-3 px-5 py-2.5 bg-slate-50 border-y border-gray-100 text-left hover:bg-slate-100 transition-colors group"
   }, React.createElement("span", {
-    className: "text-xs font-black tracking-widest px-2 py-0.5 rounded-lg",
+    className: "text-xs font-black flex-shrink-0",
     style: {
-      background: BLUE + '14',
       color: BLUE
     }
   }, cn), sigla && React.createElement("span", {
-    className: "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md",
-    style: {
-      background: BLUE + '14',
-      color: BLUE
-    }
-  }, sigla), React.createElement("p", {
-    className: "text-xs text-gray-500 truncate max-w-xs"
-  }, meta.object || 'Sem descrição')), React.createElement("div", {
-    className: "flex items-center gap-3 flex-shrink-0"
-  }, React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("p", {
-    className: "text-[10px] text-gray-400"
-  }, "parcelas em ", statsYear), React.createElement("p", {
-    className: "text-xs font-bold",
-    style: {
-      color: BLUE
-    }
-  }, fmtCurrencyShort(total))), React.createElement("button", {
-    onClick: () => onOpenContract(cn),
-    className: "flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:text-blue-700 transition-all",
-    style: {
-      color: BLUE
-    }
-  }, React.createElement(ExternalLink, {
-    className: "w-3 h-3"
-  }), " Ver contrato"))), React.createElement("div", {
-    className: "divide-y divide-gray-50"
+    className: "text-[11px] font-semibold text-gray-400 flex-shrink-0"
+  }, sigla), React.createElement("span", {
+    className: "text-xs text-gray-500 truncate flex-1 min-w-0"
+  }, meta.object || 'Sem descrição'), React.createElement("span", {
+    className: "text-xs font-bold text-gray-600 flex-shrink-0"
+  }, fmtCurrencyShort(total)), React.createElement(ChevronRight, {
+    className: "w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0"
+  })), React.createElement("div", {
+    className: "divide-y divide-gray-100"
   }, nfs.map(c => {
-    const st = contractStatus(c);
-    const cfg = CFG[st] || CFG.pending;
-    const fmtV = v => {
-      const n = Number(v);
-      if (!n) return '—';
-      return 'R$ ' + n.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
-    };
+    const s = situacao(c);
+    const done = c.currentStep > TOTAL_STEPS;
+    const curStep = STEPS.find(st => st.id === c.currentStep);
     const isEditing = editingId === c.id;
+    const gdocUrl = /^https?:\/\//i.test(c.gdoc || '');
     return React.createElement("div", {
       key: c.id,
-      className: `px-5 transition-colors ${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`
+      className: isEditing ? 'bg-blue-50/50' : ''
     }, React.createElement("div", {
-      className: "py-3 flex items-center gap-3 flex-wrap"
-    }, React.createElement("div", {
-      className: "w-14 flex-shrink-0"
-    }, React.createElement("p", {
-      className: "text-[10px] text-gray-400 font-medium"
+      className: `grid grid-cols-2 ${COLS} gap-x-4 gap-y-2 px-5 py-3 items-center group hover:bg-slate-50 transition-colors`
+    }, React.createElement("div", null, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
     }, "Compet\xEAncia"), React.createElement("p", {
-      className: "text-xs font-bold text-gray-700"
-    }, fmtMonth(c.refMonth))), React.createElement("div", {
-      className: "w-20 flex-shrink-0"
-    }, React.createElement("p", {
-      className: "text-[10px] text-gray-400 font-medium"
+      className: "text-sm font-bold text-gray-800"
+    }, fmtMonth(c.refMonth || (c.nfDate || '').slice(0, 7)))), React.createElement("div", null, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
     }, "NF"), React.createElement("p", {
-      className: "text-xs font-bold text-gray-700"
-    }, c.nfNumber || '—')), React.createElement("div", {
-      className: "w-20 flex-shrink-0"
+      className: "text-xs font-semibold text-gray-700"
+    }, c.nfNumber || '—'), React.createElement("p", {
+      className: "text-[10px] text-gray-400"
+    }, c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : '')), React.createElement("div", {
+      className: "lg:text-right"
     }, React.createElement("p", {
-      className: "text-[10px] text-gray-400 font-medium"
-    }, "Emiss\xE3o"), React.createElement("p", {
-      className: "text-xs font-bold text-gray-700"
-    }, c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—')), React.createElement("div", {
-      className: "w-24 flex-shrink-0"
-    }, React.createElement("p", {
-      className: "text-[10px] text-gray-400 font-medium"
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
     }, "Valor"), React.createElement("p", {
-      className: "text-xs font-bold text-gray-700"
-    }, fmtV(parseBRL(c.billingValue)))), React.createElement("div", {
-      className: "flex-1 min-w-0 flex items-center gap-2"
+      className: "text-sm font-bold text-gray-800"
+    }, fmtCurrency(parseBRL(c.billingValue) || 0))), React.createElement("div", {
+      className: "min-w-0",
+      title: STEPS.map(st => `${st.id}. ${st.name}`).join(' → ')
+    }, React.createElement("div", {
+      className: "flex gap-1 mb-1 max-w-[180px]"
+    }, STEPS.map(st => {
+      const ok = done || (c.completedSteps || []).includes(st.id);
+      const cur = !done && st.id === c.currentStep;
+      return React.createElement("span", {
+        key: st.id,
+        className: "h-1.5 flex-1 rounded-full",
+        style: {
+          background: ok ? GREEN : cur ? s.cor : '#e5e7eb'
+        }
+      });
+    })), React.createElement("p", {
+      className: "text-[11px] text-gray-500 truncate"
+    }, done ? 'Concluída' : curStep ? `${curStep.id}/${TOTAL_STEPS} · ${curStep.name}` : '—')), React.createElement("div", {
+      className: "min-w-0"
+    }, React.createElement("div", {
+      className: "flex items-center gap-1.5"
     }, React.createElement("span", {
-      className: `text-[10px] font-black px-2 py-0.5 rounded-md border ${cfg.badge}`
-    }, cfg.label), st === 'completed' && c.paymentDate && React.createElement("span", {
-      className: "text-[10px] text-green-700 font-semibold"
-    }, "pago em ", new Date(c.paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')), st === 'waiting' && c.nfDate && React.createElement("span", {
-      className: "text-[10px] text-amber-700 font-semibold"
-    }, paymentDaysLeft(c.nfDate) > 0 ? `vence em ${paymentDaysLeft(c.nfDate)} dia${paymentDaysLeft(c.nfDate) !== 1 ? 's' : ''}` : `venceu há ${Math.abs(paymentDaysLeft(c.nfDate))} dia${Math.abs(paymentDaysLeft(c.nfDate)) !== 1 ? 's' : ''}`), c.gdoc && React.createElement("a", {
+      className: "w-2 h-2 rounded-full flex-shrink-0",
+      style: {
+        background: s.cor
+      }
+    }), React.createElement("span", {
+      className: "text-xs font-semibold truncate",
+      style: {
+        color: s.cor === '#64748b' ? '#475569' : s.cor
+      }
+    }, s.label)), s.det && React.createElement("p", {
+      className: "text-[10px] text-gray-400 pl-3.5"
+    }, s.det)), React.createElement("div", {
+      className: "min-w-0"
+    }, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
+    }, "GDoc"), c.gdoc ? gdocUrl ? React.createElement("a", {
       href: c.gdoc,
       target: "_blank",
       rel: "noopener noreferrer",
-      className: "text-[10px] font-semibold hover:underline flex-shrink-0",
+      onClick: e => e.stopPropagation(),
+      className: "text-xs font-semibold hover:underline",
       style: {
-        color: '#7c3aed'
+        color: BLUE
       }
-    }, "Gdoc")), isAdmin && !isEditing && React.createElement("button", {
-      onClick: () => startEdit(c),
-      className: "flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-700 transition-all"
-    }, "Editar"), isAdmin && isEditing && React.createElement("button", {
+    }, "Abrir processo") : React.createElement("p", {
+      className: "text-[11px] font-mono text-gray-600 truncate",
+      title: c.gdoc
+    }, c.gdoc.replace(/\/B[ÉE]LEMDIGITAL$/i, '')) : React.createElement("p", {
+      className: "text-[11px] text-gray-300"
+    }, "sem processo")), React.createElement("div", {
+      className: "hidden lg:flex justify-end"
+    }, isAdmin && (isEditing ? React.createElement("button", {
       onClick: () => setEditingId(null),
-      className: "flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 transition-all"
-    }, "Cancelar")), isAdmin && isEditing && React.createElement("div", {
-      className: "pb-4 pt-1"
+      title: "Cancelar edi\xE7\xE3o",
+      className: "w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100"
+    }, React.createElement(X, {
+      className: "w-3.5 h-3.5 text-gray-400"
+    })) : React.createElement("button", {
+      onClick: () => startEdit(c),
+      title: "Editar parcela",
+      className: "w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-blue-50 transition-all"
+    }, React.createElement(Edit2, {
+      className: "w-3.5 h-3.5",
+      style: {
+        color: BLUE
+      }
+    }))))), isAdmin && isEditing && React.createElement("div", {
+      className: "px-5 pb-4"
     }, React.createElement("div", {
-      className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 bg-white rounded-xl border border-blue-100 shadow-sm"
+      className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 bg-white rounded-xl border border-blue-100"
     }, [{
       key: 'refMonth',
       label: 'Competência',
@@ -7018,9 +7111,9 @@ function InstallmentsPage({
       ph: 'R$ 0,00'
     }, {
       key: 'gdoc',
-      label: 'Link Gdoc',
+      label: 'Processo GDoc',
       type: 'text',
-      ph: 'https://…'
+      ph: '2026.01.000123/2026/BÉLEMDIGITAL'
     }].map(f => React.createElement("div", {
       key: f.key
     }, React.createElement("label", {
@@ -7038,8 +7131,11 @@ function InstallmentsPage({
         '--tw-ring-color': BLUE + '40'
       }
     })))), React.createElement("div", {
-      className: "flex justify-end mt-2"
+      className: "flex justify-end gap-2 mt-2"
     }, React.createElement("button", {
+      onClick: () => setEditingId(null),
+      className: "text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50"
+    }, "Cancelar"), React.createElement("button", {
       onClick: () => saveEdit(c.id),
       disabled: saving,
       className: "flex items-center gap-2 text-white text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity",

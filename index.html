@@ -4606,31 +4606,48 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                 availableYears, currentUser, onOpenContract, onUpdateNfData }) {
       const [search,       setSearch]       = useState('');
       const [statusFilter, setStatusFilter] = useState('all');
+      const [stepFilter,   setStepFilter]   = useState(null);
       const [editingId,    setEditingId]    = useState(null);
       const [editDraft,    setEditDraft]    = useState({});
       const [saving,       setSaving]       = useState(false);
 
       const isAdmin = currentUser?.role === 'admin';
+      const soma = arr => arr.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+
+      // Situação de cada parcela, do ponto de vista de quem acompanha
+      function situacao(c) {
+        const st = contractStatus(c);
+        if (st === 'completed') return { key:'paid', label:'Paga', cor: GREEN,
+          det: c.paymentDate ? `em ${new Date(c.paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : '' };
+        if (st === 'waiting') {
+          const d = c.nfDate ? paymentDaysLeft(c.nfDate) : null;
+          if (d !== null && d < 0) return { key:'late', label:'Pagamento vencido', cor:'#dc2626', det:`há ${-d} dia${-d !== 1 ? 's' : ''}` };
+          return { key:'waiting', label:'Aguardando pagamento', cor:'#d97706',
+            det: d === null ? '' : d === 0 ? 'vence hoje' : `vence em ${d} dia${d !== 1 ? 's' : ''}` };
+        }
+        if (st === 'overdue')   return { key:'late', label:'Etapa atrasada',   cor:'#dc2626', det:'' };
+        if (st === 'due-today') return { key:'open', label:'Etapa vence hoje', cor:'#d97706', det:'' };
+        return { key:'open', label:'No prazo', cor:'#64748b', det:'' };
+      }
 
       // Filtra NFs do ano selecionado
       const nfsInYear = useMemo(() =>
         contracts.filter(c => c.nfDate && c.nfDate.slice(0,4) === statsYear),
       [contracts, statsYear]);
 
-      // KPIs globais
       const kpi = useMemo(() => {
-        const faturado    = nfsInYear.reduce((s, c) => s + parseBRL(c.billingValue), 0);
-        const pagas       = nfsInYear.filter(c => contractStatus(c) === 'completed');
-        const aguardando  = nfsInYear.filter(c => contractStatus(c) === 'waiting');
-        const atrasadas   = nfsInYear.filter(c => contractStatus(c) === 'overdue');
-        const pago        = pagas.reduce((s, c) => s + parseBRL(c.billingValue), 0);
+        const sit      = nfsInYear.map(c => ({ c, s: situacao(c) }));
+        const pagas    = sit.filter(x => x.s.key === 'paid').map(x => x.c);
+        const abertas  = sit.filter(x => x.s.key !== 'paid').map(x => x.c);
+        const atrasadas= sit.filter(x => x.s.key === 'late').map(x => x.c);
+        const faturado = soma(nfsInYear);
         return {
-          total:      nfsInYear.length,
-          faturado,
-          pagas:      pagas.length,
-          pagoVal:    pago,
-          aguardando: aguardando.length,
-          atrasadas:  atrasadas.length,
+          total: nfsInYear.length, faturado,
+          pagas: pagas.length, pagoVal: soma(pagas),
+          abertas: abertas.length, abertoVal: soma(abertas),
+          atrasadas: atrasadas.length, atrasadoVal: soma(atrasadas),
+          aguardando: sit.filter(x => x.s.key === 'waiting').length,
+          porEtapa: STEPS.map(st => abertas.filter(c => c.currentStep === st.id).length),
         };
       }, [nfsInYear]);
 
@@ -4640,32 +4657,34 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         return cns.map(cn => {
           const meta  = contractMeta[cn] || {};
           const nfs   = nfsInYear.filter(c => c.contractNumber === cn)
-                         .sort((a,b) => (a.nfDate||'') < (b.nfDate||'') ? -1 : 1);
+                         .sort((a,b) => ((a.refMonth || a.nfDate || '') < (b.refMonth || b.nfDate || '') ? -1 : 1));
           const sigla = getUnitSigla(meta.unit || '');
-          const total = nfs.reduce((s, c) => s + parseBRL(c.billingValue), 0);
-          return { cn, meta, nfs, sigla, total };
+          return { cn, meta, nfs, sigla, total: soma(nfs) };
         });
       }, [nfsInYear, contractMeta]);
 
-      // Filtragem: busca + status
+      // Filtragem: busca + situação + etapa
       const filtered = useMemo(() => {
         const q = search.toLowerCase();
         return groups.map(g => {
           const nfs = g.nfs.filter(c => {
-            const st = contractStatus(c);
-            const matchStatus = statusFilter === 'all' || st === statusFilter;
+            const k = situacao(c).key;
+            const matchStatus = statusFilter === 'all' ||
+              (statusFilter === 'open' && k !== 'paid') || k === statusFilter;
+            const matchStep = stepFilter === null || (k !== 'paid' && c.currentStep === stepFilter);
             const matchQ = !q ||
               (c.nfNumber||'').toLowerCase().includes(q) ||
               (c.refMonth||'').toLowerCase().includes(q) ||
+              (c.gdoc||'').toLowerCase().includes(q) ||
               g.cn.toLowerCase().includes(q) ||
               (g.meta.contractorName||'').toLowerCase().includes(q) ||
               (g.meta.object||'').toLowerCase().includes(q) ||
               (g.sigla||'').toLowerCase().includes(q);
-            return matchStatus && matchQ;
+            return matchStatus && matchStep && matchQ;
           });
           return { ...g, nfs };
         }).filter(g => g.nfs.length > 0);
-      }, [groups, search, statusFilter]);
+      }, [groups, search, statusFilter, stepFilter]);
 
       function startEdit(c) {
         setEditingId(c.id);
@@ -4689,10 +4708,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
 
       const STATUS_FILTERS = [
-        { key:'all',       label:'Todas',            count: kpi.total       },
-        { key:'completed', label:'Pagas',            count: kpi.pagas       },
-        { key:'waiting',   label:'Aguardando Pgto.', count: kpi.aguardando  },
-        { key:'overdue',   label:'Em Atraso',        count: kpi.atrasadas   },
+        { key:'all',     label:'Todas',                count: kpi.total      },
+        { key:'open',    label:'Em aberto',            count: kpi.abertas    },
+        { key:'late',    label:'Atrasadas',            count: kpi.atrasadas  },
+        { key:'waiting', label:'Aguardando pagamento', count: kpi.aguardando },
+        { key:'paid',    label:'Pagas',                count: kpi.pagas      },
       ];
 
       function fmtMonth(ym) {
@@ -4701,20 +4721,20 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
         return `${MONTHS[(parseInt(m,10)||1)-1]}/${y}`;
       }
+      const COLS = 'lg:grid-cols-[90px_110px_130px_minmax(0,1fr)_190px_150px_56px]';
 
       return (
-        <div className="fade-in space-y-5">
+        <div className="fade-in space-y-6">
 
           {/* ── Cabeçalho ── */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-end justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-2xl font-black tracking-tight" style={{color: BLUE}}>Parcelas</h1>
               <p className="text-xs text-gray-400 mt-0.5">
-                {kpi.total} NF{kpi.total !== 1 ? 's' : ''} emitida{kpi.total !== 1 ? 's' : ''} em {statsYear} · faturado {fmtCurrencyShort(kpi.faturado)}
+                {kpi.total} NF{kpi.total !== 1 ? 's' : ''} emitida{kpi.total !== 1 ? 's' : ''} em {statsYear} · {groups.length} contrato{groups.length !== 1 ? 's' : ''}
               </p>
             </div>
-            {/* Seletor de ano */}
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm">
+            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white">
               <span className="text-[10px] text-gray-400 font-medium">exercício:</span>
               <select value={statsYear} onChange={e => setStatsYear(e.target.value)}
                       className="text-[11px] font-bold bg-transparent focus:outline-none cursor-pointer"
@@ -4724,175 +4744,197 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </div>
           </div>
 
-          {/* ── KPI strip ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* ── Resumo do exercício ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
             {[
-              { label:'Total NFs',         value: kpi.total,      color: BLUE,     key:'all'       },
-              { label:'Aguardando Pgto.',  value: kpi.aguardando, color:'#b45309', key:'waiting'   },
-              { label:'Em Atraso',         value: kpi.atrasadas,  color:'#dc2626', key:'overdue'   },
-              { label:'Pagas',             value: kpi.pagas,      color: GREEN,    key:'completed' },
+              { label:`Faturado em ${statsYear}`, value: fmtCurrencyShort(kpi.faturado),
+                sub: `${kpi.total} NF${kpi.total !== 1 ? 's' : ''}` },
+              { label:'Recebido', value: fmtCurrencyShort(kpi.pagoVal),
+                sub: kpi.faturado > 0 ? `${kpi.pagas} paga${kpi.pagas !== 1 ? 's' : ''} · ${(kpi.pagoVal / kpi.faturado * 100).toFixed(0)}% do faturado` : '—' },
+              { label:'A receber', value: fmtCurrencyShort(kpi.abertoVal),
+                sub: `${kpi.abertas} parcela${kpi.abertas !== 1 ? 's' : ''} em aberto` },
+              { label:'Atrasadas', value: String(kpi.atrasadas), alert: kpi.atrasadas > 0,
+                sub: kpi.atrasadas ? `${fmtCurrencyShort(kpi.atrasadoVal)} parado${kpi.atrasadas !== 1 ? 's' : ''}` : 'Nada atrasado' },
             ].map(k => (
-              <div key={k.key} onClick={() => setStatusFilter(k.key)}
-                   className={`bg-white rounded-2xl px-4 py-3 border shadow-sm cursor-pointer hover:shadow-md transition-all ${statusFilter === k.key ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100'}`}>
-                <p className="text-2xl font-black leading-none" style={{color: k.color}}>{k.value}</p>
-                <p className="text-xs font-semibold text-gray-400 mt-1">{k.label}</p>
+              <div key={k.label} className="px-5 py-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{k.label}</p>
+                <p className="text-xl font-black mt-1 leading-tight" style={{color: k.alert ? '#dc2626' : BLUE}}>{k.value}</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{k.sub}</p>
               </div>
             ))}
           </div>
 
-          {/* ── Busca + filtros ── */}
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-            <div className="relative flex-1">
+          {/* ── Em aberto por etapa (clique filtra) ── */}
+          {kpi.abertas > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Parcelas em aberto, por etapa</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {STEPS.map((st, i) => {
+                  const on = stepFilter === st.id;
+                  return (
+                    <button key={st.id} onClick={() => setStepFilter(on ? null : st.id)}
+                            className={`text-left rounded-xl border px-4 py-3 transition-colors ${on ? 'bg-white' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                            style={on ? {borderColor: BLUE, boxShadow:`0 0 0 1px ${BLUE}`} : {}}>
+                      <p className="text-[10px] font-semibold text-gray-400">{i + 1}. {st.name}</p>
+                      <p className="text-lg font-black leading-tight" style={{color: kpi.porEtapa[i] ? BLUE : '#cbd5e1'}}>{kpi.porEtapa[i]}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Filtros + busca ── */}
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="flex gap-1.5 flex-wrap">
+              {STATUS_FILTERS.map(f => {
+                const on = statusFilter === f.key;
+                return (
+                  <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${on ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                          style={on ? {background: BLUE} : {}}>
+                    {f.label} <span className={on ? 'opacity-70' : 'text-gray-400'}>{f.count}</span>
+                  </button>
+                );
+              })}
+              {stepFilter !== null && (
+                <button onClick={() => setStepFilter(null)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-200 bg-gray-50 text-gray-600 flex items-center gap-1">
+                  Etapa: {STEPS.find(s => s.id === stepFilter)?.name} <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div className="relative lg:ml-auto lg:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                     placeholder="Buscar por NF, competência, contrato, órgão ou contratada…"
-                     className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
+                     placeholder="Buscar NF, competência, contrato ou GDoc…"
+                     className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300"
                      style={{'--tw-ring-color': BLUE + '40'}} />
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {STATUS_FILTERS.map(f => (
-                <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                        className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all ${statusFilter === f.key ? 'text-white border-transparent shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
-                        style={statusFilter === f.key ? {background: BLUE, borderColor: BLUE} : {}}>
-                  {f.label} <span className={`ml-1 ${statusFilter === f.key ? 'opacity-80' : 'text-gray-400'}`}>{f.count}</span>
-                </button>
-              ))}
             </div>
           </div>
 
-          {/* ── Lista de grupos ── */}
+          {/* ── Lista por contrato ── */}
           {filtered.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
               <p className="text-sm font-semibold text-gray-400">Nenhuma NF encontrada</p>
               <p className="text-xs text-gray-300 mt-1">Tente ajustar os filtros ou o ano</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              {/* Cabeçalho das colunas (desktop) */}
+              <div className={`hidden lg:grid ${COLS} gap-4 px-5 py-2.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400`}>
+                <span>Competência</span>
+                <span>NF</span>
+                <span className="text-right">Valor</span>
+                <span>Etapa</span>
+                <span>Situação</span>
+                <span>GDoc</span>
+                <span />
+              </div>
+
               {filtered.map(({ cn, meta, nfs, sigla, total }) => (
-                <div key={cn} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div key={cn}>
+                  {/* ── Linha do contrato ── */}
+                  <button onClick={() => onOpenContract(cn)}
+                          className="w-full flex items-center gap-3 px-5 py-2.5 bg-slate-50 border-y border-gray-100 text-left hover:bg-slate-100 transition-colors group">
+                    <span className="text-xs font-black flex-shrink-0" style={{color: BLUE}}>{cn}</span>
+                    {sigla && <span className="text-[11px] font-semibold text-gray-400 flex-shrink-0">{sigla}</span>}
+                    <span className="text-xs text-gray-500 truncate flex-1 min-w-0">{meta.object || 'Sem descrição'}</span>
+                    <span className="text-xs font-bold text-gray-600 flex-shrink-0">{fmtCurrencyShort(total)}</span>
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
+                  </button>
 
-                  {/* ── Cabeçalho do grupo ── */}
-                  <div className="px-5 py-3.5 flex items-center justify-between gap-3 flex-wrap"
-                       style={{background:'#f8fafc', borderBottom:'1px solid #e2e8f0'}}>
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-xs font-black tracking-widest px-2 py-0.5 rounded-lg"
-                            style={{background: BLUE + '14', color: BLUE}}>
-                        {cn}
-                      </span>
-                      {sigla && (
-                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md"
-                              style={{background: BLUE + '14', color: BLUE}}>
-                          {sigla}
-                        </span>
-                      )}
-                      <p className="text-xs text-gray-500 truncate max-w-xs">{meta.object || 'Sem descrição'}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="text-right">
-                        <p className="text-[10px] text-gray-400">parcelas em {statsYear}</p>
-                        <p className="text-xs font-bold" style={{color: BLUE}}>{fmtCurrencyShort(total)}</p>
-                      </div>
-                      <button onClick={() => onOpenContract(cn)}
-                              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:text-blue-700 transition-all"
-                              style={{color: BLUE}}>
-                        <ExternalLink className="w-3 h-3" /> Ver contrato
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* ── Linhas de NF ── */}
-                  <div className="divide-y divide-gray-50">
+                  {/* ── Parcelas ── */}
+                  <div className="divide-y divide-gray-100">
                     {nfs.map(c => {
-                      const st   = contractStatus(c);
-                      const cfg  = CFG[st] || CFG.pending;
-                      const fmtV = v => {
-                        const n = Number(v);
-                        if (!n) return '—';
-                        return 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-                      };
+                      const s       = situacao(c);
+                      const done    = c.currentStep > TOTAL_STEPS;
+                      const curStep = STEPS.find(st => st.id === c.currentStep);
                       const isEditing = editingId === c.id;
+                      const gdocUrl = /^https?:\/\//i.test(c.gdoc || '');
                       return (
-                        <div key={c.id} className={`px-5 transition-colors ${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-
-                          {/* Linha principal */}
-                          <div className="py-3 flex items-center gap-3 flex-wrap">
+                        <div key={c.id} className={isEditing ? 'bg-blue-50/50' : ''}>
+                          <div className={`grid grid-cols-2 ${COLS} gap-x-4 gap-y-2 px-5 py-3 items-center group hover:bg-slate-50 transition-colors`}>
                             {/* Competência */}
-                            <div className="w-14 flex-shrink-0">
-                              <p className="text-[10px] text-gray-400 font-medium">Competência</p>
-                              <p className="text-xs font-bold text-gray-700">{fmtMonth(c.refMonth)}</p>
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden">Competência</p>
+                              <p className="text-sm font-bold text-gray-800">{fmtMonth(c.refMonth || (c.nfDate || '').slice(0,7))}</p>
                             </div>
 
-                            {/* NF */}
-                            <div className="w-20 flex-shrink-0">
-                              <p className="text-[10px] text-gray-400 font-medium">NF</p>
-                              <p className="text-xs font-bold text-gray-700">{c.nfNumber || '—'}</p>
-                            </div>
-
-                            {/* Data emissão */}
-                            <div className="w-20 flex-shrink-0">
-                              <p className="text-[10px] text-gray-400 font-medium">Emissão</p>
-                              <p className="text-xs font-bold text-gray-700">
-                                {c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                              </p>
+                            {/* NF + emissão */}
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden">NF</p>
+                              <p className="text-xs font-semibold text-gray-700">{c.nfNumber || '—'}</p>
+                              <p className="text-[10px] text-gray-400">{c.nfDate ? new Date(c.nfDate + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</p>
                             </div>
 
                             {/* Valor */}
-                            <div className="w-24 flex-shrink-0">
-                              <p className="text-[10px] text-gray-400 font-medium">Valor</p>
-                              <p className="text-xs font-bold text-gray-700">{fmtV(parseBRL(c.billingValue))}</p>
+                            <div className="lg:text-right">
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden">Valor</p>
+                              <p className="text-sm font-bold text-gray-800">{fmtCurrency(parseBRL(c.billingValue) || 0)}</p>
                             </div>
 
-                            {/* Status badge */}
-                            <div className="flex-1 min-w-0 flex items-center gap-2">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${cfg.badge}`}>
-                                {cfg.label}
-                              </span>
-                              {st === 'completed' && c.paymentDate && (
-                                <span className="text-[10px] text-green-700 font-semibold">
-                                  pago em {new Date(c.paymentDate+'T12:00:00').toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                              {st === 'waiting' && c.nfDate && (
-                                <span className="text-[10px] text-amber-700 font-semibold">
-                                  {paymentDaysLeft(c.nfDate) > 0
-                                    ? `vence em ${paymentDaysLeft(c.nfDate)} dia${paymentDaysLeft(c.nfDate)!==1?'s':''}`
-                                    : `venceu há ${Math.abs(paymentDaysLeft(c.nfDate))} dia${Math.abs(paymentDaysLeft(c.nfDate))!==1?'s':''}`}
-                                </span>
-                              )}
-                              {c.gdoc && (
-                                <a href={c.gdoc} target="_blank" rel="noopener noreferrer"
-                                   className="text-[10px] font-semibold hover:underline flex-shrink-0"
-                                   style={{color:'#7c3aed'}}>
-                                  Gdoc
-                                </a>
-                              )}
+                            {/* Etapa: 4 segmentos */}
+                            <div className="min-w-0" title={STEPS.map(st => `${st.id}. ${st.name}`).join(' → ')}>
+                              <div className="flex gap-1 mb-1 max-w-[180px]">
+                                {STEPS.map(st => {
+                                  const ok  = done || (c.completedSteps || []).includes(st.id);
+                                  const cur = !done && st.id === c.currentStep;
+                                  return <span key={st.id} className="h-1.5 flex-1 rounded-full"
+                                               style={{background: ok ? GREEN : cur ? s.cor : '#e5e7eb'}} />;
+                                })}
+                              </div>
+                              <p className="text-[11px] text-gray-500 truncate">{done ? 'Concluída' : curStep ? `${curStep.id}/${TOTAL_STEPS} · ${curStep.name}` : '—'}</p>
+                            </div>
+
+                            {/* Situação */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background: s.cor}} />
+                                <span className="text-xs font-semibold truncate" style={{color: s.cor === '#64748b' ? '#475569' : s.cor}}>{s.label}</span>
+                              </div>
+                              {s.det && <p className="text-[10px] text-gray-400 pl-3.5">{s.det}</p>}
+                            </div>
+
+                            {/* GDoc */}
+                            <div className="min-w-0">
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden">GDoc</p>
+                              {c.gdoc ? (
+                                gdocUrl
+                                  ? <a href={c.gdoc} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                       className="text-xs font-semibold hover:underline" style={{color: BLUE}}>Abrir processo</a>
+                                  : <p className="text-[11px] font-mono text-gray-600 truncate" title={c.gdoc}>{c.gdoc.replace(/\/B[ÉE]LEMDIGITAL$/i, '')}</p>
+                              ) : <p className="text-[11px] text-gray-300">sem processo</p>}
                             </div>
 
                             {/* Ações (admin) */}
-                            {isAdmin && !isEditing && (
-                              <button onClick={() => startEdit(c)}
-                                      className="flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-700 transition-all">
-                                Editar
-                              </button>
-                            )}
-                            {isAdmin && isEditing && (
-                              <button onClick={() => setEditingId(null)}
-                                      className="flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 transition-all">
-                                Cancelar
-                              </button>
-                            )}
+                            <div className="hidden lg:flex justify-end">
+                              {isAdmin && (
+                                isEditing ? (
+                                  <button onClick={() => setEditingId(null)} title="Cancelar edição"
+                                          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100">
+                                    <X className="w-3.5 h-3.5 text-gray-400" />
+                                  </button>
+                                ) : (
+                                  <button onClick={() => startEdit(c)} title="Editar parcela"
+                                          className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-blue-50 transition-all">
+                                    <Edit2 className="w-3.5 h-3.5" style={{color: BLUE}} />
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </div>
 
                           {/* Formulário de edição inline (admin) */}
                           {isAdmin && isEditing && (
-                            <div className="pb-4 pt-1">
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 bg-white rounded-xl border border-blue-100 shadow-sm">
+                            <div className="px-5 pb-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 bg-white rounded-xl border border-blue-100">
                                 {[
-                                  { key:'refMonth',     label:'Competência', type:'month', ph:'' },
-                                  { key:'nfDate',       label:'Data Emissão', type:'date', ph:'' },
-                                  { key:'nfNumber',     label:'Nº NF',       type:'text', ph:'NF-0001' },
-                                  { key:'billingValue', label:'Valor Faturado', type:'text', ph:'R$ 0,00' },
-                                  { key:'gdoc',         label:'Link Gdoc',   type:'text', ph:'https://…' },
+                                  { key:'refMonth',     label:'Competência',    type:'month', ph:'' },
+                                  { key:'nfDate',       label:'Data Emissão',   type:'date',  ph:'' },
+                                  { key:'nfNumber',     label:'Nº NF',          type:'text',  ph:'NF-0001' },
+                                  { key:'billingValue', label:'Valor Faturado', type:'text',  ph:'R$ 0,00' },
+                                  { key:'gdoc',         label:'Processo GDoc',  type:'text',  ph:'2026.01.000123/2026/BÉLEMDIGITAL' },
                                 ].map(f => (
                                   <div key={f.key}>
                                     <label className="block text-[10px] font-semibold text-gray-500 mb-1">{f.label}</label>
@@ -4904,7 +4946,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                   </div>
                                 ))}
                               </div>
-                              <div className="flex justify-end mt-2">
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={() => setEditingId(null)}
+                                        className="text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
+                                  Cancelar
+                                </button>
                                 <button onClick={() => saveEdit(c.id)} disabled={saving}
                                         className="flex items-center gap-2 text-white text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
                                         style={{background: BLUE}}>
@@ -4917,7 +4963,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       );
                     })}
                   </div>
-
                 </div>
               ))}
             </div>
