@@ -4,8 +4,11 @@
 // a pessoa; quem pode ENTRAR continua sendo decidido pelo admin: o e-mail
 // verificado da conta Google precisa ser o e-mail de um usuário já cadastrado e
 // aprovado na coleção 'users' (ou 'gcsp_users'). Gmail sem cadastro é recusado.
-const { getDb, getAdminApp } = require('../lib/firebaseAdmin');
+const { getDb } = require('../lib/firebaseAdmin');
+const { verificarIdToken } = require('../lib/tokenGoogle');
 const { emitirPasse } = require('../lib/baseIA');
+
+const projetoId = () => { try { return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).project_id; } catch { return 'belem-contratos'; } };
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -19,14 +22,10 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Carregado sob demanda: se o módulo falhar no servidor, o erro aparece na resposta em vez de derrubar a função
-    let getAuth;
-    try { ({ getAuth } = require('firebase-admin/auth')); }
-    catch (e) { console.error('firebase-admin/auth:', e); res.status(500).json({ error: 'Login com Google indisponível no servidor: ' + e.message }); return; }
-
+    // Verificação própria do token (o firebase-admin/auth não carrega no runtime da Vercel)
     let conta;
-    try { conta = await getAuth(getAdminApp()).verifyIdToken(String(idToken)); }
-    catch { res.status(401).json({ error: 'Não foi possível confirmar a conta Google. Tente de novo.' }); return; }
+    try { conta = await verificarIdToken(idToken, projetoId()); }
+    catch (e) { console.warn('login-google:', e.message); res.status(401).json({ error: 'Não foi possível confirmar a conta Google. Tente de novo.' }); return; }
 
     const email = String(conta.email || '').trim().toLowerCase();
     const provedor = conta.firebase && conta.firebase.sign_in_provider;
