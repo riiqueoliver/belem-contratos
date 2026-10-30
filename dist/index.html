@@ -27244,6 +27244,11 @@ function App() {
     }));
   }, [contracts, statsYear]);
   function handleLogin(user) {
+    handleGoHome();
+    setShowProfile(false);
+    setShowContacts(false);
+    setShowNfListView(false);
+    setShowPlusMenu(false);
     localStorage.setItem(SYS.sessionKey, String(user.id));
     setCurrentUser(user);
     if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);

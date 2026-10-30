@@ -19030,6 +19030,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       }, [contracts, statsYear]);
 
       function handleLogin(user) {
+        // A tela de login vive dentro do App: sem isso, painéis e a última página abertos
+        // antes do logout (ex.: Meu Perfil, de onde se sai do sistema) voltam no próximo login
+        handleGoHome();
+        setShowProfile(false); setShowContacts(false); setShowNfListView(false); setShowPlusMenu(false);
         localStorage.setItem(SYS.sessionKey, String(user.id));
         setCurrentUser(user);
         if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
