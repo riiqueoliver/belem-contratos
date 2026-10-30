@@ -13,7 +13,6 @@ Uma base de código serve **dois sistemas** e vários módulos, tudo dentro de u
 | `/` | Belém Digital — sistema principal (navy `#0B2B5E`, coleções sem prefixo) |
 | `/gcsp` | GCSP — Gerência de Contratos, Suprimentos e Patrimônio (petróleo `#0E7490`, prefixo `gcsp_`) |
 | `/moduloarcanjo` | Login do Instituto Arcanjo's (arquivo separado: `arcanjo-login.html`) |
-| `/campanha` | Módulo privado — só o usuário `henriquecorreia` |
 
 Persistência é **Firestore** (projeto `belem-contratos`). Produção: https://belem-contratos.vercel.app
 
@@ -52,7 +51,6 @@ Não use `python -m http.server` — o Python não está instalado nesta máquin
 | ~8228 | Painel Admin |
 | **~8306** | **Módulo Arcanjo's** |
 | **~9299** | **Painel Gerencial Arcanjo** |
-| ~9562 | Módulo privado de Campanha |
 | ~10067 | Cronograma Financeiro |
 | ~11545 | GDoc |
 | ~14810 | `App` principal |

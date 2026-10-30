@@ -330,8 +330,6 @@
       try { iaGuardarPasse(null); } catch {}
       try { firebase.auth().signOut().catch(() => {}); } catch {}
     }
-    // Link direto para o módulo privado de Campanha: /campanha
-    const IS_CAMPANHA_ROUTE = typeof window !== 'undefined' && /^\/campanha\/?$/i.test(window.location.pathname || '');
     // Token de redefinição de senha vindo do link enviado por e-mail (?resetToken=...)
     const RESET_TOKEN_FROM_URL = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('resetToken')
@@ -508,7 +506,6 @@
     const ArcanjoIcon     = ({className}) => <SVG className={className}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/></SVG>;
     const BarChart2       = ({className}) => <SVG className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></SVG>;
     const PieChart        = ({className}) => <SVG className={className}><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></SVG>;
-    const Megaphone       = ({className}) => <SVG className={className}><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></SVG>;
 
     /* ═══════════════════════════════════════════════════════
        BUSINESS LOGIC
@@ -11488,511 +11485,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     /* ═══════════════════════════════════════════════════════
-       MÓDULO PRIVADO DE CAMPANHA — cadastro de pessoas, veículo
-       adesivado e presença em eventos. Módulo independente do
-       Arcanjo's: coleção própria (campanha_pessoas), visível
-       apenas para o usuário "henriquecorreia" no sistema
-       principal de Gestão de Contratos (ver gating em App()).
-    ═══════════════════════════════════════════════════════ */
-    const CAMPANHA_COLOR = '#4338ca';
-
-    function CampanhaModal({ editing, eventos = [], onSubmit, onClose }) {
-      const blank = { nome:'', cpf:'', orgao:'', temVeiculo:false, placa:'', adesivou:false, presencas:{} };
-      const [form, setForm] = React.useState(editing ? {
-        nome: editing.nome || '', cpf: editing.cpf || '', orgao: editing.orgao || '',
-        temVeiculo: !!editing.temVeiculo, placa: editing.placa || '', adesivou: !!editing.adesivou,
-        presencas: { ...(editing.presencas || {}) },
-      } : blank);
-      const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-      const togglePresenca = (eventoId) => setForm(f => {
-        const presencas = { ...f.presencas };
-        if (presencas[eventoId]) delete presencas[eventoId]; else presencas[eventoId] = true;
-        return { ...f, presencas };
-      });
-      const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
-      const lc = "block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider";
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background: CAMPANHA_COLOR}}>
-                  <UserPlus className="w-4 h-4 text-white" />
-                </div>
-                <h2 className="font-bold text-gray-800 text-sm">{editing ? 'Editar Pessoa' : 'Cadastrar Pessoa'}</h2>
-              </div>
-              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"><X className="w-4 h-4" /></button>
-            </div>
-            <form id="campanha-form" onSubmit={e => { e.preventDefault(); if (!form.nome.trim()) return; onSubmit(form); }} className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={lc}>Nome Completo *</label>
-                  <input value={form.nome} onChange={e => set('nome', e.target.value)} required placeholder="Nome completo" className={ic} />
-                </div>
-                <div>
-                  <label className={lc}>CPF</label>
-                  <input value={form.cpf} onChange={e => {
-                    const v = e.target.value.replace(/\D/g,'').slice(0,11);
-                    const m = v.length <= 3 ? v
-                            : v.length <= 6 ? v.slice(0,3)+'.'+v.slice(3)
-                            : v.length <= 9 ? v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6)
-                            : v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
-                    set('cpf', m);
-                  }} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" className={ic} />
-                </div>
-              </div>
-              <div>
-                <label className={lc}>Órgão que Trabalha</label>
-                <input value={form.orgao} onChange={e => set('orgao', e.target.value)} placeholder="Órgão / secretaria" className={ic} />
-              </div>
-
-              <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
-                <input type="checkbox" checked={form.temVeiculo} onChange={e => set('temVeiculo', e.target.checked)}
-                  className="w-4 h-4 rounded" style={{accentColor: CAMPANHA_COLOR}} />
-                <span className="text-sm font-semibold text-gray-700">Tem veículo</span>
-              </label>
-
-              {form.temVeiculo && (
-                <div className="rounded-xl border p-4 space-y-3" style={{borderColor:'#E6ECF5', background:'#F4F7FB'}}>
-                  <div>
-                    <label className={lc}>Placa do Veículo</label>
-                    <input value={form.placa} onChange={e => set('placa', e.target.value.toUpperCase())} placeholder="ABC-1234" maxLength={8} className={ic} />
-                  </div>
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input type="checkbox" checked={form.adesivou} onChange={e => set('adesivou', e.target.checked)}
-                      className="w-4 h-4 rounded" style={{accentColor: CAMPANHA_COLOR}} />
-                    <span className="text-sm font-semibold text-gray-700">Adesivou o veículo</span>
-                  </label>
-                </div>
-              )}
-
-              <div>
-                <label className={lc}>Presença em Eventos</label>
-                {eventos.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Nenhum evento cadastrado ainda. Use o botão "+ Eventos" na tela anterior.</p>
-                ) : (
-                  <div className="rounded-xl border border-gray-100 divide-y divide-gray-50 max-h-52 overflow-y-auto">
-                    {eventos.map(ev => (
-                      <label key={ev.id} className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-2.5 hover:bg-gray-50">
-                        <input type="checkbox" checked={!!form.presencas[ev.id]} onChange={() => togglePresenca(ev.id)}
-                          className="w-4 h-4 rounded flex-shrink-0" style={{accentColor: CAMPANHA_COLOR}} />
-                        <span className="text-sm text-gray-700 flex-1">{ev.nome}</span>
-                        <span className="text-[11px] text-gray-400 font-mono flex-shrink-0">{ev.data ? new Date(ev.data+'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </form>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
-              <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button type="submit" form="campanha-form" className="px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95" style={{background: CAMPANHA_COLOR}}>
-                {editing ? 'Salvar Alterações' : 'Cadastrar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Lista os eventos cadastrados e permite adicionar um novo (nome + data) ou excluir
-    function CampanhaEventosModal({ eventos, onAdd, onDelete, onClose, addToast }) {
-      const [nome, setNome] = React.useState('');
-      const [data, setData] = React.useState('');
-      const [saving, setSaving] = React.useState(false);
-      const ic = "w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition-all";
-
-      async function handleAdd(e) {
-        e.preventDefault();
-        if (!nome.trim()) return;
-        setSaving(true);
-        try {
-          await onAdd({ nome: nome.trim(), data });
-          addToast('Evento cadastrado com sucesso!');
-          setNome(''); setData('');
-        } catch(err) {
-          addToast('Erro ao cadastrar evento: ' + (err.message || 'falha'));
-        } finally {
-          setSaving(false);
-        }
-      }
-
-      const ordenados = [...eventos].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(15,23,42,.55)'}} onClick={onClose}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background: CAMPANHA_COLOR}}>
-                  <Calendar className="w-4 h-4 text-white" />
-                </div>
-                <h2 className="font-bold text-gray-800 text-sm">Eventos</h2>
-              </div>
-              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"><X className="w-4 h-4" /></button>
-            </div>
-
-            <form onSubmit={handleAdd} className="px-6 py-4 border-b border-gray-100 flex gap-2 items-end">
-              <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Nome do Evento</label>
-                <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Comício Centro" className={ic} />
-              </div>
-              <div className="w-36">
-                <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Data</label>
-                <input type="date" value={data} onChange={e => setData(e.target.value)} className={ic} />
-              </div>
-              <button type="submit" disabled={!nome.trim() || saving}
-                className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 flex-shrink-0"
-                style={{background: CAMPANHA_COLOR}} title="Adicionar evento">
-                <Plus className="w-4 h-4" />
-              </button>
-            </form>
-
-            <div className="overflow-y-auto flex-1 px-3 py-2">
-              {ordenados.length === 0 ? (
-                <p className="text-center text-xs text-gray-400 py-8">Nenhum evento cadastrado ainda.</p>
-              ) : (
-                ordenados.map(ev => (
-                  <div key={ev.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">{ev.nome}</p>
-                      <p className="text-[11px] text-gray-400 font-mono">{ev.data ? new Date(ev.data+'T12:00:00').toLocaleDateString('pt-BR') : 'sem data'}</p>
-                    </div>
-                    <button onClick={() => onDelete(ev.id)} title="Excluir evento"
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100">
-              <button type="button" onClick={onClose} className="w-full py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Fechar</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    async function exportarCampanhaExcel(pessoas, eventos, addToast) {
-      if (!pessoas || pessoas.length === 0) { addToast('Nenhuma pessoa cadastrada para exportar.'); return; }
-      addToast('Gerando planilha…');
-      try {
-        if (!window.ExcelJS) {
-          await new Promise((res, rej) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
-            s.onload = res; s.onerror = rej;
-            document.head.appendChild(s);
-          });
-        }
-        const ExcelJS = window.ExcelJS;
-        const wb = new ExcelJS.Workbook();
-        wb.creator = 'Belém Digital';
-        wb.created = new Date();
-
-        const COLS = [
-          { header: 'Nome',            width: 32 },
-          { header: 'CPF',             width: 16 },
-          { header: 'Órgão',           width: 26 },
-          { header: 'Tem Veículo',     width: 13 },
-          { header: 'Placa',           width: 12 },
-          { header: 'Adesivou',        width: 12 },
-          { header: 'Eventos Presente',width: 36 },
-          { header: 'Cadastrado em',   width: 14 },
-        ];
-
-        const ws = wb.addWorksheet('Campanha');
-        ws.getRow(1).height = 22;
-        COLS.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
-
-        const hRow = ws.getRow(1);
-        COLS.forEach((c, i) => {
-          const cell = hRow.getCell(i + 1);
-          cell.value = c.header;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4338CA' } };
-          cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-          cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
-
-        const eventosPorId = {};
-        (eventos || []).forEach(ev => { eventosPorId[ev.id] = ev.nome; });
-
-        pessoas.forEach((p, idx) => {
-          const row = ws.getRow(idx + 2);
-          const d = toJsDate(p.createdAt);
-          const nomesEventos = Object.keys(p.presencas || {})
-            .filter(id => p.presencas[id] && eventosPorId[id])
-            .map(id => eventosPorId[id])
-            .join(', ');
-          const vals = [
-            p.nome || '', p.cpf || '', p.orgao || '',
-            p.temVeiculo ? 'Sim' : 'Não', p.temVeiculo ? (p.placa || '') : '',
-            p.temVeiculo && p.adesivou ? 'Sim' : 'Não',
-            nomesEventos,
-            d ? d.toLocaleDateString('pt-BR') : '',
-          ];
-          vals.forEach((v, ci) => {
-            const cell = row.getCell(ci + 1);
-            cell.value = v;
-            cell.font = { size: 10 };
-            cell.alignment = { vertical: 'middle', horizontal: (ci >= 3 && ci !== 6) ? 'center' : 'left' };
-            if (idx % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-          });
-          row.height = 18;
-        });
-
-        ws.autoFilter = 'A1:H1';
-        ws.views = [{ state: 'frozen', ySplit: 1 }];
-
-        const buf = await wb.xlsx.writeBuffer();
-        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `campanha-${new Date().toISOString().slice(0,10)}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        addToast('Planilha exportada com sucesso!');
-      } catch(e) {
-        addToast('Erro ao exportar: ' + (e.message || 'falha'));
-      }
-    }
-
-    function CampanhaPage({ pessoas, eventos, onAdd, onUpdate, onDelete, onAddEvento, onDeleteEvento, addToast }) {
-      const [search,          setSearch]          = React.useState('');
-      const [filterOrgao,     setFilterOrgao]     = React.useState('');
-      const [filterVeiculo,   setFilterVeiculo]   = React.useState('');
-      const [filterAdesivo,   setFilterAdesivo]   = React.useState('');
-      const [filterEvento,    setFilterEvento]    = React.useState('');
-      const [filterPresenca,  setFilterPresenca]  = React.useState('');
-      const [showModal,       setShowModal]       = React.useState(false);
-      const [editing,         setEditing]         = React.useState(null);
-      const [showEventosModal,setShowEventosModal]= React.useState(false);
-
-      const orgaoOpts = React.useMemo(() => {
-        const vals = pessoas.map(p => (p.orgao || '').trim()).filter(Boolean);
-        return [...new Set(vals)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      }, [pessoas]);
-
-      const filtered = pessoas.filter(p => {
-        if (search && !p.nome?.toLowerCase().includes(search.toLowerCase()) && !p.cpf?.includes(search)) return false;
-        if (filterOrgao && (p.orgao || '').trim() !== filterOrgao) return false;
-        if (filterVeiculo === 'sim' && !p.temVeiculo) return false;
-        if (filterVeiculo === 'nao' && p.temVeiculo) return false;
-        if (filterAdesivo === 'sim' && !(p.temVeiculo && p.adesivou)) return false;
-        if (filterAdesivo === 'nao' && (p.temVeiculo && p.adesivou)) return false;
-        if (filterEvento) {
-          const esteve = !!(p.presencas && p.presencas[filterEvento]);
-          if (filterPresenca === 'nao' ? esteve : !esteve) return false;
-        }
-        return true;
-      });
-
-      const stats = React.useMemo(() => ({
-        total:     pessoas.length,
-        veiculo:   pessoas.filter(p => p.temVeiculo).length,
-        adesivado: pessoas.filter(p => p.temVeiculo && p.adesivou).length,
-        eventos:   eventos.length,
-      }), [pessoas, eventos]);
-
-      async function handleSubmit(data) {
-        try {
-          if (editing) { await onUpdate(editing.id, data); addToast('Registro atualizado com sucesso!'); }
-          else { await onAdd(data); addToast('Pessoa cadastrada com sucesso!'); }
-          setShowModal(false); setEditing(null);
-        } catch(e) {
-          addToast('Erro ao salvar: ' + (e.message || 'Falha no banco de dados'));
-        }
-      }
-
-      const hasFilters = filterOrgao || filterVeiculo || filterAdesivo || filterEvento;
-
-      return (
-        <div className="fade-in space-y-5">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm" style={{background: CAMPANHA_COLOR}}>
-                <Megaphone className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-extrabold tracking-tight" style={{color: CAMPANHA_COLOR}}>Campanha</h1>
-                <p className="text-[11px] text-gray-400 font-medium">Cadastro privado de pessoas · visível apenas para você</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => exportarCampanhaExcel(filtered, eventos, addToast)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
-                style={{borderColor:'#d1fae5', color:'#059669', background:'#F2F8F4'}}>
-                <Download className="w-3.5 h-3.5" /> Exportar Excel
-              </button>
-              <button onClick={() => setShowEventosModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
-                style={{borderColor:'#E6ECF5', color: CAMPANHA_COLOR, background:'#F4F7FB'}}>
-                <Calendar className="w-3.5 h-3.5" /> + Eventos
-              </button>
-              <button onClick={() => { setEditing(null); setShowModal(true); }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
-                style={{background: CAMPANHA_COLOR}}>
-                <Plus className="w-4 h-4" /> Cadastrar Pessoa
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label:'Total cadastradas',   value: stats.total,     color: CAMPANHA_COLOR },
-              { label:'Com veículo',         value: stats.veiculo,   color:'#0284c7' },
-              { label:'Adesivados',          value: stats.adesivado, color:'#059669' },
-              { label:'Eventos cadastrados', value: stats.eventos,   color:'#dc2626' },
-            ].map(k => (
-              <div key={k.label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm">
-                <p className="text-2xl font-black leading-none" style={{color: k.color}}>{k.value}</p>
-                <p className="text-xs font-semibold text-gray-400 mt-1">{k.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Buscar por nome, CPF…" value={search} onChange={e => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 w-64 transition-all"
-                style={{'--tw-ring-color': CAMPANHA_COLOR + '44'}} />
-            </div>
-            <select value={filterOrgao} onChange={e => setFilterOrgao(e.target.value)}
-              className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-              style={filterOrgao
-                ? {borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}
-                : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff'}}>
-              <option value="">Todos os Órgãos</option>
-              {orgaoOpts.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-            <select value={filterVeiculo} onChange={e => setFilterVeiculo(e.target.value)}
-              className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-              style={filterVeiculo
-                ? {borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}
-                : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff'}}>
-              <option value="">Veículo: Todos</option>
-              <option value="sim">Tem veículo</option>
-              <option value="nao">Sem veículo</option>
-            </select>
-            <select value={filterAdesivo} onChange={e => setFilterAdesivo(e.target.value)}
-              className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-              style={filterAdesivo
-                ? {borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}
-                : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff'}}>
-              <option value="">Adesivo: Todos</option>
-              <option value="sim">Adesivou</option>
-              <option value="nao">Não adesivou</option>
-            </select>
-            <select value={filterEvento} onChange={e => { setFilterEvento(e.target.value); if (!e.target.value) setFilterPresenca(''); }}
-              className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-              style={filterEvento
-                ? {borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}
-                : {borderColor:'#e5e7eb', color:'#9ca3af', background:'#fff'}}>
-              <option value="">Evento: Todos</option>
-              {eventos.map(ev => <option key={ev.id} value={ev.id}>{ev.nome}</option>)}
-            </select>
-            {filterEvento && (
-              <select value={filterPresenca || 'sim'} onChange={e => setFilterPresenca(e.target.value)}
-                className="py-2.5 pl-3 pr-8 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 appearance-none cursor-pointer"
-                style={{borderColor: CAMPANHA_COLOR, color: CAMPANHA_COLOR, background: CAMPANHA_COLOR + '10'}}>
-                <option value="sim">Presentes</option>
-                <option value="nao">Ausentes</option>
-              </select>
-            )}
-            {hasFilters && (
-              <button onClick={() => { setFilterOrgao(''); setFilterVeiculo(''); setFilterAdesivo(''); setFilterEvento(''); setFilterPresenca(''); }}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
-                <X className="w-3.5 h-3.5" /> Limpar filtros
-              </button>
-            )}
-            <span className="text-xs font-semibold text-gray-400 tracking-wide ml-auto">
-              {filtered.length} {filtered.length === 1 ? 'pessoa' : 'pessoas'}
-            </span>
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
-              <Megaphone className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-              <p className="text-gray-400 text-sm font-medium">Nenhuma pessoa encontrada.</p>
-              <p className="text-gray-300 text-xs mt-1">Cadastre a primeira pessoa para começar.</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{background:'#f8fafc'}}>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nome / CPF</th>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Órgão</th>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Veículo</th>
-                    <th className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Eventos</th>
-                    <th className="px-5 py-3 w-20"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((p, idx) => {
-                    const qtdPresencas = Object.values(p.presencas || {}).filter(Boolean).length;
-                    return (
-                    <tr key={p.id} className={`border-t border-gray-50 transition-colors ${idx % 2 === 1 ? 'bg-indigo-50/20' : ''}`}
-                      onMouseEnter={e=>e.currentTarget.style.background='#f5f3ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
-                      <td className="px-5 py-3">
-                        <p className="font-semibold text-gray-800 leading-tight">{p.nome}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{p.cpf || '—'}</p>
-                      </td>
-                      <td className="px-5 py-3 text-gray-600">{p.orgao || '—'}</td>
-                      <td className="px-5 py-3">
-                        {p.temVeiculo ? (
-                          <div>
-                            <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#e0f2fe', color:'#0284c7'}}>{p.placa || 'Sem placa'}</span>
-                            {p.adesivou && <span className="text-[11px] font-bold px-2 py-1 rounded-full ml-1" style={{background:'#dcfce7', color:'#15803d'}}>Adesivado</span>}
-                          </div>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
-                      </td>
-                      <td className="px-5 py-3">
-                        {eventos.length === 0 ? <span className="text-gray-300 text-xs">—</span> : filterEvento ? (
-                          p.presencas && p.presencas[filterEvento]
-                            ? <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#dcfce7', color:'#15803d'}}>Presente</span>
-                            : <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background:'#f3f4f6', color:'#6b7280'}}>Ausente</span>
-                        ) : (
-                          <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{background: qtdPresencas > 0 ? '#dcfce7' : '#f3f4f6', color: qtdPresencas > 0 ? '#15803d' : '#6b7280'}}>
-                            {qtdPresencas} / {eventos.length}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => { setEditing(p); setShowModal(true); }}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => onDelete(p.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );})}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {showModal && (
-            <CampanhaModal editing={editing} eventos={eventos} onSubmit={handleSubmit} onClose={() => { setShowModal(false); setEditing(null); }} />
-          )}
-          {showEventosModal && (
-            <CampanhaEventosModal eventos={eventos} onAdd={onAddEvento} onDelete={onDeleteEvento} addToast={addToast} onClose={() => setShowEventosModal(false)} />
-          )}
-        </div>
-      );
-    }
-
-    /* ═══════════════════════════════════════════════════════
        CRONOGRAMA FINANCEIRO — parceria com rateio e impostos
        Regra central: a CONTRATADA emite a NF de 100%, recolhe os
        tributos e só então repassa o percentual à PARCEIRA. Logo a
@@ -17904,7 +17396,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
          ia_memoria      → o que ele aprende (preferências, correções, fatos)
          ia_conhecimento → base de conhecimento (carregada à parte)
        Gravações em dados do sistema só acontecem depois do clique de confirmação.
-       Arcanjo's e Campanha ficam de fora: são dados pessoais sensíveis (LGPD).
+       Arcanjo's fica de fora: são dados pessoais sensíveis (LGPD).
     ═══════════════════════════════════════════════════════ */
     const IA_NOME    = SYS.id === 'gcsp' ? 'Assistente GCSP' : 'Assistente BD';
     const IA_AVATAR  = '/assistente-ia.jpg';
@@ -19174,10 +18666,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [arcanjoPessoas,       setArcanjoPessoas]       = useState([]);
       const [arcanjoEventos,       setArcanjoEventos]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
-      // Módulo privado de campanha — visível só para o usuário henriquecorreia no sistema principal
-      const [campanhaPessoas,      setCampanhaPessoas]      = useState([]);
-      const [campanhaEventos,      setCampanhaEventos]      = useState([]);
-      const [showCampanhaPage,     setShowCampanhaPage]     = useState(false);
       const [showRelatoriosPage,   setShowRelatoriosPage]   = useState(false);
       const [showAssistentePage,   setShowAssistentePage]   = useState(false);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
@@ -19222,7 +18710,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           if (u) {
             setCurrentUser(u);
             if (ARCANJO_ONLY.has(u.username)) setShowArcanjoPage(true);
-            if (IS_CAMPANHA_ROUTE && SYS.id === 'main' && u.username === 'henriquecorreia') setShowCampanhaPage(true);
           }
         }
       }, [users, sessionId]);
@@ -19353,19 +18840,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); unsubArcanjoPessoas(); unsubArcanjoEventos(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
       }, []);
 
-      // Módulo privado de campanha — só assina o Firestore quando é o próprio henriquecorreia
-      // logado no sistema principal; nenhum outro usuário ou o GCSP chega a buscar esses dados.
-      useEffect(() => {
-        if (SYS.id !== 'main' || currentUser?.username !== 'henriquecorreia') { setCampanhaPessoas([]); setCampanhaEventos([]); return; }
-        const unsubP = db.collection(COL('campanha_pessoas')).orderBy('createdAt', 'desc').onSnapshot(snap => {
-          setCampanhaPessoas(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-        });
-        const unsubE = db.collection(COL('campanha_eventos')).orderBy('data', 'desc').onSnapshot(snap => {
-          setCampanhaEventos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-        });
-        return () => { unsubP(); unsubE(); };
-      }, [currentUser]);
-
       const uniqueContractCount = useMemo(() => {
         const fromContracts = contracts.map(c => c.contractNumber);
         const fromMeta      = Object.keys(contractMeta);
@@ -19407,10 +18881,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => {
         if (showContractsPage || showInstallmentsPage || showProposalsPage || showGdocPage || showArcanjoPage || showArcanjoGerencial ||
             showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage ||
-            showCampanhaPage || showAdmin || showForm || activeContractNumber) setShowRelatoriosPage(false);
+            showAdmin || showForm || activeContractNumber) setShowRelatoriosPage(false);
       }, [showContractsPage, showInstallmentsPage, showProposalsPage, showGdocPage, showArcanjoPage, showArcanjoGerencial,
           showArcanjoAcoes, showProposalBI, showCronogramaPage, showCertidoesPage, showPropEmissao, showLeadsPage,
-          showCampanhaPage, showAdmin, showForm, activeContractNumber]);
+          showAdmin, showForm, activeContractNumber]);
       const [contractSearch,       setContractSearch]       = useState('');
       const [statsYear,            setStatsYear]            = useState(String(new Date().getFullYear()));
       const [showOverduePanel,     setShowOverduePanel]     = useState(false);
@@ -19555,7 +19029,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         localStorage.setItem(SYS.sessionKey, String(user.id));
         setCurrentUser(user);
         if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
-        if (IS_CAMPANHA_ROUTE && SYS.id === 'main' && user.username === 'henriquecorreia') setShowCampanhaPage(true);
       }
       function handleLogout() {
         const goArcanjo = (showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes) ||
@@ -19746,7 +19219,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         setShowGdocPage(false);
         setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false);
         setShowProposalBI(false);
-        setShowCampanhaPage(false);
         setShowRelatoriosPage(false);
         setShowAssistentePage(false);
         if (ARCANJO_ONLY.has(currentUser?.username)) {
@@ -19898,10 +19370,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => {
         if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI
             || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage
-            || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showCampanhaPage) setShowAssistentePage(false);
+            || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes) setShowAssistentePage(false);
       }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage,
           showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage,
-          showArcanjoGerencial, showArcanjoAcoes, showCampanhaPage]);
+          showArcanjoGerencial, showArcanjoAcoes]);
 
       // Aguarda Firebase carregar
       if (!dbReady) return (
@@ -20428,22 +19900,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         await db.collection(COL('arcanjo_eventos')).doc(id).delete();
       }
 
-      async function handleAddCampanha(data) {
-        await db.collection(COL('campanha_pessoas')).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-      }
-      async function handleUpdateCampanha(id, data) {
-        await db.collection(COL('campanha_pessoas')).doc(id).update(data);
-      }
-      async function handleDeleteCampanha(id) {
-        await db.collection(COL('campanha_pessoas')).doc(id).delete();
-      }
-      async function handleAddCampanhaEvento(data) {
-        await db.collection(COL('campanha_eventos')).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-      }
-      async function handleDeleteCampanhaEvento(id) {
-        await db.collection(COL('campanha_eventos')).doc(id).delete();
-      }
-
       async function handleExportArcanjo() {
         addToast('Gerando planilha…');
         try {
@@ -20861,12 +20317,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={abrirAssistente} />
               )}
 
-              {SYS.id === 'main' && currentUser.username === 'henriquecorreia' && (
-                <SidebarBtn icon={Megaphone} label="Campanha"
-                  active={showCampanhaPage}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowCampanhaPage(true); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
-              )}
-
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && (
                 <SidebarBtn icon={Layers} label="GDoc"
                   active={showGdocPage}
@@ -20889,7 +20339,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               {ARCANJO_USERS.has(currentUser.username) && (
                 <SidebarBtn icon={Calendar} label="Ações"
                   active={showArcanjoAcoes}
-                  onClick={() => { setShowArcanjoAcoes(true); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setShowCampanhaPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                  onClick={() => { setShowArcanjoAcoes(true); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowGdocPage(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {(showArcanjoPage || showArcanjoGerencial) && ARCANJO_USERS.has(currentUser.username) && (
@@ -21602,18 +21052,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 onUpdateNfData={handleUpdateNfData}
                 cronogramas={cronogramas}
                 onDelete={cn => handleDeleteContract(cn, () => { setActiveContractNumber(null); })}
-              />
-            ) : showCampanhaPage && SYS.id === 'main' && currentUser.username === 'henriquecorreia' ? (
-              /* ── MÓDULO PRIVADO DE CAMPANHA (apenas henriquecorreia) ── */
-              <CampanhaPage
-                pessoas={campanhaPessoas}
-                eventos={campanhaEventos}
-                onAdd={handleAddCampanha}
-                onUpdate={handleUpdateCampanha}
-                onDelete={handleDeleteCampanha}
-                onAddEvento={handleAddCampanhaEvento}
-                onDeleteEvento={handleDeleteCampanhaEvento}
-                addToast={addToast}
               />
             ) : (
               <>
