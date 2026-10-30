@@ -26992,6 +26992,7 @@ function App() {
   const [orgaos, setOrgaos] = useState([]);
   const [gcspModules, setGcspModules] = useState({});
   const moduleOn = key => SYS.id === 'main' ? true : gcspModules[key] !== false;
+  const MENU_OCULTO = new Set(['oportunidades', 'emitirProposta']);
   const [arcanjoRecords, setArcanjoRecords] = useState([]);
   const [arcanjoPessoas, setArcanjoPessoas] = useState([]);
   const [arcanjoEventos, setArcanjoEventos] = useState([]);
@@ -29060,7 +29061,7 @@ function App() {
       setShowAdmin(false);
       setShowCronogramaPage(true);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && !MENU_OCULTO.has('oportunidades') && React.createElement(SidebarBtn, {
     icon: TrendingUp,
     label: "Oportunidades",
     active: showLeadsPage,
@@ -29083,7 +29084,7 @@ function App() {
       setShowAdmin(false);
       setShowLeadsPage(true);
     }
-  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && React.createElement(SidebarBtn, {
+  }), !ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && !MENU_OCULTO.has('emitirProposta') && React.createElement(SidebarBtn, {
     icon: FileText,
     label: "Emitir Proposta",
     active: showPropEmissao,

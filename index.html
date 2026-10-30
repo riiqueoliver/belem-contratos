@@ -18893,6 +18893,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [gcspModules,          setGcspModules]          = useState({});
       // No sistema principal tudo é habilitado; no GCSP respeita a config (default: habilitado)
       const moduleOn = (key) => SYS.id === 'main' ? true : (gcspModules[key] !== false);
+      // Módulos escondidos do menu (código e dados continuam; tire daqui para voltar a exibir)
+      const MENU_OCULTO = new Set(['oportunidades', 'emitirProposta']);
       const [arcanjoRecords,       setArcanjoRecords]       = useState([]);
       const [arcanjoPessoas,       setArcanjoPessoas]       = useState([]);
       const [arcanjoEventos,       setArcanjoEventos]       = useState([]);
@@ -20516,14 +20518,14 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCronogramaPage(true); }} />
               )}
 
-              {!ARCANJO_ONLY.has(currentUser.username) && (
+              {!ARCANJO_ONLY.has(currentUser.username) && !MENU_OCULTO.has('oportunidades') && (
                 <SidebarBtn icon={TrendingUp} label="Oportunidades"
                   active={showLeadsPage}
                   badge={leads.filter(l => l.status === 'novo').length}
                   onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowLeadsPage(true); }} />
               )}
 
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && (
+              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && !MENU_OCULTO.has('emitirProposta') && (
                 <SidebarBtn icon={FileText} label="Emitir Proposta"
                   active={showPropEmissao}
                   onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowPropEmissao(true); }} />
