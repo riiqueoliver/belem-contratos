@@ -42,6 +42,56 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
     /* ════════════════════════════════════════════════════
+       SISTEMA DE DESIGN — telas internas (classe .ds na raiz do App).
+       Tom mais sóbrio e institucional: pesos de fonte contidos,
+       cantos e sombras discretos, tons pastel neutralizados.
+       Não vale no tema escuro, que tem as próprias regras abaixo.
+       ════════════════════════════════════════════════════ */
+    html:not([data-tema="escuro"]) .ds { background: #F3F5F8 !important; color: #1E293B; }
+    .ds .font-black      { font-weight: 700 !important; }
+    .ds .font-extrabold  { font-weight: 700 !important; }
+    .ds .tracking-widest { letter-spacing: .06em !important; }
+    .ds .tracking-wider  { letter-spacing: .04em !important; }
+    .ds .rounded-3xl { border-radius: 16px !important; }
+    .ds .rounded-2xl { border-radius: 12px !important; }
+    .ds .rounded-xl  { border-radius: 10px !important; }
+    .ds .shadow-2xl, .ds .shadow-xl { box-shadow: 0 16px 40px -16px rgba(15,23,42,.24) !important; }
+    .ds .shadow-lg  { box-shadow: 0 8px 20px -10px rgba(15,23,42,.18) !important; }
+    .ds .shadow-md  { box-shadow: 0 2px 8px -3px rgba(15,23,42,.10) !important; }
+    .ds .shadow-sm  { box-shadow: 0 1px 2px rgba(15,23,42,.05) !important; }
+    .ds .shadow     { box-shadow: 0 1px 3px rgba(15,23,42,.07) !important; }
+    /* bordas com um cinza único */
+    html:not([data-tema="escuro"]) .ds .border-gray-100,
+    html:not([data-tema="escuro"]) .ds .border-gray-200,
+    html:not([data-tema="escuro"]) .ds .border-slate-100,
+    html:not([data-tema="escuro"]) .ds .border-slate-200 { border-color: #E3E8EF !important; }
+    /* tons pastel decorativos → neutros (cores de status continuam, mais contidas) */
+    html:not([data-tema="escuro"]) .ds-cores .bg-blue-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-indigo-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-sky-50   { background-color: #F4F7FB !important; }
+    html:not([data-tema="escuro"]) .ds-cores .bg-purple-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-violet-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-pink-50  { background-color: #F6F6F9 !important; }
+    html:not([data-tema="escuro"]) .ds-cores .border-blue-100,
+    html:not([data-tema="escuro"]) .ds-cores .border-blue-200,
+    html:not([data-tema="escuro"]) .ds-cores .border-indigo-100,
+    html:not([data-tema="escuro"]) .ds-cores .border-indigo-200,
+    html:not([data-tema="escuro"]) .ds-cores .border-purple-100,
+    html:not([data-tema="escuro"]) .ds-cores .border-purple-200 { border-color: #E1E7F0 !important; }
+    html:not([data-tema="escuro"]) .ds-cores .bg-green-50  { background-color: #F2F8F4 !important; }
+    html:not([data-tema="escuro"]) .ds-cores .bg-amber-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-yellow-50,
+    html:not([data-tema="escuro"]) .ds-cores .bg-orange-50 { background-color: #FBF7EE !important; }
+    html:not([data-tema="escuro"]) .ds-cores .bg-red-50    { background-color: #FCF3F3 !important; }
+    /* títulos e números sem exagero */
+    .ds h1, .ds h2, .ds h3 { letter-spacing: -0.01em; }
+    /* etiquetas em CAIXA ALTA espaçada → texto como foi escrito, um pouco maior */
+    .ds .uppercase.tracking-widest,
+    .ds .uppercase.tracking-wider { text-transform: none !important; letter-spacing: 0 !important; font-weight: 600 !important; }
+    .ds .text-\[9px\]  { font-size: 10px !important; }
+    .ds .text-\[10px\] { font-size: 11px !important; }
+
+    /* ════════════════════════════════════════════════════
        TEMA ESCURO — reescreve as superfícies mais usadas.
        Só entra quando data-tema="escuro" está no <html>.
        ════════════════════════════════════════════════════ */
@@ -1957,24 +2007,55 @@ function Badge({
     className: `w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`
   }), c.label);
 }
+const TOAST_TIPOS = {
+  ok: {
+    cor: '#2F7D4F',
+    Icone: CheckCircle
+  },
+  erro: {
+    cor: '#C2413B',
+    Icone: X
+  },
+  aviso: {
+    cor: '#B7791F',
+    Icone: AlertTriangle
+  },
+  info: {
+    cor: SYS.blue,
+    Icone: Info
+  }
+};
 function Toast({
   id,
   msg,
   onClose
 }) {
+  const texto = String(msg || '');
+  const tipo = /❌|🚫|⛔/.test(texto) ? 'erro' : /⚠/.test(texto) ? 'aviso' : /✅|✔|🎉|🎯/.test(texto) ? 'ok' : 'info';
+  const limpo = texto.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{2714}\u{2705}\u{274C}\u{26A0}]/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
+  const {
+    cor,
+    Icone
+  } = TOAST_TIPOS[tipo];
   return React.createElement("div", {
-    className: "fade-in flex items-start gap-3 text-white text-sm px-4 py-3 rounded-xl shadow-2xl border",
+    className: "fade-in flex items-start gap-3 bg-white text-slate-700 text-sm pl-3.5 pr-3 py-3 rounded-lg border border-slate-200",
     style: {
-      background: BLUE,
-      borderColor: '#1a4a8a'
+      boxShadow: '0 10px 28px -12px rgba(15,23,42,.28)',
+      borderLeft: `3px solid ${cor}`
     }
-  }, React.createElement(Bell, {
-    className: "w-4 h-4 mt-0.5 flex-shrink-0 text-green-400"
-  }), React.createElement("span", {
+  }, React.createElement("span", {
+    style: {
+      color: cor
+    },
+    className: "mt-0.5 flex-shrink-0"
+  }, React.createElement(Icone, {
+    className: "w-4 h-4"
+  })), React.createElement("span", {
     className: "flex-1 leading-snug whitespace-pre-line"
-  }, msg), React.createElement("button", {
+  }, limpo), React.createElement("button", {
     onClick: () => onClose(id),
-    className: "text-blue-300 hover:text-white flex-shrink-0 mt-0.5"
+    title: "Fechar",
+    className: "text-slate-400 hover:text-slate-600 flex-shrink-0 mt-0.5"
   }, React.createElement(X, {
     className: "w-3.5 h-3.5"
   })));
@@ -28745,9 +28826,9 @@ function App() {
   const totalHomeAlerts_sb = homeAlerts.expired + homeAlerts.exp7 + homeAlerts.exp30;
   const hasAlert_sb = totalHomeAlerts_sb > 0;
   return React.createElement("div", {
-    className: "min-h-screen flex",
+    className: `min-h-screen flex ds ${emArcanjo ? '' : 'ds-cores'}`,
     style: {
-      background: '#F1F5F9'
+      background: '#F3F5F8'
     }
   }, React.createElement("div", {
     className: "fixed top-4 right-4 z-[70] flex flex-col gap-2 pointer-events-none",
@@ -29235,12 +29316,7 @@ function App() {
     label: `Perfil — ${currentUser.name || currentUser.username}`,
     isAvatar: true,
     onClick: () => setShowProfile(true)
-  })), React.createElement("div", {
-    className: "absolute bottom-0 left-0 right-0 h-1 rounded-b",
-    style: {
-      background: `linear-gradient(to right, ${BLUE}, ${GREEN})`
-    }
-  })), React.createElement("div", {
+  }))), React.createElement("div", {
     className: "flex-1 flex flex-col min-h-screen min-w-0",
     style: {
       marginLeft: '64px'
@@ -30158,16 +30234,15 @@ function App() {
   }, React.createElement("div", {
     className: "flex items-center gap-2"
   }, React.createElement("h2", {
-    className: "text-sm font-bold",
-    style: {
-      color: BLUE
-    }
-  }, "Dashboard Executivo"), React.createElement("span", {
-    className: "text-[10px] font-bold px-2 py-0.5 rounded-full text-white",
+    className: "text-[17px] font-semibold text-slate-900"
+  }, "Vis\xE3o geral"), React.createElement("span", {
+    className: "flex items-center gap-1.5 text-[11px] text-slate-500"
+  }, React.createElement("span", {
+    className: "w-1.5 h-1.5 rounded-full",
     style: {
       background: GREEN
     }
-  }, "em tempo real")), React.createElement("div", {
+  }), "atualizado em tempo real")), React.createElement("div", {
     className: "flex items-center gap-2 flex-wrap"
   }, React.createElement("div", {
     className: "flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1 bg-white shadow-sm"
@@ -30191,23 +30266,30 @@ function App() {
     }
   }, "Ver contratos"))), React.createElement("div", {
     onClick: () => setActiveHomeCard(activeHomeCard === 'global' ? null : 'global'),
-    className: "rounded-2xl border shadow-sm px-5 py-4 mb-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all duration-200 select-none",
+    className: "bg-white rounded-xl border px-6 py-5 mb-4 flex items-center gap-4 cursor-pointer transition-colors select-none hover:border-slate-300",
     style: {
-      background: '#eff6ff',
-      borderColor: activeHomeCard === 'global' ? BLUE : '#bfdbfe',
-      boxShadow: activeHomeCard === 'global' ? `0 0 0 3px ${BLUE}33, 0 4px 16px rgba(11,43,94,0.18)` : undefined
+      borderColor: activeHomeCard === 'global' ? BLUE : '#E3E8EF',
+      borderLeft: `4px solid ${BLUE}`
     }
   }, React.createElement("div", {
     className: "min-w-0 flex-1"
   }, React.createElement("p", {
-    className: "text-[10px] font-bold uppercase tracking-widest text-blue-400"
-  }, "Valor Global em Contratos Ativos"), React.createElement("p", {
-    className: "text-2xl sm:text-3xl font-black leading-tight text-blue-900 truncate"
+    className: "text-[13px] font-medium text-slate-500"
+  }, "Valor global em contratos ativos"), React.createElement("p", {
+    className: "text-[28px] sm:text-[32px] font-semibold leading-tight text-slate-900 truncate tabular-nums mt-0.5"
   }, fmtCurrency(financialKPIs.activeGlobalTotal)), React.createElement("p", {
-    className: "text-[11px] text-blue-400 mt-0.5"
+    className: "text-xs text-slate-500 mt-1"
   }, financialKPIs.activeContractsCount, " contrato", financialKPIs.activeContractsCount !== 1 ? 's' : '', " ativo", financialKPIs.activeContractsCount !== 1 ? 's' : '', " \xB7 soma do valor total (inclui a parte destinada a parceiros)")), React.createElement(ChevronRight, {
-    className: `w-5 h-5 text-blue-400 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`
+    className: `w-5 h-5 text-slate-400 flex-shrink-0 transition-transform ${activeHomeCard === 'global' ? 'rotate-90' : ''}`
   })), (() => {
+    const KPI_DESTAQUE = {
+      portfolio: BLUE,
+      parceiros: '#5B7BB4',
+      anual: '#2457A6',
+      faturado: '#64748B',
+      recebido: GREEN,
+      transito: '#C27C0E'
+    };
     const homeCardDefs = [{
       key: 'portfolio',
       label: 'Portfólio Total',
@@ -30279,33 +30361,31 @@ function App() {
       className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
     }, homeCardDefs.map(card => {
       const isActive = activeHomeCard === card.key;
-      const useDark = isActive;
       return React.createElement("div", {
         key: card.key,
         onClick: () => setActiveHomeCard(isActive ? null : card.key),
-        className: "rounded-2xl overflow-hidden shadow-sm border cursor-pointer hover:shadow-md transition-all duration-200 select-none",
+        className: "bg-white rounded-xl border cursor-pointer transition-colors select-none hover:border-slate-300",
         style: {
-          background: useDark ? `linear-gradient(135deg,${BLUE} 0%,#1e3a8a 100%)` : card.defaultBg,
-          borderColor: useDark ? BLUE : card.defaultBorder,
-          boxShadow: isActive ? `0 0 0 3px ${BLUE}40, 0 4px 16px rgba(11,43,94,0.2)` : undefined
+          borderColor: isActive ? BLUE : '#E3E8EF',
+          boxShadow: isActive ? `inset 0 0 0 1px ${BLUE}` : undefined
         }
       }, React.createElement("div", {
-        className: "px-4 py-4 relative overflow-hidden"
-      }, useDark && React.createElement("div", {
-        className: "absolute inset-0 opacity-10",
-        style: {
-          backgroundImage: 'radial-gradient(circle at 70% 50%, white 0%, transparent 60%)'
-        }
-      }), React.createElement("div", {
-        className: "flex items-center justify-between mb-2 relative"
+        className: "px-4 py-3.5"
+      }, React.createElement("div", {
+        className: "flex items-center justify-between mb-2"
       }, React.createElement("p", {
-        className: `text-[10px] font-bold uppercase tracking-widest ${useDark ? 'text-blue-300' : card.defaultLabel}`
-      }, card.label), isActive && React.createElement(ChevronRight, {
-        className: "w-3 h-3 text-blue-300 rotate-90"
+        className: "text-xs font-medium text-slate-500 flex items-center gap-1.5"
+      }, React.createElement("span", {
+        className: "w-1.5 h-1.5 rounded-full",
+        style: {
+          background: KPI_DESTAQUE[card.key] || '#94A3B8'
+        }
+      }), card.label), React.createElement(ChevronRight, {
+        className: `w-3.5 h-3.5 text-slate-300 transition-transform ${isActive ? 'rotate-90 text-slate-500' : ''}`
       })), React.createElement("p", {
-        className: `text-xl font-black leading-tight relative ${useDark ? 'text-white' : card.defaultValue}`
+        className: "text-xl font-semibold leading-tight text-slate-900 tabular-nums"
       }, card.value), React.createElement("p", {
-        className: `text-[10px] mt-1 relative ${useDark ? 'text-blue-300' : card.defaultSub}`
+        className: "text-[11px] mt-1 text-slate-500"
       }, card.sub)));
     }));
   })(), activeHomeCard && (() => {
@@ -30887,16 +30967,13 @@ function App() {
       }, "Nenhuma parcela em tr\xE2nsito em ", statsYear))));
     })()));
   })(), financialKPIs.billedYTD > 0 && React.createElement("div", {
-    className: "mt-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3"
+    className: "mt-3 bg-white rounded-xl border border-gray-100 px-4 py-3"
   }, React.createElement("div", {
-    className: "flex items-center justify-between mb-1.5"
+    className: "flex items-center justify-between mb-2"
   }, React.createElement("span", {
-    className: "text-[10px] font-bold text-gray-500 uppercase tracking-wider"
-  }, "Taxa de Recebimento em ", statsYear), React.createElement("span", {
-    className: "text-[11px] font-black",
-    style: {
-      color: GREEN
-    }
+    className: "text-xs font-medium text-slate-500"
+  }, "Taxa de recebimento em ", statsYear), React.createElement("span", {
+    className: "text-sm font-semibold text-slate-900 tabular-nums"
   }, Math.round(financialKPIs.paidYTD / financialKPIs.billedYTD * 100), "%")), React.createElement("div", {
     className: "h-1.5 bg-gray-100 rounded-full overflow-hidden"
   }, React.createElement("div", {
@@ -30908,44 +30985,28 @@ function App() {
   })))), React.createElement("div", null, React.createElement("div", {
     className: "flex items-center gap-2 mb-3"
   }, React.createElement("h2", {
-    className: "text-sm font-bold",
-    style: {
-      color: BLUE
-    }
-  }, "Pipeline de Processamento"), React.createElement("span", {
-    className: "text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"
+    className: "text-[15px] font-semibold text-slate-900"
+  }, "Pipeline de processamento"), React.createElement("span", {
+    className: "text-[11px] text-slate-500"
   }, "parcelas em andamento")), React.createElement("div", {
     className: "grid grid-cols-2 lg:grid-cols-4 gap-2"
   }, pipelineData.map((step, idx) => {
     const palette = [{
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      iconColor: 'text-blue-500',
-      badgeBg: 'bg-blue-500',
-      numColor: 'text-blue-700'
+      cor: '#94A3B8'
     }, {
-      bg: 'bg-violet-50',
-      border: 'border-violet-200',
-      iconColor: 'text-violet-500',
-      badgeBg: 'bg-violet-500',
-      numColor: 'text-violet-700'
+      cor: '#5B7BB4'
     }, {
-      bg: 'bg-orange-50',
-      border: 'border-orange-200',
-      iconColor: 'text-orange-500',
-      badgeBg: 'bg-orange-500',
-      numColor: 'text-orange-700'
+      cor: '#2457A6'
     }, {
-      bg: 'bg-amber-50',
-      border: 'border-amber-200',
-      iconColor: 'text-amber-600',
-      badgeBg: 'bg-amber-500',
-      numColor: 'text-amber-700'
+      cor: '#C27C0E'
     }];
     const p = palette[idx] || palette[0];
     return React.createElement("div", {
       key: step.id,
-      className: `relative rounded-xl border ${p.bg} ${p.border} px-4 py-3 flex flex-col gap-2`
+      className: "relative bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col gap-2",
+      style: {
+        borderTop: `3px solid ${p.cor}`
+      }
     }, idx < pipelineData.length - 1 && React.createElement("div", {
       className: "hidden lg:flex absolute -right-1.5 top-1/2 -translate-y-1/2 z-10 items-center justify-center w-3 h-3 rounded-full bg-gray-200"
     }, React.createElement(ChevronRight, {
@@ -30953,13 +31014,11 @@ function App() {
     })), React.createElement("div", {
       className: "flex items-center justify-between"
     }, React.createElement("span", {
-      className: `text-[10px] font-black ${p.numColor} opacity-40`
-    }, "etapa ", step.id), React.createElement("span", {
-      className: `w-5 h-5 rounded-full ${p.badgeBg} flex items-center justify-center text-[10px] font-black text-white`
-    }, step.count)), React.createElement("div", null, React.createElement("p", {
-      className: "text-[10px] font-bold text-gray-500 uppercase tracking-wider leading-tight"
-    }, step.id === TOTAL_STEPS ? 'Aguardando Pgto.' : step.short), React.createElement("p", {
-      className: `text-2xl font-black ${p.numColor} leading-none mt-0.5`
+      className: "text-[11px] font-medium text-slate-400"
+    }, "Etapa ", step.id)), React.createElement("div", null, React.createElement("p", {
+      className: "text-[13px] font-medium text-slate-600 leading-tight"
+    }, step.id === TOTAL_STEPS ? 'Aguardando pagamento' : step.short), React.createElement("p", {
+      className: "text-2xl font-semibold text-slate-900 leading-none mt-1 tabular-nums"
     }, step.count), step.totalValue > 0 ? React.createElement("p", {
       className: "text-[10px] text-gray-400 mt-0.5"
     }, fmtCurrencyShort(step.totalValue)) : React.createElement("p", {
@@ -30968,11 +31027,8 @@ function App() {
   }))), React.createElement("div", null, React.createElement("div", {
     className: "flex items-center gap-2 mb-3"
   }, React.createElement("h2", {
-    className: "text-sm font-bold",
-    style: {
-      color: BLUE
-    }
-  }, "Requer Aten\xE7\xE3o"), homeAlerts.overdue + homeAlerts.dueToday + homeAlerts.expired + homeAlerts.exp7 === 0 && React.createElement("span", {
+    className: "text-[15px] font-semibold text-slate-900"
+  }, "Requer aten\xE7\xE3o"), homeAlerts.overdue + homeAlerts.dueToday + homeAlerts.expired + homeAlerts.exp7 === 0 && React.createElement("span", {
     className: "text-[10px] font-semibold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full flex items-center gap-1"
   }, React.createElement(CheckCircle, {
     className: "w-3 h-3"
