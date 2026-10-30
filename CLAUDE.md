@@ -12,7 +12,6 @@ Uma base de código serve **dois sistemas** e vários módulos, tudo dentro de u
 |---|---|
 | `/` | Belém Digital — sistema principal (navy `#0B2B5E`, coleções sem prefixo) |
 | `/gcsp` | GCSP — Gerência de Contratos, Suprimentos e Patrimônio (petróleo `#0E7490`, prefixo `gcsp_`) |
-| `/gcsp/painel` | Painel de TV do setor — tela própria, sem login |
 | `/moduloarcanjo` | Login do Instituto Arcanjo's (arquivo separado: `arcanjo-login.html`) |
 | `/campanha` | Módulo privado — só o usuário `henriquecorreia` |
 
@@ -56,7 +55,6 @@ Não use `python -m http.server` — o Python não está instalado nesta máquin
 | ~9562 | Módulo privado de Campanha |
 | ~10067 | Cronograma Financeiro |
 | ~11545 | GDoc |
-| ~14537 | Painel de TV do GCSP |
 | ~14810 | `App` principal |
 
 Pastas satélite: `ocr-api/` (Python, OCR de nota fiscal — deploy separado) e
