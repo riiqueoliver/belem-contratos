@@ -4,7 +4,6 @@
 // a pessoa; quem pode ENTRAR continua sendo decidido pelo admin: o e-mail
 // verificado da conta Google precisa ser o e-mail de um usuário já cadastrado e
 // aprovado na coleção 'users' (ou 'gcsp_users'). Gmail sem cadastro é recusado.
-const { getAuth } = require('firebase-admin/auth');
 const { getDb, getAdminApp } = require('../lib/firebaseAdmin');
 const { emitirPasse } = require('../lib/baseIA');
 
@@ -19,6 +18,11 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'Token do Google ausente.' });
       return;
     }
+
+    // Carregado sob demanda: se o módulo falhar no servidor, o erro aparece na resposta em vez de derrubar a função
+    let getAuth;
+    try { ({ getAuth } = require('firebase-admin/auth')); }
+    catch (e) { console.error('firebase-admin/auth:', e); res.status(500).json({ error: 'Login com Google indisponível no servidor: ' + e.message }); return; }
 
     let conta;
     try { conta = await getAuth(getAdminApp()).verifyIdToken(String(idToken)); }
