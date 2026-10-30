@@ -779,7 +779,7 @@
         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={onClose}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md fade-in" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#fef2f2'}}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#FCF3F3'}}>
                 <AlertTriangle className="w-4.5 h-4.5" style={{color:'#DC2626'}} />
               </div>
               <div>
@@ -1257,7 +1257,7 @@
     }
 
     const LEAD_STATUS = [
-      { id:'novo',      label:'Novo',        cor:'#1d4ed8', bg:'#dbeafe' },
+      { id:'novo',      label:'Novo',        cor:'#1d4ed8', bg:'#E6ECF5' },
       { id:'analise',   label:'Em análise',  cor:'#b45309', bg:'#fef3c7' },
       { id:'contatado', label:'Contatado',   cor:'#7c3aed', bg:'#ede9fe' },
       { id:'proposta',  label:'Proposta',    cor:'#15803d', bg:'#dcfce7' },
@@ -3047,7 +3047,7 @@ Regras:
                   </div>
                 </div>
 
-                {avisoSessao === 'inatividade' && !error && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">🔒 Sua sessão foi encerrada após 30 minutos sem uso. Entre novamente.</p>}
+                {avisoSessao === 'inatividade' && !error && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Sua sessão foi encerrada após 30 minutos sem uso. Entre novamente.</p>}
                 {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
                 {googleNegado && (
                   <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900">
@@ -3848,7 +3848,7 @@ Regras:
                     <span className="text-gray-400">{total}p</span>
                     {completed > 0 && <span className="text-green-600">✓{completed}</span>}
                     {waiting > 0   && <span className="text-amber-600">~{waiting}</span>}
-                    {overdue > 0   && <span className="text-red-500">⚠{overdue}</span>}
+                    {overdue > 0   && <span className="text-red-500 inline-flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />{overdue}</span>}
                     {dueToday > 0  && <span className="text-amber-500">!{dueToday}</span>}
                   </div>}
             </div>
@@ -3913,12 +3913,12 @@ Regras:
     //  PROPOSALS — Kanban de gestão de propostas comerciais
     // ════════════════════════════════════════════════════════
     const PROPOSAL_COLS = [
-      { id:'demanda',    label:'Demanda',           color:BLUE, bg:'#eff6ff', border:'#bfdbfe' },
+      { id:'demanda',    label:'Demanda',           color:BLUE, bg:'#F4F7FB', border:'#D5DEEB' },
       { id:'elaboracao', label:'Em Elaboração',      color:'#92400e', bg:'#fefce8', border:'#fde68a' },
       { id:'despacho',   label:'Em Despacho',        color:'#5b21b6', bg:'#faf5ff', border:'#ddd6fe' },
       { id:'aguardando', label:'Ag. Aceite',          color:'#c2410c', bg:'#fff7ed', border:'#fed7aa' },
-      { id:'aceita',     label:'Aceita',              color:'#166534', bg:'#f0fdf4', border:'#bbf7d0' },
-      { id:'recusada',   label:'Não Contratada',      color:'#991b1b', bg:'#fef2f2', border:'#fecaca' },
+      { id:'aceita',     label:'Aceita',              color:'#166534', bg:'#F2F8F4', border:'#bbf7d0' },
+      { id:'recusada',   label:'Não Contratada',      color:'#991b1b', bg:'#FCF3F3', border:'#fecaca' },
     ];
 
     // ── Card individual ──────────────────────────────────────
@@ -4194,12 +4194,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
                 {pdfStatus === 'ok' && (
                   <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
-                    ✅ Campos preenchidos automaticamente. Revise abaixo antes de salvar.
+                    Campos preenchidos automaticamente. Revise abaixo antes de salvar.
                   </p>
                 )}
                 {pdfStatus === 'error' && (
                   <p className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
-                    ❌ Não foi possível ler o PDF. Verifique o arquivo ou preencha manualmente.
+                    Não foi possível ler o PDF. Verifique o arquivo ou preencha manualmente.
                   </p>
                 )}
               </div>
@@ -4476,9 +4476,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {/* Indicador que abre o BI de Propostas */}
               <button onClick={onOpenBI}
                       className="flex items-center gap-2.5 border rounded-xl pl-3 pr-3.5 py-1.5 bg-white shadow-sm hover:shadow-md transition-all group"
-                      style={{borderColor:'#bfdbfe'}}
+                      style={{borderColor:'#D5DEEB'}}
                       title="Abrir o painel de BI das propostas">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#eff6ff'}}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#F4F7FB'}}>
                   <PieChart className="w-3.5 h-3.5" style={{color: BLUE}} />
                 </div>
                 <div className="text-left leading-tight">
@@ -4995,11 +4995,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }), [activeSummaries]);
 
       const STC = {
-        'on-time':   { label:'Em Dia',                color: BLUE,     bg:'#eff6ff', border:'#bfdbfe' },
-        'overdue':   { label:'Em Atraso',             color:'#dc2626', bg:'#fef2f2', border:'#fecaca' },
-        'due-today': { label:'Vence Hoje',            color:'#d97706', bg:'#fffbeb', border:'#fde68a' },
-        'waiting':   { label:'Aguardando Pagamento',  color:'#b45309', bg:'#fffbeb', border:'#fcd34d' },
-        'completed': { label:'Paga',                  color: GREEN,    bg:'#f0fdf4', border:'#bbf7d0' },
+        'on-time':   { label:'Em Dia',                color: BLUE,     bg:'#F4F7FB', border:'#D5DEEB' },
+        'overdue':   { label:'Em Atraso',             color:'#dc2626', bg:'#FCF3F3', border:'#fecaca' },
+        'due-today': { label:'Vence Hoje',            color:'#d97706', bg:'#FBF7EE', border:'#fde68a' },
+        'waiting':   { label:'Aguardando Pagamento',  color:'#b45309', bg:'#FBF7EE', border:'#fcd34d' },
+        'completed': { label:'Paga',                  color: GREEN,    bg:'#F2F8F4', border:'#bbf7d0' },
       };
 
       const FILTERS = [
@@ -5255,7 +5255,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           setErros(res.erros || []);
           const n = res.novos || 0;
           addToast(n > 0
-            ? `🎯 ${n} nova(s) oportunidade(s) encontrada(s)!`
+            ? `${n} nova(s) oportunidade(s) encontrada(s)!`
             : `Busca concluída — nenhuma oportunidade nova nas linhas monitoradas.`);
         } catch(e) {
           addToast('Erro na busca: ' + (e.message || 'falha'));
@@ -5325,19 +5325,19 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <button onClick={buscar} disabled={buscando}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
                   style={{background: BLUE}}>
-                  {buscando ? '⏳ Buscando…' : '🔎 Buscar agora'}
+                  {buscando ? 'Buscando…' : 'Buscar agora'}
                 </button>
               </div>
             </div>
 
             {buscando && progresso && (
               <div className="rounded-xl px-4 py-2.5 text-[12px] font-medium border"
-                   style={{background:'#eff6ff', borderColor:'#bfdbfe', color:'#1d4ed8'}}>
+                   style={{background:'#F4F7FB', borderColor:'#D5DEEB', color:'#1d4ed8'}}>
                 {progresso}
               </div>
             )}
             {erros.length > 0 && !buscando && (
-              <div className="rounded-xl px-4 py-3 text-[12px] border" style={{background:'#fffbeb', borderColor:'#fde68a', color:'#92400e'}}>
+              <div className="rounded-xl px-4 py-3 text-[12px] border" style={{background:'#FBF7EE', borderColor:'#fde68a', color:'#92400e'}}>
                 <p className="font-bold mb-1">A consulta ao PNCP falhou parcialmente ({erros.length}):</p>
                 <ul className="space-y-0.5">{erros.slice(0,4).map((e,i) => <li key={i}>· {e}</li>)}</ul>
                 <p className="mt-1.5 text-[11px] opacity-80">O portal do governo costuma ficar instável. Tente de novo em alguns minutos — os leads já capturados permanecem salvos.</p>
@@ -5582,7 +5582,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                style={{borderColor: sel ? BLUE+'55' : '#e5e7eb'}}>
             {sel ? (
               <span className="flex items-center gap-2 min-w-0">
-                <span className="text-[10px] font-black px-2 py-0.5 rounded flex-shrink-0" style={{background:'#eff6ff', color:BLUE}}>{sel.sigla}</span>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded flex-shrink-0" style={{background:'#F4F7FB', color:BLUE}}>{sel.sigla}</span>
                 <span className="truncate text-gray-700">{sel.nome}</span>
               </span>
             ) : <span className="text-gray-400">Selecione ou digite o órgão…</span>}
@@ -5604,7 +5604,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       <button key={o.id} type="button"
                         onClick={() => { onPick(o); setAberto(false); }}
                         className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors flex items-start gap-2.5">
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5" style={{background:'#eff6ff', color:BLUE}}>{o.sigla}</span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5" style={{background:'#F4F7FB', color:BLUE}}>{o.sigla}</span>
                         <span className="min-w-0">
                           <span className="block text-[12.5px] font-semibold text-gray-700 truncate">{o.nome}</span>
                           <span className="block text-[10.5px] text-gray-400 truncate">{o.titular} · {o.cargo}</span>
@@ -5618,7 +5618,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <button type="button" onClick={() => { setAberto(false); onEditar(); }}
                 className="w-full px-3 py-2.5 text-[11px] font-bold border-t border-gray-100 hover:bg-gray-50 transition-colors"
                 style={{color: BLUE}}>
-                ⚙ Gerenciar órgãos e titulares
+                Gerenciar órgãos e titulares
               </button>
             </div>
           )}
@@ -5688,7 +5688,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   {orgaos.map(o => (
                     <div key={o.id} className="px-6 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50">
                       <div className="min-w-0 flex items-start gap-2.5">
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5" style={{background:'#eff6ff', color:BLUE}}>{o.sigla}</span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5" style={{background:'#F4F7FB', color:BLUE}}>{o.sigla}</span>
                         <div className="min-w-0">
                           <p className="text-[12.5px] font-semibold text-gray-700 truncate">{o.nome}</p>
                           <p className="text-[10.5px] text-gray-400 truncate">{o.titular || '—'} · {o.cargo || '—'}</p>
@@ -5762,7 +5762,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <div className="flex items-center gap-2">
                   <button onClick={() => setShowOrgaos(true)}
                     className="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50">
-                    ⚙ Órgãos ({orgaos.length})
+                    Órgãos ({orgaos.length})
                   </button>
                   <button onClick={() => setSelId('nova')}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90"
@@ -5793,7 +5793,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                               onClick={() => setSelId(p.id)}>
                             <td className="px-5 py-3 font-black whitespace-nowrap" style={{color: BLUE}}>{p.numero}</td>
                             <td className="px-5 py-3 font-semibold text-gray-800 max-w-[260px]"><p className="truncate">{p.solucao}</p></td>
-                            <td className="px-5 py-3"><span className="text-[10px] font-black px-2 py-0.5 rounded" style={{background:'#eff6ff', color:BLUE}}>{p.orgaoSigla}</span></td>
+                            <td className="px-5 py-3"><span className="text-[10px] font-black px-2 py-0.5 rounded" style={{background:'#F4F7FB', color:BLUE}}>{p.orgaoSigla}</span></td>
                             <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{p.data ? p.data.split('-').reverse().join('/') : '—'}</td>
                             <td className="px-5 py-3 font-bold whitespace-nowrap" style={{color: GREEN}}>{tot ? 'R$ '+propBRL(tot) : '—'}</td>
                             <td className="px-5 py-3 text-right whitespace-nowrap">
@@ -5855,7 +5855,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </div>
 
             {/* Abas */}
-            <div className="flex gap-1 p-1 rounded-2xl w-fit flex-wrap" style={{background:'#eff6ff'}}>
+            <div className="flex gap-1 p-1 rounded-2xl w-fit flex-wrap" style={{background:'#F4F7FB'}}>
               {ABAS.map(a => (
                 <button key={a.k} onClick={() => setAba(a.k)}
                   className="px-4 py-1.5 rounded-xl text-[12.5px] font-bold transition-all"
@@ -5898,7 +5898,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </div>
                 <p className="text-[10.5px] text-gray-400 -mt-2">
                   Preenchidos automaticamente ao selecionar o órgão. Pode ajustar aqui só para esta proposta,
-                  ou atualizar no cadastro (⚙ Órgãos) se o titular mudou de vez.
+                  ou atualizar no cadastro (Órgãos) se o titular mudou de vez.
                 </p>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -5958,7 +5958,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         className="p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0"><Trash2 className="w-4 h-4" /></button>
                     </div>
                     {(m.itens||[]).map((it, ii) => (
-                      <div key={ii} className="pl-3 border-l-2 space-y-1.5" style={{borderColor:'#e0e7ff'}}>
+                      <div key={ii} className="pl-3 border-l-2 space-y-1.5" style={{borderColor:'#E6ECF5'}}>
                         <div className="flex items-center gap-2">
                           <input value={it.nome} onChange={e => setL('modulos', mi, {...m, itens:m.itens.map((x,j)=>j===ii?{...x,nome:e.target.value}:x)})}
                             className={ic + ' font-semibold'} placeholder="Nome da funcionalidade" />
@@ -5977,7 +5977,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 ))}
                 <button onClick={() => addL('modulos', { titulo:'', itens:[{nome:'',desc:''}] })}
                   className="w-full py-2.5 rounded-xl text-sm font-bold border-2 border-dashed hover:bg-blue-50"
-                  style={{borderColor:'#bfdbfe', color: BLUE}}>+ Adicionar módulo</button>
+                  style={{borderColor:'#D5DEEB', color: BLUE}}>+ Adicionar módulo</button>
               </div>
             )}
 
@@ -6104,7 +6104,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
               <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider"
-                    style={{background:'#e0e7ff', color: BLUE}}>{cert.type}</span>
+                    style={{background:'#E6ECF5', color: BLUE}}>{cert.type}</span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                     style={{background:cfg.bg, color:cfg.color}}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{background:cfg.dot}} />
@@ -6151,7 +6151,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div data-cert-drop="1" data-cert-id={cert.id} role="button" tabIndex={0}
                    onClick={() => inputRef.current?.click()}
                    className="px-3 py-3.5 rounded-lg border-2 border-dashed cursor-pointer flex flex-col items-center gap-1 transition-colors"
-                   style={dragOver ? {borderColor:'#3b82f6', background:'#eff6ff'} : {borderColor:'#d1d5db', background:'#f9fafb'}}>
+                   style={dragOver ? {borderColor:'#3b82f6', background:'#F4F7FB'} : {borderColor:'#d1d5db', background:'#f9fafb'}}>
                 <Upload className="w-4 h-4 pointer-events-none" style={{color: dragOver ? '#2563eb' : '#9ca3af'}} />
                 <span className="text-[11px] font-semibold pointer-events-none" style={{color: dragOver ? '#1d4ed8' : '#4b5563'}}>
                   {dragOver ? 'Solte o PDF aqui' : 'Arraste o PDF ou clique'}
@@ -6166,7 +6166,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 className="flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-60"
                 style={{borderColor:'#7c3aed', color:'#6d28d9', background:'#faf5ff'}}
                 title="Lê a validade do PDF já anexado usando IA">
-                {lendo ? '⏳ Lendo documento…' : '🔍 Ler validade com IA'}
+                {lendo ? 'Lendo documento…' : 'Ler validade com IA'}
               </button>
             )}
             <a href={cert.portalUrl} target="_blank" rel="noopener noreferrer"
@@ -6277,7 +6277,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             </div>
 
             {criticas > 0 && (
-              <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl border" style={{background:'#fef2f2', borderColor:'#fecaca'}}>
+              <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl border" style={{background:'#FCF3F3', borderColor:'#fecaca'}}>
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{color:'#dc2626'}} />
                 <p className="text-[12px] leading-snug" style={{color:'#7f1d1d'}}>
                   <b>{criticas} certidão(ões) exigem ação.</b> Emita a renovação antes de usar em processos de cobrança.
@@ -6349,7 +6349,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{label}</span>
             <button onClick={() => copiar(valor, chave)}
               className="text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all"
-              style={copiado===chave ? {background:'#dcfce7', color:'#15803d'} : {background:'#eff6ff', color:'#1d4ed8'}}>
+              style={copiado===chave ? {background:'#dcfce7', color:'#15803d'} : {background:'#F4F7FB', color:'#1d4ed8'}}>
               {copiado===chave ? '✓ copiado' : 'copiar'}
             </button>
           </div>
@@ -6413,7 +6413,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       {a.chave === 'nf' && (
                         <button onClick={baixarNf}
                           className="text-[11px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap"
-                          style={pdfBase64 ? {background:'#eff6ff', color:'#1d4ed8'} : {background:'#f3f4f6', color:'#9ca3af'}}>
+                          style={pdfBase64 ? {background:'#F4F7FB', color:'#1d4ed8'} : {background:'#f3f4f6', color:'#9ca3af'}}>
                           {pdfBase64 ? 'baixar PDF' : 'sem PDF'}
                         </button>
                       )}
@@ -6508,7 +6508,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                         String(rascunho.dados.nfNumero) !== String(c.nfNumber).trim();
 
       const borda = pago ? '#86efac' : rascunho ? '#7dd3fc' : '#e2e8f0';
-      const fundo = pago ? '#f0fdf4' : rascunho ? '#f0f9ff' : '#f8fafc';
+      const fundo = pago ? '#F2F8F4' : rascunho ? '#f0f9ff' : '#f8fafc';
 
       return (
         <div className="mx-5 mb-4 rounded-xl border-2 overflow-hidden" style={{borderColor: borda}}>
@@ -6594,7 +6594,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 </div>
                 {divergeNf && (
                   <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-800">
-                    ⚠ A nota de liquidação é da <strong>NF {rascunho.dados.nfNumero}</strong>, mas esta parcela
+                    A nota de liquidação é da <strong>NF {rascunho.dados.nfNumero}</strong>, mas esta parcela
                     está com a <strong>NF {c.nfNumber}</strong>. Confira se é o documento certo.
                   </div>
                 )}
@@ -7059,7 +7059,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <div className="px-5 py-4 border-t border-gray-100 bg-white space-y-2">
                   {selectedToDelete.size > 0 && (
                     <p className="text-[10px] text-center text-red-500 font-semibold">
-                      ⚠ {selectedToDelete.size === 1 ? '1 parcela selecionada' : `${selectedToDelete.size} parcelas selecionadas`} — essa ação é irreversível
+                      {selectedToDelete.size === 1 ? '1 parcela selecionada' : `${selectedToDelete.size} parcelas selecionadas`} — essa ação é irreversível
                     </p>
                   )}
                   <div className="flex gap-2">
@@ -7123,7 +7123,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>
                     <button onClick={handleSave}
                             className="text-xs px-4 py-1.5 rounded-xl text-white font-bold hover:opacity-90"
-                            style={{background: BLUE}}>💾 Salvar Alterações</button>
+                            style={{background: BLUE}}>Salvar Alterações</button>
                   </>
                 ) : (
                   <>
@@ -7181,7 +7181,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">{meta.modality}</span>
                   )}
                   {meta.contractType === 'parceria' && (
-                    <span className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border" style={{background:'#f0fdf4', color:'#166534', borderColor:'#86efac'}}>
+                    <span className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border" style={{background:'#F2F8F4', color:'#166534', borderColor:'#86efac'}}>
                       <LinkIcon className="w-3 h-3"/>Parceria
                     </span>
                   )}
@@ -7220,7 +7220,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
             {/* ── Painel de Parceria (somente contratos em parceria) ── */}
             {meta.contractType === 'parceria' && (
-              <div className="mx-6 mb-4 rounded-2xl border-2 p-4 space-y-3" style={{borderColor:'#86efac', background:'#f0fdf4'}}>
+              <div className="mx-6 mb-4 rounded-2xl border-2 p-4 space-y-3" style={{borderColor:'#86efac', background:'#F2F8F4'}}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <LinkIcon className="w-4 h-4" style={{color:'#166534'}} />
                   <span className="font-bold text-sm" style={{color:'#166534'}}>Contrato em Parceria</span>
@@ -7247,7 +7247,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 {/* Cards de valores */}
                 {(meta.partnerTotal > 0 || meta.bdTotal > 0) && (
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl p-2.5 text-center" style={{background:'#eff6ff', border:'1px solid #bfdbfe'}}>
+                    <div className="rounded-xl p-2.5 text-center" style={{background:'#F4F7FB', border:'1px solid #bfdbfe'}}>
                       <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">Valor Global</p>
                       <p className="text-xs font-black text-blue-900">{fmtCurrencyShort(meta.globalValue||0)}</p>
                       <p className="text-[9px] text-blue-400">Contrato órgão</p>
@@ -7257,7 +7257,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       <p className="text-xs font-black text-orange-900">{fmtCurrencyShort(meta.partnerTotal||0)}</p>
                       {meta.globalValue > 0 && <p className="text-[9px] text-orange-400">{(((meta.partnerTotal||0)/meta.globalValue)*100).toFixed(1)}%</p>}
                     </div>
-                    <div className="rounded-xl p-2.5 text-center" style={{background:'#f0fdf4', border:'1px solid #bbf7d0'}}>
+                    <div className="rounded-xl p-2.5 text-center" style={{background:'#F2F8F4', border:'1px solid #bbf7d0'}}>
                       <p className="text-[9px] font-bold text-green-600 uppercase tracking-wider mb-0.5">Belém Digital</p>
                       <p className="text-xs font-black text-green-900">{fmtCurrencyShort(meta.bdTotal||0)}</p>
                       {meta.globalValue > 0 && <p className="text-[9px] text-green-500">{(((meta.bdTotal||0)/meta.globalValue)*100).toFixed(1)}%</p>}
@@ -7269,7 +7269,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <div className="space-y-2">
                     {[
                       { label: `Participação ${meta.partnerName || 'Empresa Parceira'}`, items: meta.partnerItems, color:'#ea580c', bg:'#fff7ed', border:'#fed7aa' },
-                      { label: 'Participação Belém Digital', items: meta.bdItems, color:'#166534', bg:'#f0fdf4', border:'#86efac' },
+                      { label: 'Participação Belém Digital', items: meta.bdItems, color:'#166534', bg:'#F2F8F4', border:'#86efac' },
                     ].map(sec => sec.items?.length > 0 && (
                       <details key={sec.label} className="rounded-xl overflow-hidden border" style={{borderColor:sec.border}}>
                         <summary className="px-3 py-2 text-xs font-bold cursor-pointer select-none" style={{background:sec.bg, color:sec.color}}>{sec.label} — {fmtCurrencyShort(sec.items === meta.partnerItems ? (meta.partnerTotal||0) : (meta.bdTotal||0))}</summary>
@@ -7518,7 +7518,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl text-white shadow-sm hover:opacity-90 transition-opacity flex-shrink-0"
                       style={{background: BLUE}}>
                 <Plus className="w-3.5 h-3.5" />
-                {showTaForm && !taForm.id ? 'Cancelar' : '+ Novo TA'}
+                {showTaForm && !taForm.id ? 'Cancelar' : 'Novo TA'}
               </button>
             </div>
 
@@ -7528,7 +7528,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     className="mb-4 bg-white rounded-2xl border-2 shadow-sm overflow-hidden"
                     style={{borderColor: BLUE}}>
                 <div className="px-5 py-3 border-b flex items-center gap-2"
-                     style={{background:'#eff6ff', borderColor:'#bfdbfe'}}>
+                     style={{background:'#F4F7FB', borderColor:'#D5DEEB'}}>
                   <FileText className="w-4 h-4 flex-shrink-0" style={{color: BLUE}} />
                   <p className="text-sm font-bold" style={{color: BLUE}}>
                     {taForm.id ? 'Editar Termo Aditivo' : 'Cadastrar Novo Termo Aditivo'}
@@ -7573,7 +7573,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                               {new Date(taForm.newEndDate+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}
                             </p>
                             <p className="text-[10px] text-blue-500 mt-0.5">
-                              ✅ O contrato será atualizado automaticamente ao salvar
+                              O contrato será atualizado automaticamente ao salvar
                             </p>
                           </div>
                         </div>
@@ -7638,7 +7638,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div className="space-y-2">
                 {additives.map(ta => (
                   <div key={ta.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3 flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#eff6ff'}}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'#F4F7FB'}}>
                       <FileText className="w-4 h-4" style={{color: BLUE}} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -7718,7 +7718,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                     style={{borderColor: GREEN}}>
                 {/* Header do form */}
                 <div className="px-5 py-3 border-b flex items-center gap-2"
-                     style={{background:'#f0fdf4', borderColor:'#bbf7d0'}}>
+                     style={{background:'#F2F8F4', borderColor:'#bbf7d0'}}>
                   <Plus className="w-4 h-4 flex-shrink-0" style={{color: GREEN}} />
                   <p className="text-sm font-bold" style={{color:'#166534'}}>Cadastrar Nova Parcela de Faturamento</p>
                 </div>
@@ -7932,7 +7932,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           {needsPdf && (
                             <span title="PDF da NF obrigatório para avançar"
                                   className="hidden sm:inline-flex items-center gap-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                              ⚠ NF
+                              NF
                             </span>
                           )}
                           <Badge status={st} />
@@ -8230,14 +8230,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                style={{borderColor: hasPdf ? '#86efac' : needsPdf ? '#fcd34d' : '#e2e8f0'}}>
                             {/* Header da seção PDF */}
                             <div className="flex items-center gap-2 px-4 py-2.5 border-b"
-                                 style={{background: hasPdf ? '#f0fdf4' : needsPdf ? '#fffbeb' : '#f8fafc',
+                                 style={{background: hasPdf ? '#F2F8F4' : needsPdf ? '#FBF7EE' : '#f8fafc',
                                          borderColor: hasPdf ? '#86efac' : needsPdf ? '#fcd34d' : '#e2e8f0'}}>
                               <Paperclip className="w-3.5 h-3.5 flex-shrink-0"
                                          style={{color: hasPdf ? '#16a34a' : needsPdf ? '#d97706' : '#94a3b8'}} />
                               <p className="text-xs font-bold text-gray-700 flex-1">Nota Fiscal em PDF</p>
                               {needsPdf && (
                                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 flex items-center gap-1">
-                                  ⚠ Obrigatório para avançar
+                                  Obrigatório para avançar
                                 </span>
                               )}
                               {hasPdf && (
@@ -8332,7 +8332,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           {c.currentStep === 2 && (
                             <div className="mx-5 mb-4 rounded-xl border-2 overflow-hidden" style={{borderColor:'#6366f1'}}>
                               <div className="flex items-center gap-2 px-4 py-2.5 border-b"
-                                   style={{background:'#eef2ff', borderColor:'#a5b4fc'}}>
+                                   style={{background:'#F4F7FB', borderColor:'#a5b4fc'}}>
                                 <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{color:'#4f46e5'}} />
                                 <p className="text-xs font-bold flex-1" style={{color:'#3730a3'}}>Relatório de Gestão</p>
                                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300">
@@ -8573,7 +8573,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     const ARCANJO_COLOR = '#7b61c7';  // cor-base do módulo
     const ARCANJO_STATUSES = [
       { key: 'pendente',       label: 'Pendente',       color: '#6b7280', bg: '#f3f4f6' },
-      { key: 'encaminhado',    label: 'Encaminhado',    color: '#1d4ed8', bg: '#dbeafe' },
+      { key: 'encaminhado',    label: 'Encaminhado',    color: '#1d4ed8', bg: '#E6ECF5' },
       { key: 'atendido',       label: 'Atendido',       color: '#15803d', bg: '#dcfce7' },
       { key: 'nao_compareceu', label: 'Não Compareceu', color: '#b45309', bg: '#fef3c7' },
     ];
@@ -9300,14 +9300,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             {(() => {
               const ind = [
                 { key: null,          label: 'Total cadastrados', value: stats.total,        icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe', iconBg: ARCANJO_COLOR, iconColor: '#fff'     },
-                { key: 'atendidos',   label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0', iconBg: '#dcfce7',     iconColor: '#059669'  },
+                { key: 'atendidos',   label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#F2F8F4', border: '#bbf7d0', iconBg: '#dcfce7',     iconColor: '#059669'  },
                 { key: 'encaminhado', label: 'Encaminhados',      value: stats.encaminhados, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd', iconBg: '#e0f2fe',     iconColor: '#0284c7'  },
                 { key: 'pendente',    label: 'Pendente',          value: stats.pendentes,    icon: AlertTriangle, color: '#7c3aed',     bg: '#faf5ff', border: '#ddd6fe', iconBg: '#ede9fe',     iconColor: '#7c3aed'  },
-                { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a', iconBg: '#fef3c7',     iconColor: '#d97706'  },
+                { key: 'naoComp',     label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#FBF7EE', border: '#fde68a', iconBg: '#fef3c7',     iconColor: '#d97706'  },
               ];
               // Indicador "Visita" — exclusivo da aba CRAS
               if (tab === 'cras') {
-                ind.push({ key: 'visita', label: 'Visita', value: stats.visita, icon: Home, color: '#dc2626', bg: '#fef2f2', border: '#fecaca', iconBg: '#fee2e2', iconColor: '#dc2626' });
+                ind.push({ key: 'visita', label: 'Visita', value: stats.visita, icon: Home, color: '#dc2626', bg: '#FCF3F3', border: '#fecaca', iconBg: '#fee2e2', iconColor: '#dc2626' });
               }
               return (
                 <div className={tab === 'cras' ? "grid grid-cols-6 gap-3 mb-6" : "grid grid-cols-5 gap-3 mb-6"}>
@@ -9353,7 +9353,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               {(tab === 'rg' || tab === 'certidao') && (
                 <button onClick={() => setShowExportModal(true)}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all hover:opacity-90"
-                  style={{borderColor:'#d1fae5', color:'#059669', background:'#f0fdf4'}}>
+                  style={{borderColor:'#d1fae5', color:'#059669', background:'#F2F8F4'}}>
                   <Download className="w-3.5 h-3.5" />
                   Exportar planilha por responsável
                 </button>
@@ -9870,10 +9870,10 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             <div className="grid grid-cols-5 gap-3">
               {[
                 { label: 'Total cadastrados', value: stats.total,        icon: Users,         color: ARCANJO_COLOR, bg: '#f5f3ff', border: '#ddd6fe' },
-                { label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#f0fdf4', border: '#bbf7d0' },
+                { label: 'Atendidos',         value: stats.atendidos,    icon: CheckCircle,   color: '#059669',     bg: '#F2F8F4', border: '#bbf7d0' },
                 { label: 'Encaminhados',      value: stats.encaminhados, icon: Clock,         color: '#0284c7',     bg: '#f0f9ff', border: '#bae6fd' },
                 { label: 'Pendente',          value: stats.pendentes,    icon: AlertTriangle, color: '#7c3aed',     bg: '#faf5ff', border: '#ddd6fe' },
-                { label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#fffbeb', border: '#fde68a' },
+                { label: 'Não compareceram',  value: stats.naoComp,      icon: AlertTriangle, color: '#d97706',     bg: '#FBF7EE', border: '#fde68a' },
               ].map(({ label, value, icon, color, bg, border }, i) => (
                 <ArcanjoKpiCard key={label} label={label} value={value} icon={icon} color={color} bg={bg} border={border} delay={i * 0.07} />
               ))}
@@ -9928,9 +9928,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     // confirmado só pode virar concluído ou cancelado (ou voltar por arraste manual).
     const ARCANJO_EVENTO_STATUSES = [
       { key: 'cadastrado', label: 'Cadastrados', color: '#6b7280', bg: '#f9fafb', border: '#e2e8f0' },
-      { key: 'confirmado', label: 'Confirmados', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
-      { key: 'concluido',  label: 'Concluídos',  color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
-      { key: 'cancelado',  label: 'Cancelados',  color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+      { key: 'confirmado', label: 'Confirmados', color: '#1d4ed8', bg: '#F4F7FB', border: '#D5DEEB' },
+      { key: 'concluido',  label: 'Concluídos',  color: '#15803d', bg: '#F2F8F4', border: '#bbf7d0' },
+      { key: 'cancelado',  label: 'Cancelados',  color: '#dc2626', bg: '#FCF3F3', border: '#fecaca' },
     ];
 
     function ArcanjoEventoModal({ editing, onSubmit, onClose }) {
@@ -10159,7 +10159,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <div className="flex flex-wrap items-center gap-1.5">
                 {acoesFiltro.map(a => (
                   <span key={a} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-semibold"
-                    style={{background:'#eff6ff', color:'#1d4ed8'}}>
+                    style={{background:'#F4F7FB', color:'#1d4ed8'}}>
                     {a}
                     <button type="button" onClick={() => removerAcao(a)} className="p-0.5 rounded-full hover:bg-white/60 transition-colors">
                       <X className="w-3 h-3" />
@@ -10483,7 +10483,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         render: () => (
           <div className="bg-white rounded-xl p-3 text-[9px]">
             <div className="grid grid-cols-5 gap-1.5 mb-2">
-              {[['4653','PESSOAS',ARCANJO_COLOR,'#f5f3ff'],['12','EVENTOS','#1d4ed8','#eff6ff'],['24','CONFIRMADAS','#0891b2','#ecfeff'],['3','CONCLUÍDOS',GREEN,'#f0fdf4'],['9','IMPACTADAS','#ea580c','#fff7ed']].map(([v,l,c,bg],i) => (
+              {[['4653','PESSOAS',ARCANJO_COLOR,'#f5f3ff'],['12','EVENTOS','#1d4ed8','#F4F7FB'],['24','CONFIRMADAS','#0891b2','#ecfeff'],['3','CONCLUÍDOS',GREEN,'#F2F8F4'],['9','IMPACTADAS','#ea580c','#fff7ed']].map(([v,l,c,bg],i) => (
                 <div key={i} className="rounded-lg p-1.5" style={{background:bg}}>
                   <p className="text-xs font-black" style={{color:c}}>{v}</p>
                   <p className="text-[6px] font-bold text-gray-400 uppercase">{l}</p>
@@ -10605,7 +10605,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           <div className="bg-white rounded-xl p-3 text-[9px] space-y-1">
             <p className="font-bold text-gray-700 text-[10px] mb-1">18 / 30 pessoa(s) incluída(s) · 12 presente(s)</p>
             {[['Maria da Silva Souza', true], ['João Pereira Costa', true], ['Ana Clara Lima', false]].map(([n,p],i) => (
-              <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background: p ? '#f0fdf4' : undefined}}>
+              <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background: p ? '#F2F8F4' : undefined}}>
                 <div className="w-3 h-3 rounded flex items-center justify-center" style={p ? {background: GREEN} : {border:'1px solid #d1d5db'}}>
                   {p && <CheckCircle className="w-2 h-2 text-white" />}
                 </div>
@@ -10898,7 +10898,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Ação:</span>
                   {filtroAcoes.map(a => (
                     <span key={a} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-semibold"
-                      style={{background:'#eff6ff', color:'#1d4ed8'}}>
+                      style={{background:'#F4F7FB', color:'#1d4ed8'}}>
                       {a}
                       <button type="button" onClick={() => removerFiltroAcao(a)} className="p-0.5 rounded-full hover:bg-white/60 transition-colors">
                         <X className="w-3 h-3" />
@@ -11146,7 +11146,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               </label>
 
               {form.temVeiculo && (
-                <div className="rounded-xl border p-4 space-y-3" style={{borderColor:'#e0e7ff', background:'#eef2ff'}}>
+                <div className="rounded-xl border p-4 space-y-3" style={{borderColor:'#E6ECF5', background:'#F4F7FB'}}>
                   <div>
                     <label className={lc}>Placa do Veículo</label>
                     <input value={form.placa} onChange={e => set('placa', e.target.value.toUpperCase())} placeholder="ABC-1234" maxLength={8} className={ic} />
@@ -11417,12 +11417,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             <div className="flex items-center gap-2">
               <button onClick={() => exportarCampanhaExcel(filtered, eventos, addToast)}
                 className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
-                style={{borderColor:'#d1fae5', color:'#059669', background:'#f0fdf4'}}>
+                style={{borderColor:'#d1fae5', color:'#059669', background:'#F2F8F4'}}>
                 <Download className="w-3.5 h-3.5" /> Exportar Excel
               </button>
               <button onClick={() => setShowEventosModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-bold border transition-all hover:opacity-90"
-                style={{borderColor:'#e0e7ff', color: CAMPANHA_COLOR, background:'#eef2ff'}}>
+                style={{borderColor:'#E6ECF5', color: CAMPANHA_COLOR, background:'#F4F7FB'}}>
                 <Calendar className="w-3.5 h-3.5" /> + Eventos
               </button>
               <button onClick={() => { setEditing(null); setShowModal(true); }}
@@ -11802,15 +11802,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     }
 
     const CRON_ALERT_STYLE = {
-      CRITICO: { bg:'#fef2f2', border:'#fecaca', color:'#b91c1c', label:'CRÍTICO' },
-      ALERTA:  { bg:'#fffbeb', border:'#fde68a', color:'#b45309', label:'ALERTA'  },
+      CRITICO: { bg:'#FCF3F3', border:'#fecaca', color:'#b91c1c', label:'CRÍTICO' },
+      ALERTA:  { bg:'#FBF7EE', border:'#fde68a', color:'#b45309', label:'ALERTA'  },
       INFO:    { bg:'#f0f9ff', border:'#bae6fd', color:'#0369a1', label:'INFO'    },
     };
 
     // Linhas do cronograma mensal — repasses entram só quando solicitado
     function cronLinhas(mostrarRepasses, nomeBD, nomeParc) {
       const base = [
-        { k:'bruto',     l:'Faturamento bruto',        sub:'NF emitida',        c:'#1e3a8a', bg:'#eff6ff', bar:'#3b82f6' },
+        { k:'bruto',     l:'Faturamento bruto',        sub:'NF emitida',        c:'#1e3a8a', bg:'#F4F7FB', bar:'#3b82f6' },
         { k:'imposto',   l:'(−) Impostos',             sub:'retidos na fonte',  c:'#9a3412', bg:'#FCE4D6', bar:'#ea580c', neg:true },
         { k:'liquido',   l:'(=) Líquido',              sub:'após impostos',     c:'#334155', bg:'#f1f5f9', bar:'#64748b' },
       ];
@@ -11846,7 +11846,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-baseline gap-2.5">
                     <h2 className="font-bold text-sm text-gray-700">Cronograma físico-financeiro</h2>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{background:'#eef2ff', color:'#4338ca'}}>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{background:'#F4F7FB', color:'#4338ca'}}>
                       Ano {b+1} · meses {ini}–{fim}
                     </span>
                   </div>
@@ -11886,7 +11886,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           </th>
                         ))}
                         <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-widest whitespace-nowrap"
-                            style={{borderBottom:'2px solid #c7d2fe', background:'#eef2ff', color:'#3730a3'}}>Total</th>
+                            style={{borderBottom:'2px solid #c7d2fe', background:'#F4F7FB', color:'#3730a3'}}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -11983,7 +11983,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     /* Resumo da divisão (read-only, reaproveitado em 2 telas) */
     function CronogramaResumo({ calc, pctBD, nomeBD, nomeParc, aliquotaTotal }) {
       const linhas = [
-        { l:`Valor bruto do contrato — NF emitida por ${nomeBD}`, v:calc.tot.bruto,   c:'#1e3a8a', bg:'#eff6ff', bar:'#3b82f6' },
+        { l:`Valor bruto do contrato — NF emitida por ${nomeBD}`, v:calc.tot.bruto,   c:'#1e3a8a', bg:'#F4F7FB', bar:'#3b82f6' },
         { l:`(−) Impostos recolhidos (${cronPctTxt(aliquotaTotal)})`, v:-calc.tot.imposto, c:'#9a3412', bg:'#FCE4D6', bar:'#ea580c' },
         { l:'(=) Valor líquido após impostos',                    v:calc.tot.liquido, c:'#334155', bg:'#f1f5f9', bar:'#64748b' },
         { l:`Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)} do líquido)`, v:calc.tot.repasse, c:'#92400e', bg:'#FFE699', bar:'#d97706' },
@@ -12548,9 +12548,9 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               {/* Novo cronograma — IA ou manual */}
               <div className="grid lg:grid-cols-2 gap-4">
                 {/* Via IA */}
-                <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{borderColor:'#bfdbfe'}}>
+                <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{borderColor:'#D5DEEB'}}>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#dbeafe', color:'#1d4ed8'}}>IA</span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#E6ECF5', color:'#1d4ed8'}}>IA</span>
                     <h2 className="font-bold text-sm text-gray-700">Analisar contrato em PDF</h2>
                   </div>
                   <p className="text-[11px] text-gray-400 mb-4">A IA extrai itens, valores, prazo e partes automaticamente.</p>
@@ -12561,7 +12561,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                   <button onClick={analisarPdf} disabled={!pdfFile || analyzing}
                     className="w-full px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
                     style={{background: BLUE}}>
-                    {analyzing ? '⏳ Analisando contrato…' : '✨ Analisar e criar cronograma'}
+                    {analyzing ? 'Analisando contrato…' : 'Analisar e criar cronograma'}
                   </button>
                 </div>
 
@@ -12845,7 +12845,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                           <td className="px-3 py-2" style={{borderBottom:'1px solid #f1f5f9'}}>
                             <select value={it.tipo_recorrencia} onChange={e => setItem(i,'tipo_recorrencia', e.target.value)}
                               className="border rounded-lg px-2 py-1 text-[11px] font-bold cursor-pointer"
-                              style={mensal ? {background:'#eff6ff', borderColor:'#bfdbfe', color:'#1d4ed8'} : {background:'#f5f3ff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
+                              style={mensal ? {background:'#F4F7FB', borderColor:'#D5DEEB', color:'#1d4ed8'} : {background:'#f5f3ff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
                               <option value="UNICO">Único</option>
                               <option value="MENSAL">Mensal</option>
                             </select>
@@ -12881,7 +12881,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                     {draft.itens.length === 0 && (
                       <tr><td colSpan={8} className="px-3 py-8 text-center text-xs text-gray-400">Nenhum item — clique em "Adicionar item".</td></tr>
                     )}
-                    <tr style={{background:'#eef2ff'}}>
+                    <tr style={{background:'#F4F7FB'}}>
                       <td colSpan={5} className="px-3 py-3 text-[10px] font-black uppercase tracking-widest" style={{color:'#3730a3', borderTop:'2px solid #c7d2fe'}}>
                         Valor global do contrato · {prazo} meses
                       </td>
@@ -13032,7 +13032,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       }, [filtered]);
 
       const modelos = React.useMemo(() => [...new Set((proposals||[]).map(p => p.modelo).filter(Boolean))].sort(), [proposals]);
-      const bluepal = ['#0B2B5E','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd'];
+      const bluepal = ['#0B2B5E','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#B8C6DB'];
 
       return (
         <div className="flex-1 flex flex-col fade-in overflow-hidden">
@@ -14746,7 +14746,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             <div className="flex px-5 gap-1 pb-0">
               {[
                 { key:'dashboard',     label:'Dashboard' },
-                { key:'lancar-nf',    label:'📄 Lançar NF' },
+                { key:'lancar-nf',    label:'Lançar NF' },
                 { key:'contratos',    label:'Contratos' },
                 { key:'usuarios',     label: <span className="flex items-center gap-1.5">Usuários {pendingUsers?.length > 0 && <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white" style={{background:'#f59e0b'}}>{pendingUsers.length}</span>}</span> },
                 { key:'configuracoes', label:'Configurações' },
@@ -14859,7 +14859,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               {/* KPIs */}
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-bold uppercase tracking-wider" style={{color:BLUE}}>Indicadores</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{background:GREEN}}>em tempo real</span>
+                <span className="flex items-center gap-1.5 text-[11px] text-slate-500"><span className="w-1.5 h-1.5 rounded-full" style={{background:GREEN}} />atualizado em tempo real</span>
                 <span className="text-[10px] text-gray-400 font-medium">{adminStatsYear}</span>
               </div>
               {/* KPIs */}
@@ -14930,7 +14930,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                                 <td className="px-4 py-2.5 text-gray-700 max-w-[200px]"><p className="truncate">{m.object||'—'}</p></td>
                                 <td className="px-4 py-2.5 whitespace-nowrap">
                                   {isParceria
-                                    ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#f0fdf4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
+                                    ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#F2F8F4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
                                     : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-gray-50">Direto</span>}
                                 </td>
                                 <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-center">{totalMeses}m</td>
@@ -14944,7 +14944,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                             );
                           })}
                           {rows.length > 0 && (
-                            <tr style={{background:'#eef2ff', borderTop:'2px solid #a5b4fc'}}>
+                            <tr style={{background:'#F4F7FB', borderTop:'2px solid #a5b4fc'}}>
                               <td colSpan={7} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-400">Total Receita {adminStatsYear}</td>
                               <td className="px-4 py-2.5 font-black text-sm text-indigo-800">{fmtV(total)}</td>
                             </tr>
@@ -15020,7 +15020,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                     </div>
                   )}
                   <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
-                    <div className="p-2 rounded-xl" style={{background:'#f0fdf4'}}>
+                    <div className="p-2 rounded-xl" style={{background:'#F2F8F4'}}>
                       <p className="text-lg font-black" style={{color:GREEN}}>{activeCountYr}</p>
                       <p className="text-[9px] text-green-600 font-semibold">Ativos</p>
                     </div>
@@ -15175,7 +15175,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 {m.endDate ? (
                                   <span className={`font-medium ${expiring?'text-orange-600 font-bold':expired?'text-red-500 font-bold':'text-gray-600'}`}>
-                                    {(expiring||expired) && '⚠️ '}{new Date(m.endDate+'T12:00:00').toLocaleDateString('pt-BR')}
+                                    {(expiring||expired) && ''}{new Date(m.endDate+'T12:00:00').toLocaleDateString('pt-BR')}
                                   </span>
                                 ) : '—'}
                               </td>
@@ -15198,7 +15198,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             <div className="space-y-4">
               {pendingUsers && pendingUsers.length > 0 && (
                 <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
-                  <div className="px-5 py-3 flex items-center gap-3" style={{background:'#fffbeb'}}>
+                  <div className="px-5 py-3 flex items-center gap-3" style={{background:'#FBF7EE'}}>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-amber-100">
                       <UserCircle className="w-4 h-4 text-amber-600" />
                     </div>
@@ -15452,7 +15452,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 {/* Cabeçalho + upload */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>📄</div>
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}><FileText className="w-4 h-4" /></div>
                     <div className="flex-1">
                       <h3 className="font-bold text-gray-800 text-sm">Lançar Notas Fiscais</h3>
                       <p className="text-[11px] text-gray-400 mt-0.5">Selecione um ou vários PDFs — a IA identifica os dados e o contrato de cada NF automaticamente.</p>
@@ -15642,7 +15642,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                                     conf==='media' ? 'bg-blue-100 text-blue-700' :
                                                      'bg-yellow-100 text-yellow-700'
                                   }`}>
-                                    {conf==='alta' ? '✓ Alta' : conf==='media' ? '~ Média' : '⚠ Baixa'}
+                                    {conf==='alta' ? '✓ Alta' : conf==='media' ? '~ Média' : 'Baixa'}
                                   </span>
                                 </div>
                               )}
@@ -15754,14 +15754,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             <div className="space-y-5">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>🤖</div>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}><IaMenuIcon className="w-4 h-4" /></div>
                   <div>
                     <h3 className="font-bold text-gray-800 text-sm">Leitura de NF via IA</h3>
                     <p className="text-[11px] text-gray-400 mt-0.5">Extração automática de número, data e valor usando a API Claude.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-green-50 border border-green-200">
-                  <span className="text-green-600 text-sm">✅</span>
+                  <span className="text-green-600"><CheckCircle className="w-4 h-4" /></span>
                   <p className="text-xs text-green-700 font-semibold">API Claude configurada e ativa</p>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
@@ -15772,7 +15772,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
               {/* ── Personalização da interface ── */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <div className="flex items-center gap-3 mb-1">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}>🎨</div>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-black" style={{background:BLUE}}><Layers className="w-4 h-4" /></div>
                   <div>
                     <h3 className="font-bold text-gray-800 text-sm">Personalização da interface</h3>
                     <p className="text-[11px] text-gray-400 mt-0.5">Aparência do sistema neste navegador. Fica salvo só para você.</p>
@@ -15965,7 +15965,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             <div className="flex flex-wrap gap-2">
               {counts.overdue > 0 && (
                 <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
-                  ⚠ {counts.overdue} atrasada{counts.overdue !== 1 ? 's' : ''}
+                  {counts.overdue} atrasada{counts.overdue !== 1 ? 's' : ''}
                 </span>
               )}
               {counts.dueToday > 0 && (
@@ -16137,7 +16137,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
     // cartão com cor de severidade, para chamar a atenção de longe na TV.
     function PainelTvCardAtencao({ item }) {
       const cor = item.faixa === 'vencido' ? '#DC2626' : item.faixa === '7' ? '#D97706' : '#CA8A04';
-      const bg  = item.faixa === 'vencido' ? '#FEF2F2' : item.faixa === '7' ? '#FFFBEB' : '#FEFCE8';
+      const bg  = item.faixa === 'vencido' ? '#FCF3F3' : item.faixa === '7' ? '#FBF7EE' : '#FEFCE8';
       const rotulo = item.faixa === 'vencido' ? 'VENCIDO' : item.faixa === '7' ? 'VENCE EM ATÉ 7 DIAS' : 'VENCE EM ATÉ 30 DIAS';
       const diasTxt = item.dias < 0 ? `Venceu há ${Math.abs(item.dias)} dia${Math.abs(item.dias) === 1 ? '' : 's'}`
         : item.dias === 0 ? 'Vence hoje'
@@ -16304,8 +16304,8 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
           {/* Indicadores — blocos, como no design original */}
           <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, padding:'16px 32px 0 32px'}}>
             {[
-              { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FEF2F2', icone:AlertTriangle },
-              { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FFFBEB', icone:Clock },
+              { label:'Contratos Vencidos',      value:kpi.vencidos, cor:'#DC2626', bg:'#FCF3F3', icone:AlertTriangle },
+              { label:'Vencem em até 7 dias',    value:kpi.em7,      cor:'#D97706', bg:'#FBF7EE', icone:Clock },
               { label:'Vencem em até 30 dias',   value:kpi.em30,     cor:'#CA8A04', bg:'#FEFCE8', icone:Clock },
               { label:'Total em Vigência',       value:kpi.total,    cor:'#0E7490', bg:'#F0FDFA', icone:CheckCircle },
             ].map(({ label, value, cor, bg, icone: Icone }) => (
@@ -17674,7 +17674,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
                         </div>
 
                         {/* Gestão da lista */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-2.5 border-b border-gray-100" style={{background: verExcluidos ? '#fef2f2' : '#f8fafc'}}>
+                        <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-2.5 border-b border-gray-100" style={{background: verExcluidos ? '#FCF3F3' : '#f8fafc'}}>
                           <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
                             <Info className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
                             {verExcluidos
@@ -18292,7 +18292,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             </div>
           ) : (
             <p className={`text-[11px] font-bold ${acao.status === 'gravado' ? 'text-green-700' : acao.status === 'erro' ? 'text-red-600' : 'text-gray-500'}`}>
-              {acao.status === 'gravado' ? '✔ Gravado no sistema' : acao.status === 'erro' ? `Erro: ${acao.erro || ''}` : 'Descartado'}
+              {acao.status === 'gravado' ? 'Gravado no sistema' : acao.status === 'erro' ? `Erro: ${acao.erro || ''}` : 'Descartado'}
             </p>
           )}
         </div>
@@ -18499,7 +18499,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   {(m.docs || []).map(d => <IaDocCard key={d.id} doc={d} abertoInicial={idx === ultimoIdxIA && !compacto} addToast={addToast} />)}
                   {(m.acoes || []).map(a => <IaAcaoCard key={a.id} acao={a} onDecidir={(ac, ok) => decidirAcao(idx, ac, ok)} />)}
                   {m.aprendizados?.length > 0 && (
-                    <p className="mt-1 text-[10px] text-teal-700">🧠 Aprendi: {m.aprendizados.join(' · ')}</p>
+                    <p className="mt-1 text-[10px] text-teal-700">Aprendi: {m.aprendizados.join(' · ')}</p>
                   )}
                 </div>
               </div>
@@ -19917,8 +19917,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         let viaIA = false;
         if (!dados.expiry && apiKey) {
           addToast(dados.semTexto
-            ? '🔍 PDF digitalizado — lendo o documento com IA…'
-            : '🔍 Validade não localizada no texto — conferindo com IA…');
+            ? 'PDF digitalizado — lendo o documento com IA…'
+            : 'Validade não localizada no texto — conferindo com IA…');
           const ia = await certAnalisarIA(b64, cert.type, apiKey);
           if (ia?.erro) {
             addToast(`⚠️ Leitura por IA falhou: ${ia.erro}. Use o botão "Ler com IA" no card ou informe a data manualmente.`);
@@ -20374,7 +20374,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                       <button
                         onClick={() => { setShowPlusMenu(false); setShowForm(true); setActiveContractNumber(null); setShowContractsPage(false); }}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-blue-50 transition-colors group">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#dbeafe'}}>
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#E6ECF5'}}>
                           <FileText className="w-3.5 h-3.5" style={{color: BLUE}} />
                         </div>
                         <div>
@@ -20557,7 +20557,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                     className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all"
                     style={ocultarValores
                       ? {background:'#f1f5f9', color:'#475569', borderColor:'#e2e8f0'}
-                      : {background:'#eff6ff', color: BLUE, borderColor:'#bfdbfe'}}
+                      : {background:'#F4F7FB', color: BLUE, borderColor:'#D5DEEB'}}
                     title={ocultarValores
                       ? 'Valores ocultos — clique para exibir'
                       : 'Valores visíveis — clique para ocultar'}>
@@ -20569,7 +20569,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   {/* Indicador de alertas */}
                   {hasAlert_sb && (
                     <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
-                          style={{background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca'}}>
+                          style={{background:'#FCF3F3', color:'#dc2626', border:'1px solid #fecaca'}}>
                       <Bell className="w-3 h-3" style={{animation:'swing 1.4s ease-in-out infinite'}} />
                       {totalHomeAlerts_sb} alerta{totalHomeAlerts_sb!==1?'s':''}
                     </span>
@@ -20628,7 +20628,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                     <div className={`grid grid-cols-1 ${SYS.id === 'gcsp' ? 'max-w-sm mx-auto' : 'sm:grid-cols-2'} gap-4`}>
                       <button type="button" onClick={() => { setFormType('direto'); setForm(f => ({...f, contractType:'direto'})); }}
                               className="group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center cursor-pointer">
-                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#eff6ff'}}>
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#F4F7FB'}}>
                           <FileText className="w-8 h-8" style={{color:BLUE}} />
                         </div>
                         <div>
@@ -20644,7 +20644,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         <button type="button"
                                 onClick={() => { setFormType('parceria'); setForm(f => ({...f, contractType:'parceria'})); }}
                                 className="group flex flex-col items-center gap-4 p-7 rounded-2xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center cursor-pointer">
-                          <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#f0fdf4'}}>
+                          <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{background:'#F2F8F4'}}>
                             <LinkIcon className="w-8 h-8" style={{color:GREEN}} />
                           </div>
                           <div>
@@ -20689,7 +20689,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
                   {/* ── Leitura Automática por IA ── */}
                   <div className="rounded-2xl border-2 border-dashed p-4 space-y-3"
-                       style={{borderColor:'#bfdbfe', background:'#f0f7ff'}}>
+                       style={{borderColor:'#D5DEEB', background:'#f0f7ff'}}>
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black" style={{background:BLUE}}>IA</div>
                       <div>
@@ -20723,12 +20723,12 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
                     {pdfResult === 'ok' && (
                       <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
-                        ✅ Campos preenchidos automaticamente. Revise abaixo antes de salvar.
+                        Campos preenchidos automaticamente. Revise abaixo antes de salvar.
                       </p>
                     )}
                     {pdfResult === 'error' && (
                       <p className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
-                        ❌ Não foi possível ler o PDF. Verifique a chave API ou preencha manualmente.
+                        Não foi possível ler o PDF. Verifique a chave API ou preencha manualmente.
                       </p>
                     )}
                   </div>
@@ -20904,7 +20904,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                       </div>
 
                       {/* Anexo I — IA */}
-                      <div className="rounded-2xl border-2 border-dashed p-4 space-y-3" style={{borderColor:'#86efac', background:'#f0fdf4'}}>
+                      <div className="rounded-2xl border-2 border-dashed p-4 space-y-3" style={{borderColor:'#86efac', background:'#F2F8F4'}}>
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs" style={{background:GREEN}}>IA</div>
                           <div>
@@ -20932,14 +20932,14 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                             }
                           </button>
                         </div>
-                        {anexoResult === 'ok'    && <p className="text-xs text-green-700 bg-green-100 rounded-lg px-3 py-2 border border-green-200">✅ Matriz extraída com sucesso! Verifique os valores abaixo.</p>}
-                        {anexoResult === 'error' && <p className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200">❌ Não foi possível ler o Anexo I. Preencha os totais manualmente.</p>}
+                        {anexoResult === 'ok'    && <p className="text-xs text-green-700 bg-green-100 rounded-lg px-3 py-2 border border-green-200">Matriz extraída com sucesso! Verifique os valores abaixo.</p>}
+                        {anexoResult === 'error' && <p className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2 border border-red-200">Não foi possível ler o Anexo I. Preencha os totais manualmente.</p>}
                       </div>
 
                       {/* Cards de resumo de valores */}
                       {(form.partnerTotal > 0 || form.bdTotal > 0 || parseFloat(form.globalValue) > 0) && (
                         <div className="grid grid-cols-3 gap-2">
-                          <div className="rounded-xl p-3 text-center" style={{background:'#eff6ff', border:'1px solid #bfdbfe'}}>
+                          <div className="rounded-xl p-3 text-center" style={{background:'#F4F7FB', border:'1px solid #bfdbfe'}}>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Global</p>
                             <p className="text-sm font-black text-blue-900">{fmtCurrencyShort(parseFloat(form.globalValue)||0)}</p>
                             <p className="text-[10px] text-blue-400 mt-0.5">Contrato c/ Órgão</p>
@@ -20949,7 +20949,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                             <p className="text-sm font-black text-orange-900">{fmtCurrencyShort(form.partnerTotal||0)}</p>
                             {parseFloat(form.globalValue)>0 && <p className="text-[10px] text-orange-400 mt-0.5">{(((form.partnerTotal||0)/(parseFloat(form.globalValue)||1))*100).toFixed(1)}%</p>}
                           </div>
-                          <div className="rounded-xl p-3 text-center" style={{background:'#f0fdf4', border:'1px solid #bbf7d0'}}>
+                          <div className="rounded-xl p-3 text-center" style={{background:'#F2F8F4', border:'1px solid #bbf7d0'}}>
                             <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">Belém Digital</p>
                             <p className="text-sm font-black text-green-900">{fmtCurrencyShort(form.bdTotal||0)}</p>
                             {parseFloat(form.globalValue)>0 && <p className="text-[10px] text-green-500 mt-0.5">{(((form.bdTotal||0)/(parseFloat(form.globalValue)||1))*100).toFixed(1)}%</p>}
@@ -20980,7 +20980,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         <div className="space-y-3">
                           {[
                             { label:`Participação ${form.partnerName||'Empresa Parceira'}`, items:form.partnerItems, color:'#ea580c', bg:'#fff7ed', border:'#fed7aa' },
-                            { label:'Participação Belém Digital', items:form.bdItems, color:'#166534', bg:'#f0fdf4', border:'#86efac' },
+                            { label:'Participação Belém Digital', items:form.bdItems, color:'#166534', bg:'#F2F8F4', border:'#86efac' },
                           ].map(sec => sec.items?.length > 0 && (
                             <div key={sec.label} className="rounded-xl overflow-hidden border" style={{borderColor:sec.border}}>
                               <div className="px-3 py-2 text-xs font-bold" style={{background:sec.bg, color:sec.color}}>{sec.label}</div>
@@ -21268,8 +21268,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         label: 'Portfólio Total',
                         value: fmtCurrencyShort(financialKPIs.portfolioTotal),
                         sub: `${financialKPIs.contractCount} contrato${financialKPIs.contractCount!==1?'s':''}`,
-                        defaultBg: '#eff6ff',
-                        defaultBorder: '#bfdbfe',
+                        defaultBg: '#F4F7FB',
+                        defaultBorder: '#D5DEEB',
                         defaultLabel: 'text-blue-400',
                         defaultValue: 'text-blue-900',
                         defaultSub: 'text-blue-400',
@@ -21282,8 +21282,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         sub: financialKPIs.partnerRepasse > 0
                           ? 'destinado às parceiras'
                           : 'sem contratos de parceria',
-                        defaultBg: financialKPIs.partnerRepasse > 0 ? '#dbeafe' : '#ffffff',
-                        defaultBorder: financialKPIs.partnerRepasse > 0 ? '#93c5fd' : '#e5e7eb',
+                        defaultBg: financialKPIs.partnerRepasse > 0 ? '#E6ECF5' : '#ffffff',
+                        defaultBorder: financialKPIs.partnerRepasse > 0 ? '#B8C6DB' : '#e5e7eb',
                         defaultLabel: 'text-gray-400',
                         defaultValue: financialKPIs.partnerRepasse > 0 ? 'text-blue-700' : 'text-gray-300',
                         defaultSub: financialKPIs.partnerRepasse > 0 ? 'text-blue-400' : 'text-gray-400',
@@ -21294,8 +21294,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         label: `Receita ${statsYear}`,
                         value: fmtCurrencyShort(financialKPIs.valorNoAno),
                         sub: 'valor proporcional ao exercício',
-                        defaultBg: financialKPIs.valorNoAno > 0 ? '#eff6ff' : '#ffffff',
-                        defaultBorder: financialKPIs.valorNoAno > 0 ? '#bfdbfe' : '#e5e7eb',
+                        defaultBg: financialKPIs.valorNoAno > 0 ? '#F4F7FB' : '#ffffff',
+                        defaultBorder: financialKPIs.valorNoAno > 0 ? '#D5DEEB' : '#e5e7eb',
                         defaultLabel: 'text-blue-400',
                         defaultValue: financialKPIs.valorNoAno > 0 ? 'text-blue-900' : 'text-gray-300',
                         defaultSub: financialKPIs.valorNoAno > 0 ? 'text-blue-400' : 'text-gray-400',
@@ -21318,7 +21318,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         label: `Recebido ${statsYear}`,
                         value: fmtCurrencyShort(financialKPIs.paidYTD),
                         sub: `${globalStats.completed} parcela${globalStats.completed!==1?'s':''} paga${globalStats.completed!==1?'s':''}`,
-                        defaultBg: financialKPIs.paidYTD > 0 ? '#f0fdf4' : '#ffffff',
+                        defaultBg: financialKPIs.paidYTD > 0 ? '#F2F8F4' : '#ffffff',
                         defaultBorder: financialKPIs.paidYTD > 0 ? '#bbf7d0' : '#e5e7eb',
                         defaultLabel: 'text-gray-400',
                         defaultValue: financialKPIs.paidYTD > 0 ? 'text-green-700' : 'text-gray-300',
@@ -21332,7 +21332,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         sub: globalStats.waiting > 0
                           ? `${globalStats.waiting} aguardando pagamento`
                           : `${globalStats.issued - globalStats.completed} em processamento`,
-                        defaultBg: financialKPIs.pendingYTD > 0 ? '#fffbeb' : '#ffffff',
+                        defaultBg: financialKPIs.pendingYTD > 0 ? '#FBF7EE' : '#ffffff',
                         defaultBorder: financialKPIs.pendingYTD > 0 ? '#fde68a' : '#e5e7eb',
                         defaultLabel: 'text-gray-400',
                         defaultValue: financialKPIs.pendingYTD > 0 ? 'text-amber-700' : 'text-gray-300',
@@ -21423,7 +21423,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                           <p className="truncate">{m.object||'—'}</p>
                                         </td>
                                         <td className="px-4 py-2.5 text-gray-500 max-w-[160px]">
-                                          <p className="truncate">{m.contractorName||'—'}{isParceria && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{background:'#dbeafe', color:'#1d4ed8'}}>parceria</span>}</p>
+                                          <p className="truncate">{m.contractorName||'—'}{isParceria && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{background:'#E6ECF5', color:'#1d4ed8'}}>parceria</span>}</p>
                                         </td>
                                         <td className="px-4 py-2.5 font-bold whitespace-nowrap" style={{color: GREEN}}>{fmtV(m.globalValue)}</td>
                                         <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtD(m.startDate)} — {fmtD(m.endDate)}</td>
@@ -21431,7 +21431,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                     );
                                   })}
                                   {rows.length > 0 && (
-                                    <tr style={{background:'#f0fdf4'}}>
+                                    <tr style={{background:'#F2F8F4'}}>
                                       <td colSpan={4} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Valor global total ({rows.length} contrato{rows.length!==1?'s':''} ativo{rows.length!==1?'s':''})</td>
                                       <td className="px-4 py-3 font-black text-sm whitespace-nowrap" style={{color: GREEN}}>{fmtV(total)}</td>
                                       <td />
@@ -21634,7 +21634,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                         </td>
                                         <td className="px-4 py-2.5 whitespace-nowrap">
                                           {isParceria
-                                            ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#f0fdf4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
+                                            ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#F2F8F4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
                                             : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-gray-50">Direto</span>}
                                         </td>
                                         <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-center">{totalMeses}m</td>
@@ -21703,7 +21703,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                     );
                                   })}
                                   {rows.length > 0 && (
-                                    <tr style={{background:'#eff6ff', borderTop:'2px solid #93c5fd'}}>
+                                    <tr style={{background:'#F4F7FB', borderTop:'2px solid #93c5fd'}}>
                                       <td colSpan={3} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-blue-400">Total</td>
                                       <td className="px-4 py-2.5 font-black text-sm text-gray-600">{fmtV(totalContrato)}</td>
                                       <td className="px-4 py-2.5 font-black text-sm text-orange-700">{fmtV(totalParceira)}</td>
