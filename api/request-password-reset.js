@@ -81,6 +81,8 @@ module.exports = async (req, res) => {
             </p>
             <p style="font-size:13px;color:#6b7280;">Esse link expira em 30 minutos e só pode ser usado uma vez.
             Se você não solicitou essa redefinição, pode ignorar este e-mail — sua senha atual continua válida.</p>
+            <p style="font-size:12px;color:#6b7280;margin-top:24px;">Ficou com alguma dúvida? É só responder este e-mail.<br>
+            Núcleo de Gestão Comercial e Contratual (NGCC) · Belém Digital</p>
           </div>
         `,
       });

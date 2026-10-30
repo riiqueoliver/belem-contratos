@@ -32,7 +32,7 @@ function corpoEmail({ sistema, nome, username, aprovado }) {
         <p style="margin:0 0 20px;font-size:14px;line-height:1.6">${texto}</p>
         ${aprovado ? `<a href="${sistema.url}" style="display:inline-block;background:#0B2B5E;color:#fff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 22px;border-radius:10px">Acessar o sistema</a>` : ''}
       </td></tr>
-      <tr><td style="padding:14px 28px;background:#F8FAFC;font-size:11px;color:#94a3b8">Mensagem automática — não responda este e-mail.</td></tr>
+      <tr><td style="padding:14px 28px;background:#F8FAFC;font-size:12px;color:#64748b">Ficou com alguma dúvida? É só responder este e-mail.<br>Núcleo de Gestão Comercial e Contratual (NGCC) · Belém Digital</td></tr>
     </table>
   </td></tr></table></body></html>`;
 }
@@ -63,7 +63,8 @@ module.exports = async (req, res) => {
     const aprovado = decisao === 'aprovado';
     await sendEmail({
       to: email,
-      subject: aprovado ? 'Seu acesso ao sistema foi aprovado' : 'Sua solicitação de acesso não foi aprovada',
+      subject: aprovado ? `${p.name ? String(p.name).split(' ')[0] + ', seu' : 'Seu'} acesso ao sistema de contratos foi liberado`
+                        : 'Sobre a sua solicitação de acesso ao sistema de contratos',
       html: corpoEmail({ sistema, nome: p.name, username: p.username, aprovado }),
     });
     res.status(200).json({ ok: true, email });
