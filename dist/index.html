@@ -4063,9 +4063,7 @@ function ResetPasswordScreen({
     style: {
       background: BLUE
     }
-  }, "Ir para o login"))), React.createElement("p", {
-    className: "text-center text-xs text-gray-400 pb-5"
-  }, "Bel\xE9m Digital \xB7 Prefeitura Municipal de Bel\xE9m")));
+  }, "Ir para o login")))));
 }
 function RegisterModal({
   onClose,
@@ -4482,9 +4480,7 @@ function LoginScreen({
     type: "button",
     onClick: () => setShowRegister(true),
     className: "text-xs font-semibold hover:underline transition-colors text-gray-500 hover:text-gray-700"
-  }, "Solicitar Cadastro"))), React.createElement("p", {
-    className: "text-center text-xs text-gray-400 pb-5"
-  }, "Bel\xE9m Digital \xB7 Prefeitura Municipal de Bel\xE9m"), showForgot && React.createElement(ForgotPasswordModal, {
+  }, "Solicitar Cadastro"))), showForgot && React.createElement(ForgotPasswordModal, {
     onClose: () => setShowForgot(false)
   }), showRegister && React.createElement(RegisterModal, {
     onClose: () => setShowRegister(false),
