@@ -26403,10 +26403,10 @@ function AssistenteChat({
   }, React.createElement("button", {
     onClick: () => setAnexando(true),
     title: "Anexar arquivo modelo",
-    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-gray-500 hover:bg-gray-200 transition-colors"
+    className: `h-9 rounded-xl flex items-center justify-center gap-1.5 flex-shrink-0 transition-colors ${compacto ? 'w-9 text-gray-500 hover:bg-gray-200' : 'px-3 text-xs font-bold border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100'}`
   }, React.createElement(Paperclip, {
     className: "w-4 h-4"
-  })), React.createElement("textarea", {
+  }), !compacto && 'Anexar modelo'), React.createElement("textarea", {
     ref: textoRef,
     value: entrada,
     onChange: ev => setEntrada(ev.target.value),
