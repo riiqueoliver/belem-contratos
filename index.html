@@ -559,9 +559,10 @@
       return anos === 1 ? 'há 1 ano' : `há ${anos} anos`;
     }
     /* ── Modo privacidade ──────────────────────────────────
-       Ao abrir o sistema os valores vêm ocultos; o olho na
-       barra superior libera a visualização. Não é persistido:
-       toda nova sessão começa protegida. */
+       Ao abrir o sistema os valores vêm visíveis; o olho na
+       barra superior oculta. Não é persistido: toda nova
+       sessão começa com os valores à mostra. O App sincroniza
+       esta flag no render. */
     let VALORES_OCULTOS = true;
     function setValoresOcultos(v) { VALORES_OCULTOS = v; }
     const MASCARA_VALOR = '•••••';
@@ -19347,8 +19348,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [leadSync,             setLeadSync]             = useState(null);
       // Personalização (tema)
       const [tema,                 setTema]                 = useState(() => lerTema());
-      // Privacidade: começa sempre oculto a cada sessão
-      const [ocultarValores,       setOcultarValores]       = useState(true);
+      // Privacidade: começa com os valores visíveis; o olho na barra superior oculta
+      const [ocultarValores,       setOcultarValores]       = useState(false);
       // Sincroniza durante o render — os filhos renderizam depois e já pegam o valor certo
       setValoresOcultos(ocultarValores);
       const [showPropEmissao,      setShowPropEmissao]      = useState(false);
