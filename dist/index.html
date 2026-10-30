@@ -7070,33 +7070,33 @@ function ContractsPage({
       const installs = contracts.filter(c => c.contractNumber === cn);
       const statuses = installs.map(c => contractStatus(c));
       const allDone = installs.length > 0 && installs.every(c => c.currentStep > TOTAL_STEPS);
-      const hasOver = statuses.some(s => s === 'overdue');
-      const hasToday = statuses.some(s => s === 'due-today');
-      const hasWaiting = statuses.some(s => s === 'waiting');
-      const overall = allDone ? 'completed' : hasOver ? 'overdue' : hasToday ? 'due-today' : hasWaiting ? 'waiting' : 'on-time';
+      const overall = installs.length === 0 ? 'none' : allDone ? 'completed' : statuses.some(s => s === 'overdue') ? 'overdue' : statuses.some(s => s === 'due-today') ? 'due-today' : statuses.some(s => s === 'waiting') ? 'waiting' : 'on-time';
       const paid = installs.filter(c => c.currentStep > TOTAL_STEPS);
+      const open = installs.filter(c => c.currentStep <= TOTAL_STEPS);
       const totalBilled = paid.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+      const toReceive = open.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
       const globalVal = parseFloat(meta.globalValue) || 0;
       const execPct = globalVal > 0 ? Math.min(totalBilled / globalVal * 100, 100) : 0;
-      const activeInst = installs.find(c => c.currentStep <= TOTAL_STEPS);
-      const stepName = activeInst ? activeInst.currentStep === TOTAL_STEPS ? 'Aguardando Pagamento' : STEPS.find(s => s.id === activeInst.currentStep)?.name || '' : allDone ? 'Paga' : '';
       let daysLeft = null;
       if (meta.endDate) {
         const end = new Date(meta.endDate + 'T12:00:00');
         daysLeft = Math.ceil((end - new Date()) / 86400000);
       }
+      const attention = overall === 'overdue' || daysLeft !== null && daysLeft <= 90;
       return {
         cn,
         meta,
         installs,
         overall,
         paid: paid.length,
+        open: open.length,
         total: installs.length,
         totalBilled,
+        toReceive,
         globalVal,
         execPct,
-        stepName,
-        daysLeft
+        daysLeft,
+        attention
       };
     });
   }, [contracts, contractMeta]);
@@ -7105,50 +7105,43 @@ function ContractsPage({
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     const matchQ = s => !q || s.cn.toLowerCase().includes(q) || (s.meta.contractorName || '').toLowerCase().includes(q) || (s.meta.object || '').toLowerCase().includes(q) || (s.meta.unit || '').toLowerCase().includes(q);
-    if (showInativos) return inactiveSummaries.filter(matchQ);
-    return activeSummaries.filter(s => {
-      const matchS = statusFilter === 'all' || s.overall === statusFilter || statusFilter === 'active' && s.overall !== 'completed';
-      return matchQ(s) && matchS;
-    });
+    if (showInativos) return inactiveSummaries.filter(matchQ).sort((a, b) => (b.meta.terminationDate || '').localeCompare(a.meta.terminationDate || ''));
+    return activeSummaries.filter(s => matchQ(s) && (statusFilter === 'all' || statusFilter === 'attention' && s.attention || statusFilter === 'waiting' && s.overall === 'waiting' || statusFilter === 'ok' && !s.attention && s.overall !== 'waiting')).sort((a, b) => b.attention - a.attention || (a.daysLeft ?? 99999) - (b.daysLeft ?? 99999) || a.cn.localeCompare(b.cn));
   }, [activeSummaries, inactiveSummaries, search, statusFilter, showInativos]);
   const kpi = useMemo(() => ({
     total: activeSummaries.length,
-    active: activeSummaries.filter(s => s.overall === 'on-time' || s.overall === 'due-today').length,
+    value: activeSummaries.reduce((s, c) => s + c.globalVal, 0),
+    received: activeSummaries.reduce((s, c) => s + c.totalBilled, 0),
+    toReceive: activeSummaries.reduce((s, c) => s + c.toReceive, 0),
+    openInst: activeSummaries.reduce((s, c) => s + c.open, 0),
+    attention: activeSummaries.filter(s => s.attention).length,
     waiting: activeSummaries.filter(s => s.overall === 'waiting').length,
-    overdue: activeSummaries.filter(s => s.overall === 'overdue').length,
-    completed: activeSummaries.filter(s => s.overall === 'completed').length,
-    value: activeSummaries.reduce((s, c) => s + c.globalVal, 0)
+    expiring: activeSummaries.filter(s => s.daysLeft !== null && s.daysLeft <= 90).length
   }), [activeSummaries]);
   const STC = {
-    'on-time': {
-      label: 'Em Dia',
-      color: BLUE,
-      bg: '#F4F7FB',
-      border: '#D5DEEB'
+    'none': {
+      label: 'Sem parcelas',
+      color: '#94a3b8'
     },
-    'overdue': {
-      label: 'Em Atraso',
-      color: '#dc2626',
-      bg: '#FCF3F3',
-      border: '#fecaca'
+    'on-time': {
+      label: 'Em andamento',
+      color: BLUE
     },
     'due-today': {
-      label: 'Vence Hoje',
-      color: '#d97706',
-      bg: '#FBF7EE',
-      border: '#fde68a'
+      label: 'Etapa vence hoje',
+      color: '#d97706'
     },
     'waiting': {
-      label: 'Aguardando Pagamento',
-      color: '#b45309',
-      bg: '#FBF7EE',
-      border: '#fcd34d'
+      label: 'Aguardando pagamento',
+      color: '#d97706'
+    },
+    'overdue': {
+      label: 'Etapa atrasada',
+      color: '#dc2626'
     },
     'completed': {
-      label: 'Paga',
-      color: GREEN,
-      bg: '#F2F8F4',
-      border: '#bbf7d0'
+      label: 'Parcelas pagas',
+      color: GREEN
     }
   };
   const FILTERS = [{
@@ -7156,26 +7149,26 @@ function ContractsPage({
     label: 'Todos',
     count: kpi.total
   }, {
-    key: 'on-time',
-    label: 'Em Dia',
-    count: kpi.active
+    key: 'attention',
+    label: 'Precisam de atenção',
+    count: kpi.attention
   }, {
     key: 'waiting',
-    label: 'Aguardando Pgto.',
+    label: 'Aguardando pagamento',
     count: kpi.waiting
   }, {
-    key: 'overdue',
-    label: 'Em Atraso',
-    count: kpi.overdue
-  }, {
-    key: 'completed',
-    label: 'Pagas',
-    count: kpi.completed
+    key: 'ok',
+    label: 'Em dia',
+    count: kpi.total - activeSummaries.filter(s => s.attention || s.overall === 'waiting').length
   }];
+  const fmtDia = iso => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
+  const vigCor = d => d === null ? '#94a3b8' : d < 0 ? '#dc2626' : d <= 30 ? '#dc2626' : d <= 90 ? '#d97706' : '#64748b';
+  const vigTxt = d => d === null ? 'sem data final' : d < 0 ? `vencido há ${-d} dia${-d !== 1 ? 's' : ''}` : d === 0 ? 'vence hoje' : `${d} dia${d !== 1 ? 's' : ''}`;
+  const isAdmin = currentUser.role === 'admin';
   return React.createElement("div", {
-    className: "fade-in space-y-5"
+    className: "fade-in space-y-6"
   }, React.createElement("div", {
-    className: "flex items-center justify-between"
+    className: "flex items-end justify-between gap-4 flex-wrap"
   }, React.createElement("div", null, React.createElement("h1", {
     className: "text-2xl font-black tracking-tight",
     style: {
@@ -7183,106 +7176,97 @@ function ContractsPage({
     }
   }, "Contratos"), React.createElement("p", {
     className: "text-xs text-gray-400 mt-0.5"
-  }, kpi.total, " contrato", kpi.total !== 1 ? 's' : '', " cadastrado", kpi.total !== 1 ? 's' : '', " \xB7 valor total ", fmtCurrencyShort(kpi.value))), React.createElement("button", {
+  }, kpi.total, " vigente", kpi.total !== 1 ? 's' : '', " \xB7 ", inactiveSummaries.length, " inativo", inactiveSummaries.length !== 1 ? 's' : '')), React.createElement("button", {
     onClick: onNew,
-    className: "flex items-center gap-2 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-opacity",
+    className: "flex items-center gap-2 text-white text-sm font-bold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity",
     style: {
       background: GREEN
     }
   }, React.createElement(Plus, {
     className: "w-4 h-4"
-  }), " Novo Contrato")), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("button", {
-    onClick: () => setShowInativos(false),
-    className: "flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors",
-    style: !showInativos ? {
-      background: BLUE,
-      color: '#fff'
-    } : {
-      background: '#fff',
-      color: '#64748b',
-      border: '1px solid #e5e7eb'
-    }
-  }, "Vigentes (", activeSummaries.length, ")"), React.createElement("button", {
-    onClick: () => setShowInativos(true),
-    className: "flex-1 sm:flex-none sm:px-6 text-xs font-bold py-2.5 rounded-xl transition-colors",
-    style: showInativos ? {
-      background: '#64748b',
-      color: '#fff'
-    } : {
-      background: '#fff',
-      color: '#64748b',
-      border: '1px solid #e5e7eb'
-    }
-  }, "Contratos Inativos (", inactiveSummaries.length, ")")), !showInativos && React.createElement("div", {
-    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+  }), " Novo Contrato")), !showInativos && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100"
   }, [{
-    label: 'Total',
-    value: kpi.total,
-    color: BLUE,
-    key: 'all'
+    label: 'Valor contratado',
+    value: fmtCurrencyShort(kpi.value),
+    sub: `${kpi.total} contrato${kpi.total !== 1 ? 's' : ''} vigente${kpi.total !== 1 ? 's' : ''}`
   }, {
-    label: 'Aguardando Pgto.',
-    value: kpi.waiting,
-    color: '#b45309',
-    key: 'waiting'
+    label: 'Recebido',
+    value: fmtCurrencyShort(kpi.received),
+    sub: kpi.value > 0 ? `${(kpi.received / kpi.value * 100).toFixed(0)}% do valor contratado` : '—'
   }, {
-    label: 'Em Atraso',
-    value: kpi.overdue,
-    color: '#dc2626',
-    key: 'overdue'
+    label: 'A receber',
+    value: fmtCurrencyShort(kpi.toReceive),
+    sub: kpi.openInst ? `${kpi.openInst} parcela${kpi.openInst !== 1 ? 's' : ''} em andamento` : 'Nenhuma parcela em aberto'
   }, {
-    label: 'Pagas',
-    value: kpi.completed,
-    color: GREEN,
-    key: 'completed'
+    label: 'Vigência em até 90 dias',
+    value: String(kpi.expiring),
+    alert: kpi.expiring > 0,
+    sub: kpi.expiring ? 'Prorrogar ou encerrar' : 'Nenhum vencimento próximo'
   }].map(k => React.createElement("div", {
     key: k.label,
-    onClick: () => setStatusFilter(k.key),
-    className: `bg-white rounded-2xl px-4 py-3 border shadow-sm cursor-pointer hover:shadow-md transition-all ${statusFilter === k.key ? 'border-gray-300' : 'border-gray-100'}`
+    className: "px-5 py-4"
   }, React.createElement("p", {
-    className: "text-2xl font-black leading-none",
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400"
+  }, k.label), React.createElement("p", {
+    className: "text-xl font-black mt-1 leading-tight",
     style: {
-      color: k.color
+      color: k.alert ? '#d97706' : BLUE
     }
   }, k.value), React.createElement("p", {
-    className: "text-xs font-semibold text-gray-400 mt-1"
-  }, k.label)))), React.createElement("div", {
-    className: "flex flex-col sm:flex-row gap-3 items-stretch sm:items-center"
+    className: "text-[11px] text-gray-400 mt-0.5"
+  }, k.sub)))), React.createElement("div", {
+    className: "space-y-3"
   }, React.createElement("div", {
-    className: "relative flex-1"
+    className: "flex items-center gap-4 border-b border-gray-200 overflow-x-auto"
+  }, [{
+    inat: false,
+    label: 'Vigentes',
+    n: activeSummaries.length
+  }, {
+    inat: true,
+    label: 'Inativos',
+    n: inactiveSummaries.length
+  }].map(t => React.createElement("button", {
+    key: t.label,
+    onClick: () => setShowInativos(t.inat),
+    className: `pb-2.5 -mb-px border-b-2 text-sm font-bold whitespace-nowrap transition-colors ${showInativos === t.inat ? '' : 'border-transparent text-gray-400 hover:text-gray-600'}`,
+    style: showInativos === t.inat ? {
+      color: BLUE,
+      borderColor: BLUE
+    } : {}
+  }, t.label, " ", React.createElement("span", {
+    className: "text-xs font-semibold text-gray-400"
+  }, t.n)))), React.createElement("div", {
+    className: "flex flex-col lg:flex-row gap-3 lg:items-center"
+  }, !showInativos && React.createElement("div", {
+    className: "flex gap-1.5 flex-wrap"
+  }, FILTERS.map(f => {
+    const on = statusFilter === f.key;
+    return React.createElement("button", {
+      key: f.key,
+      onClick: () => setStatusFilter(f.key),
+      className: `px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${on ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`,
+      style: on ? {
+        background: BLUE
+      } : {}
+    }, f.label, " ", React.createElement("span", {
+      className: on ? 'opacity-70' : 'text-gray-400'
+    }, f.count));
+  })), React.createElement("div", {
+    className: "relative lg:ml-auto lg:w-80"
   }, React.createElement(Search, {
     className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
   }), React.createElement("input", {
     value: search,
     onChange: e => setSearch(e.target.value),
-    placeholder: "Buscar por n\xFAmero, contratada, objeto ou \xF3rg\xE3o\u2026",
-    className: "w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
+    placeholder: "Buscar n\xFAmero, objeto ou \xF3rg\xE3o\u2026",
+    className: "w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 placeholder-gray-300",
     style: {
       '--tw-ring-color': BLUE
     }
-  })), !showInativos && React.createElement("div", {
-    className: "flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-shrink-0"
-  }, FILTERS.map(f => React.createElement("button", {
-    key: f.key,
-    onClick: () => setStatusFilter(f.key),
-    className: "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1",
-    style: statusFilter === f.key ? {
-      background: BLUE,
-      color: '#fff'
-    } : {
-      color: '#64748b'
-    }
-  }, f.label, React.createElement("span", {
-    className: "text-[10px] px-1.5 py-0.5 rounded-full font-black",
-    style: statusFilter === f.key ? {
-      background: 'rgba(255,255,255,0.2)'
-    } : {
-      background: '#f1f5f9'
-    }
-  }, f.count))))), filtered.length === 0 ? React.createElement("div", {
-    className: "bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm"
+  })))), filtered.length === 0 ? React.createElement("div", {
+    className: "bg-white rounded-2xl p-12 text-center border border-gray-100"
   }, React.createElement(Clipboard, {
     className: "w-10 h-10 mx-auto mb-3 text-gray-200"
   }), React.createElement("p", {
@@ -7290,60 +7274,99 @@ function ContractsPage({
   }, "Nenhum contrato encontrado."), React.createElement("p", {
     className: "text-gray-300 text-xs mt-1"
   }, "Tente ajustar o filtro ou a busca.")) : React.createElement("div", {
-    className: "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+    className: "bg-white rounded-2xl border border-gray-100 overflow-hidden"
+  }, React.createElement("div", {
+    className: "hidden lg:grid grid-cols-[minmax(0,1fr)_130px_150px_150px_170px_56px] gap-4 px-5 py-2.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400"
+  }, React.createElement("span", null, "Contrato"), React.createElement("span", {
+    className: "text-right"
+  }, "Valor"), React.createElement("span", null, "Recebido"), React.createElement("span", null, showInativos ? 'Encerrado em' : 'Vigência'), React.createElement("span", null, "Situa\xE7\xE3o"), React.createElement("span", null)), React.createElement("div", {
+    className: "divide-y divide-gray-100"
   }, filtered.map(s => {
     const cfg = showInativos ? {
       label: 'Encerrado',
-      color: '#6b7280',
-      bg: '#f3f4f6',
-      border: '#e5e7eb'
+      color: '#94a3b8'
     } : STC[s.overall] || STC['on-time'];
     const sigla = getUnitSigla(s.meta.unit || '') || s.meta.unit || '';
-    const isAdmin = currentUser.role === 'admin';
     return React.createElement("div", {
       key: s.cn,
       onClick: () => onSelect(s.cn),
-      className: "bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden group cursor-pointer flex flex-col"
+      className: "group grid grid-cols-2 lg:grid-cols-[minmax(0,1fr)_130px_150px_150px_170px_56px] gap-x-4 gap-y-2 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors items-center"
     }, React.createElement("div", {
-      className: "h-1 flex-shrink-0",
+      className: "col-span-2 lg:col-span-1 min-w-0"
+    }, React.createElement("div", {
+      className: "flex items-center gap-2 min-w-0"
+    }, React.createElement("span", {
+      className: "text-sm font-black flex-shrink-0",
+      style: {
+        color: BLUE
+      }
+    }, s.cn), sigla && React.createElement("span", {
+      className: "text-[11px] font-semibold text-gray-400 truncate"
+    }, sigla), s.meta.contractType === 'parceria' && React.createElement("span", {
+      className: "text-[10px] font-semibold text-gray-400 border border-gray-200 rounded px-1.5 flex-shrink-0"
+    }, "Parceria")), s.meta.object && React.createElement("p", {
+      className: "text-xs text-gray-500 truncate mt-0.5",
+      title: s.meta.object
+    }, s.meta.object)), React.createElement("div", {
+      className: "lg:text-right"
+    }, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
+    }, "Valor"), React.createElement("p", {
+      className: "text-sm font-bold text-gray-800"
+    }, s.globalVal > 0 ? fmtCurrencyShort(s.globalVal) : '—')), React.createElement("div", {
+      title: s.globalVal > 0 ? `${fmtCurrency(s.totalBilled)} de ${fmtCurrency(s.globalVal)}` : ''
+    }, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
+    }, "Recebido"), s.globalVal > 0 ? React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, React.createElement("div", {
+      className: "flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"
+    }, React.createElement("div", {
+      className: "h-full rounded-full",
+      style: {
+        width: `${s.execPct}%`,
+        background: GREEN
+      }
+    })), React.createElement("span", {
+      className: "text-xs font-semibold text-gray-600 w-9 text-right"
+    }, s.execPct.toFixed(0), "%")) : React.createElement("p", {
+      className: "text-xs text-gray-300"
+    }, "\u2014"), React.createElement("p", {
+      className: "text-[10px] text-gray-400 mt-0.5"
+    }, s.paid, " de ", s.total, " parcela", s.total !== 1 ? 's' : '')), React.createElement("div", null, React.createElement("p", {
+      className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden"
+    }, showInativos ? 'Encerrado em' : 'Vigência'), showInativos ? React.createElement(React.Fragment, null, React.createElement("p", {
+      className: "text-xs font-semibold text-gray-700"
+    }, s.meta.terminationDate ? fmtDia(s.meta.terminationDate) : '—'), s.meta.terminationReason && React.createElement("p", {
+      className: "text-[10px] text-gray-400 truncate"
+    }, terminationReasonLabel(s.meta.terminationReason))) : React.createElement(React.Fragment, null, React.createElement("p", {
+      className: "text-xs font-semibold text-gray-700"
+    }, s.meta.endDate ? `até ${fmtDia(s.meta.endDate)}` : '—'), React.createElement("p", {
+      className: "text-[10px] font-semibold",
+      style: {
+        color: vigCor(s.daysLeft)
+      }
+    }, vigTxt(s.daysLeft)))), React.createElement("div", {
+      className: "flex items-center gap-2 min-w-0"
+    }, React.createElement("span", {
+      className: "w-2 h-2 rounded-full flex-shrink-0",
       style: {
         background: cfg.color
       }
-    }), React.createElement("div", {
-      className: "p-4 flex flex-col flex-1"
-    }, React.createElement("div", {
-      className: "flex items-start justify-between gap-2 mb-2"
-    }, React.createElement("div", {
-      className: "flex-1 min-w-0"
-    }, React.createElement("div", {
-      className: "flex flex-wrap items-center gap-1.5"
-    }, React.createElement("span", {
-      className: "font-black text-sm leading-tight",
+    }), React.createElement("span", {
+      className: "text-xs font-semibold truncate",
       style: {
-        color: BLUE
+        color: cfg.color === BLUE ? '#475569' : cfg.color
       }
-    }, s.cn), React.createElement("span", {
-      className: "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-      style: {
-        background: cfg.bg,
-        color: cfg.color,
-        borderColor: cfg.border
-      }
-    }, cfg.label)), sigla && React.createElement("span", {
-      className: "inline-block text-[10px] font-black uppercase tracking-widest mt-1 px-2 py-0.5 rounded-md",
-      style: {
-        background: BLUE + '14',
-        color: BLUE
-      }
-    }, sigla)), isAdmin && React.createElement("div", {
-      className: "flex gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-    }, React.createElement("button", {
+    }, cfg.label)), React.createElement("div", {
+      className: "hidden lg:flex items-center justify-end gap-1"
+    }, isAdmin && React.createElement(React.Fragment, null, React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         onEdit(s.cn);
       },
       title: "Editar contrato",
-      className: "w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:bg-blue-50"
+      className: "w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-blue-50 transition-all"
     }, React.createElement(Edit2, {
       className: "w-3.5 h-3.5",
       style: {
@@ -7355,91 +7378,13 @@ function ContractsPage({
         onDelete && onDelete(s.cn);
       },
       title: "Excluir contrato",
-      className: "w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:bg-red-50 hover:border-red-200"
+      className: "w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all"
     }, React.createElement(Trash2, {
-      className: "w-3.5 h-3.5 text-gray-400 hover:text-red-500"
-    })))), s.meta.object && React.createElement("p", {
-      className: "text-xs text-gray-600 leading-relaxed mb-2 flex-shrink-0",
-      style: {
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden'
-      }
-    }, s.meta.object), s.meta.contractorName && React.createElement("p", {
-      className: "text-[11px] text-gray-500 truncate mb-3 flex-shrink-0"
-    }, s.meta.contractorName), showInativos && s.meta.terminationReason && React.createElement("p", {
-      className: "text-[11px] text-gray-400 mb-3 flex-shrink-0"
-    }, "Motivo: ", terminationReasonLabel(s.meta.terminationReason), s.meta.terminationDate ? ` · ${new Date(s.meta.terminationDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''), React.createElement("div", {
-      className: "h-px bg-gray-100 mb-3 flex-shrink-0"
-    }), React.createElement("div", {
-      className: "grid grid-cols-3 gap-2 mb-3 flex-shrink-0"
-    }, React.createElement("div", null, React.createElement("p", {
-      className: "text-[9px] text-gray-400 uppercase font-bold tracking-wide mb-0.5"
-    }, "Valor"), React.createElement("p", {
-      className: "text-xs font-black",
-      style: {
-        color: BLUE
-      }
-    }, s.globalVal > 0 ? fmtCurrencyShort(s.globalVal) : '—')), React.createElement("div", null, React.createElement("p", {
-      className: "text-[9px] text-gray-400 uppercase font-bold tracking-wide mb-0.5"
-    }, "Parcelas"), React.createElement("p", {
-      className: "text-xs font-black text-gray-700"
-    }, s.paid, React.createElement("span", {
-      className: "text-gray-300 font-normal text-[10px]"
-    }, " / ", s.total))), React.createElement("div", null, React.createElement("p", {
-      className: "text-[9px] uppercase font-bold tracking-wide mb-0.5",
-      style: {
-        color: s.daysLeft !== null && s.daysLeft < 0 ? '#dc2626' : '#94a3b8'
-      }
-    }, s.daysLeft !== null && s.daysLeft < 0 ? 'Vencido' : 'Vigência'), React.createElement("p", {
-      className: "text-xs font-black",
-      style: {
-        color: s.daysLeft === null ? '#94a3b8' : s.daysLeft < 0 ? '#dc2626' : s.daysLeft <= 30 ? '#d97706' : GREEN
-      }
-    }, s.daysLeft === null ? '—' : s.daysLeft < 0 ? `${Math.abs(s.daysLeft)}d venc.` : `${s.daysLeft}d`))), s.globalVal > 0 && React.createElement("div", {
-      className: "mb-3 flex-shrink-0"
-    }, React.createElement("div", {
-      className: "flex justify-between text-[9px] mb-1"
-    }, React.createElement("span", {
-      className: "text-gray-400"
-    }, "Execu\xE7\xE3o financeira"), React.createElement("span", {
-      className: "font-bold",
-      style: {
-        color: s.execPct >= 90 ? '#dc2626' : GREEN
-      }
-    }, s.execPct.toFixed(0), "%")), React.createElement("div", {
-      className: "h-1.5 bg-gray-100 rounded-full overflow-hidden"
-    }, React.createElement("div", {
-      className: "h-full rounded-full",
-      style: {
-        width: `${s.execPct}%`,
-        background: s.execPct >= 90 ? '#dc2626' : GREEN,
-        transition: 'width .7s ease'
-      }
-    }))), React.createElement("div", {
-      className: "flex-1"
-    }), s.stepName && React.createElement("div", {
-      className: "flex items-center gap-1.5 text-[10px] text-gray-500 mb-3 flex-shrink-0"
-    }, React.createElement("div", {
-      className: "w-1.5 h-1.5 rounded-full flex-shrink-0",
-      style: {
-        background: cfg.color,
-        animation: s.overall !== 'completed' ? 'pulse-ring 2s infinite' : 'none'
-      }
-    }), React.createElement("span", null, s.stepName)), React.createElement("div", {
-      className: "pt-3 border-t border-gray-100 flex items-center justify-between flex-shrink-0"
-    }, React.createElement("span", {
-      className: "text-[10px] text-gray-400"
-    }, s.total === 0 ? 'Sem parcelas' : `${s.total} parcela${s.total !== 1 ? 's' : ''}`), React.createElement("span", {
-      className: "text-xs font-bold flex items-center gap-1 transition-all group-hover:gap-2",
-      style: {
-        color: BLUE
-      }
-    }, "Abrir ", React.createElement(ArrowRight, {
-      className: "w-3 h-3"
-    })))));
-  })));
+      className: "w-3.5 h-3.5 text-gray-400"
+    }))), !isAdmin && React.createElement(ChevronRight, {
+      className: "w-4 h-4 text-gray-300"
+    })));
+  }))));
 }
 function LeadsPage({
   leads,
