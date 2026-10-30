@@ -9718,13 +9718,176 @@ function ContractDetailView({
   const [editContractPdfLoading, setEditContractPdfLoading] = useState(false);
   const [quickPdfUploading, setQuickPdfUploading] = useState(false);
   const [showEncerrar, setShowEncerrar] = useState(false);
+  const [tab, setTab] = useState('geral');
   useEffect(() => {
     if (!editMode) setEditForm(buildForm());
   }, [contractNumber, contractMeta, editMode]);
+  useEffect(() => {
+    setTab('geral');
+  }, [contractNumber]);
   const meta = contractMeta[contractNumber] || {};
   const installments = contracts.filter(c => c.contractNumber === contractNumber).sort((a, b) => a.nfDate.localeCompare(b.nfDate));
   const sitCfg = CONTRACT_SITUATION[effectiveSituation(meta)] || CONTRACT_SITUATION.ativo;
   const additives = (contractAdditives || {})[contractNumber] || [];
+  const fmtBR = iso => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const refDe = c => monthLong((c.refMonth || c.nfDate || '').slice(0, 7));
+  const hoje = new Date();
+  const encerrado = effectiveSituation(meta) === 'encerrado';
+  const valorGlobal = Number(meta.globalValue) || 0;
+  const totFaturado = installments.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+  const pagas = installments.filter(c => c.currentStep > TOTAL_STEPS);
+  const totRecebido = pagas.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+  const emAndamento = installments.filter(c => c.currentStep <= TOTAL_STEPS);
+  const atrasadas = emAndamento.filter(c => contractStatus(c) === 'overdue');
+  const aguardando = emAndamento.filter(c => contractStatus(c) === 'waiting');
+  const pctFaturado = valorGlobal > 0 ? Math.min(100, totFaturado / valorGlobal * 100) : null;
+  const vigIni = meta.startDate ? new Date(meta.startDate + 'T12:00:00') : null;
+  const vigFim = meta.endDate ? new Date(meta.endDate + 'T12:00:00') : null;
+  const diasRestantes = vigFim ? Math.ceil((vigFim - hoje) / 86400000) : null;
+  const pctVigencia = vigIni && vigFim && vigFim > vigIni ? Math.max(0, Math.min(100, (hoje - vigIni) / (vigFim - vigIni) * 100)) : null;
+  const taVigencia = additives.find(t => t.newEndDate && t.newEndDate === meta.endDate) || null;
+  const corVig = encerrado ? '#64748b' : diasRestantes == null ? '#64748b' : diasRestantes < 0 ? '#b91c1c' : diasRestantes <= 30 ? '#b91c1c' : diasRestantes <= 90 ? '#b45309' : GREEN;
+  const textoVig = encerrado ? 'Contrato encerrado' : diasRestantes == null ? 'Sem data final cadastrada' : diasRestantes < 0 ? `Vencido há ${-diasRestantes} dia${-diasRestantes !== 1 ? 's' : ''}` : diasRestantes === 0 ? 'Vence hoje' : `${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''} restantes`;
+  const avisos = [];
+  if (!encerrado && diasRestantes != null) {
+    if (diasRestantes < 0) avisos.push({
+      cor: '#b91c1c',
+      txt: `A vigência terminou em ${fmtBR(meta.endDate)}. Registre um Termo Aditivo de prorrogação ou encerre o contrato.`,
+      tab: 'aditivos'
+    });else if (diasRestantes <= 90) avisos.push({
+      cor: diasRestantes <= 30 ? '#b91c1c' : '#b45309',
+      txt: `A vigência termina em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''} (${fmtBR(meta.endDate)}). Se houver interesse na prorrogação, o aditivo precisa ser tratado com antecedência.`,
+      tab: 'aditivos'
+    });
+  }
+  if (atrasadas.length) avisos.push({
+    cor: '#b91c1c',
+    txt: `${atrasadas.length} parcela${atrasadas.length !== 1 ? 's' : ''} com etapa atrasada.`,
+    tab: 'parcelas'
+  });
+  if (aguardando.length) avisos.push({
+    cor: '#b45309',
+    txt: `${aguardando.length} parcela${aguardando.length !== 1 ? 's' : ''} aguardando pagamento (${fmtCurrency(aguardando.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0))}).`,
+    tab: 'parcelas'
+  });
+  if (valorGlobal > 0 && totFaturado > valorGlobal + 0.01) avisos.push({
+    cor: '#b91c1c',
+    txt: 'O total faturado passa do valor global cadastrado. Confira se há aditivo de valor que não foi lançado.',
+    tab: 'aditivos'
+  });
+  if (!pdfStorage['contract_' + contractNumber]) avisos.push({
+    cor: '#94a3b8',
+    txt: 'PDF do contrato não anexado.',
+    tab: 'documentos'
+  });
+  if (!meta.fiscalPrimary && !meta.manager) avisos.push({
+    cor: '#94a3b8',
+    txt: 'Gestor e fiscal do contrato não cadastrados.',
+    tab: 'dados'
+  });
+  const documentos = [{
+    key: 'contract_' + contractNumber,
+    tipo: 'Contrato',
+    nome: `Contrato ${contractNumber}`,
+    data: meta.startDate
+  }, {
+    key: 'parceria_' + contractNumber,
+    tipo: 'Parceria',
+    nome: 'Contrato de Parceria',
+    opcional: true
+  }, {
+    key: 'anexo1_' + contractNumber,
+    tipo: 'Parceria',
+    nome: 'Anexo I',
+    opcional: true
+  }, ...additives.map(ta => ({
+    key: 'ta_' + ta.id,
+    alt: ta.pdfBase64,
+    tipo: 'Termo Aditivo',
+    nome: `Termo Aditivo ${ta.number}`,
+    data: ta.date
+  })), ...installments.map(c => ({
+    key: String(c.id),
+    tipo: 'Nota Fiscal',
+    nome: `NF ${c.nfNumber || 's/ nº'} · ${refDe(c)}`,
+    data: c.nfDate
+  }))].map(d => ({
+    ...d,
+    src: pdfStorage[d.key] || d.alt || null
+  })).filter(d => d.src || !d.opcional);
+  const qtdDocs = documentos.filter(d => d.src).length;
+  const eventos = [];
+  if (meta.endDate && !encerrado && vigFim > hoje) eventos.push({
+    data: meta.endDate,
+    cor: '#cbd5e1',
+    futuro: true,
+    titulo: 'Fim da vigência',
+    det: taVigencia ? `Definido pelo Termo Aditivo ${taVigencia.number}` : ''
+  });
+  if (meta.startDate) eventos.push({
+    data: meta.startDate,
+    cor: BLUE,
+    titulo: 'Início da vigência',
+    det: valorGlobal ? `Valor global ${fmtCurrency(valorGlobal)}` : ''
+  });
+  additives.forEach(ta => {
+    if (ta.date) eventos.push({
+      data: ta.date,
+      cor: '#6366f1',
+      titulo: `Termo Aditivo ${ta.number}`,
+      det: [ta.newEndDate && `Vigência prorrogada até ${fmtBR(ta.newEndDate)}`, ta.object].filter(Boolean).join(' · ')
+    });
+  });
+  installments.forEach(c => {
+    const v = parseBRL(c.billingValue) || 0;
+    if (c.nfDate) eventos.push({
+      data: c.nfDate,
+      cor: '#94a3b8',
+      titulo: `NF ${c.nfNumber || 's/ nº'} emitida — ${refDe(c)}`,
+      det: v ? fmtCurrency(v) : ''
+    });
+    if (c.paymentDate) eventos.push({
+      data: c.paymentDate,
+      cor: GREEN,
+      titulo: `Pagamento recebido — ${refDe(c)}`,
+      det: v ? fmtCurrency(v) : ''
+    });
+  });
+  if (meta.terminationDate) eventos.push({
+    data: meta.terminationDate,
+    cor: '#b91c1c',
+    titulo: 'Contrato encerrado',
+    det: [terminationReasonLabel(meta.terminationReason), meta.terminationNote].filter(Boolean).join(' · ')
+  });
+  eventos.sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const abas = [{
+    id: 'geral',
+    label: 'Visão geral'
+  }, {
+    id: 'dados',
+    label: 'Dados do contrato'
+  }, ...(meta.contractType === 'parceria' ? [{
+    id: 'parceria',
+    label: 'Parceria'
+  }] : []), {
+    id: 'aditivos',
+    label: 'Termos aditivos',
+    n: additives.length
+  }, {
+    id: 'parcelas',
+    label: 'Parcelas / NFs',
+    n: installments.length
+  }, ...(cronoVinculado ? [{
+    id: 'cronograma',
+    label: 'Cronograma'
+  }] : []), {
+    id: 'documentos',
+    label: 'Documentos',
+    n: qtdDocs
+  }, {
+    id: 'historico',
+    label: 'Histórico'
+  }];
   function handleEncerrar(reason, note) {
     onSaveEdit(contractNumber, {
       object: meta.object,
@@ -10197,7 +10360,10 @@ function ContractDetailView({
       background: BLUE
     }
   }, "Salvar Altera\xE7\xF5es")) : React.createElement(React.Fragment, null, React.createElement("button", {
-    onClick: () => setEditMode(true),
+    onClick: () => {
+      setEditMode(true);
+      setTab('dados');
+    },
     className: "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
   }, React.createElement(Edit2, {
     className: "w-3.5 h-3.5"
@@ -10293,7 +10459,203 @@ function ContractDetailView({
     className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 leading-none mb-1"
   }, "Valor Global"), React.createElement("p", {
     className: "text-xl font-black text-green-700 leading-none"
-  }, fmtCurrency(meta.globalValue))) : null), meta.contractType === 'parceria' && React.createElement("div", {
+  }, fmtCurrency(meta.globalValue))) : null)), React.createElement("div", {
+    className: "mb-5 overflow-x-auto"
+  }, React.createElement("div", {
+    className: "flex gap-1 border-b border-gray-200 min-w-max"
+  }, abas.map(a => {
+    const ativa = tab === a.id;
+    return React.createElement("button", {
+      key: a.id,
+      onClick: () => setTab(a.id),
+      className: `px-3.5 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${ativa ? '' : 'border-transparent text-gray-500 hover:text-gray-800'}`,
+      style: ativa ? {
+        color: BLUE,
+        borderColor: BLUE
+      } : {}
+    }, a.label, a.n > 0 && React.createElement("span", {
+      className: "ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500"
+    }, a.n));
+  }))), tab === 'geral' && React.createElement("div", {
+    className: "space-y-4 mb-8"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 lg:grid-cols-4 gap-3"
+  }, [{
+    label: 'Valor global',
+    valor: valorGlobal ? fmtCurrency(valorGlobal) : '—',
+    sub: additives.length ? `${additives.length} termo${additives.length !== 1 ? 's' : ''} aditivo${additives.length !== 1 ? 's' : ''}` : 'Sem termos aditivos'
+  }, {
+    label: 'Faturado',
+    valor: fmtCurrency(totFaturado),
+    bar: pctFaturado,
+    sub: pctFaturado != null ? `${pctFaturado.toFixed(1).replace('.', ',')}% do valor global` : `${installments.length} parcela${installments.length !== 1 ? 's' : ''}`
+  }, {
+    label: 'Recebido',
+    valor: fmtCurrency(totRecebido),
+    sub: `${pagas.length} de ${installments.length} parcela${installments.length !== 1 ? 's' : ''} paga${pagas.length !== 1 ? 's' : ''}`
+  }, {
+    label: 'Saldo a faturar',
+    valor: valorGlobal ? fmtCurrency(Math.max(0, valorGlobal - totFaturado)) : '—',
+    sub: emAndamento.length ? `${emAndamento.length} parcela${emAndamento.length !== 1 ? 's' : ''} em andamento` : 'Nenhuma parcela em andamento'
+  }].map(k => React.createElement("div", {
+    key: k.label,
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
+  }, React.createElement("p", {
+    className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1"
+  }, k.label), React.createElement("p", {
+    className: "text-lg font-black leading-tight",
+    style: {
+      color: BLUE
+    }
+  }, k.valor), k.bar != null && React.createElement("div", {
+    className: "h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2"
+  }, React.createElement("div", {
+    className: "h-full rounded-full",
+    style: {
+      width: `${k.bar}%`,
+      background: GREEN
+    }
+  })), React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-1.5 leading-snug"
+  }, k.sub)))), React.createElement("div", {
+    className: "grid grid-cols-1 lg:grid-cols-2 gap-4"
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-3"
+  }, React.createElement(Calendar, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Vig\xEAncia")), vigIni || vigFim ? React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "flex justify-between text-xs text-gray-500 mb-1.5"
+  }, React.createElement("span", null, fmtBR(meta.startDate)), React.createElement("span", null, fmtBR(meta.endDate))), pctVigencia != null && React.createElement("div", {
+    className: "h-2 bg-gray-100 rounded-full overflow-hidden"
+  }, React.createElement("div", {
+    className: "h-full rounded-full",
+    style: {
+      width: `${pctVigencia}%`,
+      background: corVig
+    }
+  })), React.createElement("p", {
+    className: "text-sm font-bold mt-3",
+    style: {
+      color: corVig
+    }
+  }, textoVig), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-1"
+  }, "Vig\xEAncia atual definida ", taVigencia ? `pelo Termo Aditivo ${taVigencia.number}` : 'pelo contrato original')) : React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Datas de vig\xEAncia n\xE3o cadastradas.", ' ', React.createElement("button", {
+    onClick: () => {
+      setEditMode(true);
+      setTab('dados');
+    },
+    className: "font-semibold underline",
+    style: {
+      color: BLUE
+    }
+  }, "Cadastrar"))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-3"
+  }, React.createElement(AlertTriangle, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Pontos de aten\xE7\xE3o")), avisos.length === 0 ? React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Nada pendente neste contrato.") : React.createElement("ul", {
+    className: "space-y-2.5"
+  }, avisos.map((a, i) => React.createElement("li", {
+    key: i,
+    className: "flex items-start gap-2.5 text-xs text-gray-700 leading-relaxed"
+  }, React.createElement("span", {
+    className: "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
+    style: {
+      background: a.cor
+    }
+  }), React.createElement("span", {
+    className: "flex-1"
+  }, a.txt), a.tab && React.createElement("button", {
+    onClick: () => setTab(a.tab),
+    className: "text-[11px] font-bold flex-shrink-0 hover:underline",
+    style: {
+      color: BLUE
+    }
+  }, "Abrir"))))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-3"
+  }, React.createElement(Layers, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold flex-1",
+    style: {
+      color: BLUE
+    }
+  }, "\xDAltimas parcelas"), installments.length > 0 && React.createElement("button", {
+    onClick: () => setTab('parcelas'),
+    className: "text-[11px] font-bold hover:underline",
+    style: {
+      color: BLUE
+    }
+  }, "Ver todas")), installments.length === 0 ? React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Nenhuma parcela cadastrada.") : React.createElement("div", {
+    className: "divide-y divide-gray-100"
+  }, installments.slice(-4).reverse().map(c => React.createElement("div", {
+    key: c.id,
+    className: "flex items-center gap-3 py-2"
+  }, React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("p", {
+    className: "text-sm font-semibold text-gray-800 truncate"
+  }, refDe(c)), React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, "NF ", c.nfNumber || 's/ nº', " \xB7 ", fmtCurrency(parseBRL(c.billingValue) || 0))), React.createElement(Badge, {
+    status: contractStatus(c)
+  }))))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-3"
+  }, React.createElement(Users, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Respons\xE1veis")), React.createElement("div", {
+    className: "space-y-2.5"
+  }, [['Órgão contratante', meta.unit], ['Gestor', meta.manager], ['Fiscal titular', meta.fiscalPrimary], ['Fiscal substituto', meta.fiscalSubstitute]].map(([rot, val]) => React.createElement("div", {
+    key: rot,
+    className: "flex items-baseline gap-3"
+  }, React.createElement("p", {
+    className: "text-[9px] font-bold uppercase tracking-widest text-gray-400 w-28 flex-shrink-0"
+  }, rot), React.createElement("p", {
+    className: `text-sm ${val ? 'text-gray-700' : 'text-gray-300'}`
+  }, val || 'Não informado'))))))), tab === 'parceria' && meta.contractType === 'parceria' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm mb-5 overflow-hidden pt-5"
+  }, meta.contractType === 'parceria' && React.createElement("div", {
     className: "mx-6 mb-4 rounded-2xl border-2 p-4 space-y-3",
     style: {
       borderColor: '#86efac',
@@ -10430,7 +10792,9 @@ function ContractDetailView({
     className: "px-2 py-1.5 text-center text-gray-500"
   }, it.qtde), React.createElement("td", {
     className: "px-2 py-1.5 text-right font-semibold"
-  }, fmtCurrencyShort(parseFloat(it.valorTotal) || 0))))))))))), editMode ? React.createElement("div", {
+  }, fmtCurrencyShort(parseFloat(it.valorTotal) || 0)))))))))))), tab === 'dados' && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm mb-5 overflow-hidden"
+  }, editMode ? React.createElement("div", {
     className: "p-6 space-y-5"
   }, React.createElement("div", {
     className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -10669,7 +11033,7 @@ function ContractDetailView({
     className: "text-sm text-gray-700 flex items-center gap-1.5"
   }, React.createElement(Users, {
     className: "w-3 h-3 text-gray-400 flex-shrink-0"
-  }), meta.fiscalSubstitute))))), React.createElement("div", {
+  }), meta.fiscalSubstitute))))), tab === 'aditivos' && React.createElement("div", {
     className: "mb-8"
   }, React.createElement("div", {
     className: "flex items-center gap-2 mb-4"
@@ -10912,7 +11276,7 @@ function ContractDetailView({
     className: "p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
   }, React.createElement(Trash2, {
     className: "w-4 h-4"
-  }))))))), React.createElement("div", {
+  }))))))), tab === 'parcelas' && React.createElement("div", {
     className: "mb-8"
   }, React.createElement("div", {
     className: "flex items-center gap-2 mb-4"
@@ -11716,7 +12080,97 @@ function ContractDetailView({
     }, React.createElement(Trash2, {
       className: "w-3.5 h-3.5"
     }), " Excluir esta parcela"))));
-  }))), gdocInst && React.createElement(GdocEmitModal, {
+  }))), tab === 'documentos' && React.createElement("div", {
+    className: "mb-8"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-4"
+  }, React.createElement(Paperclip, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Documentos do contrato"), React.createElement("span", {
+    className: "text-xs font-bold bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full"
+  }, qtdDocs), React.createElement("div", {
+    className: "flex-1 h-px bg-gray-200"
+  })), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100"
+  }, documentos.map(d => React.createElement("div", {
+    key: d.key,
+    className: "flex items-center gap-3 px-4 py-3"
+  }, React.createElement("div", {
+    className: "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+    style: {
+      background: '#F4F7FB'
+    }
+  }, React.createElement(FileText, {
+    className: "w-4 h-4",
+    style: {
+      color: d.src ? BLUE : '#cbd5e1'
+    }
+  })), React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("p", {
+    className: `text-sm font-semibold truncate ${d.src ? 'text-gray-800' : 'text-gray-400'}`
+  }, d.nome), React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, d.tipo, d.data ? ` · ${fmtBR(d.data)}` : '')), d.src ? React.createElement("button", {
+    onClick: () => setPdfViewer({
+      open: true,
+      src: d.src,
+      title: `${d.nome} — ${contractNumber}`
+    }),
+    className: "flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors flex-shrink-0"
+  }, React.createElement(Eye, {
+    className: "w-3.5 h-3.5"
+  }), " Ver") : React.createElement("span", {
+    className: "text-[10px] font-semibold text-gray-400 px-2 py-0.5 rounded-full bg-gray-100 flex-shrink-0"
+  }, "N\xE3o anexado")))), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-2"
+  }, "Para anexar, use a aba de origem: Dados do contrato, Termos aditivos ou Parcelas / NFs.")), tab === 'historico' && React.createElement("div", {
+    className: "mb-8"
+  }, React.createElement("div", {
+    className: "flex items-center gap-2 mb-4"
+  }, React.createElement(Clock, {
+    className: "w-4 h-4",
+    style: {
+      color: BLUE
+    }
+  }), React.createElement("h3", {
+    className: "text-sm font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Linha do tempo"), React.createElement("div", {
+    className: "flex-1 h-px bg-gray-200"
+  })), eventos.length === 0 ? React.createElement("div", {
+    className: "text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-2xl"
+  }, "Nenhum evento com data registrada para este contrato.") : React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+  }, React.createElement("ol", {
+    className: "border-l-2 border-gray-100 ml-1.5 space-y-4"
+  }, eventos.map((ev, i) => React.createElement("li", {
+    key: i,
+    className: "pl-5 relative"
+  }, React.createElement("span", {
+    className: "absolute -left-[7px] top-1 w-3 h-3 rounded-full ring-2 ring-white",
+    style: {
+      background: ev.cor
+    }
+  }), React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-wider text-gray-400"
+  }, fmtBR(ev.data), ev.futuro ? ' · previsto' : ''), React.createElement("p", {
+    className: "text-sm font-semibold text-gray-800"
+  }, ev.titulo), ev.det && React.createElement("p", {
+    className: "text-xs text-gray-500 leading-relaxed"
+  }, ev.det))))), React.createElement("p", {
+    className: "text-[11px] text-gray-400 mt-2"
+  }, "Montada a partir das datas j\xE1 registradas. Altera\xE7\xF5es de cadastro (quem mudou o qu\xEA) ainda n\xE3o ficam guardadas.")), gdocInst && React.createElement(GdocEmitModal, {
     inst: gdocInst,
     meta: contractMeta[contractNumber] || {},
     pdfBase64: pdfStorage[String(gdocInst.id)] || null,
@@ -11731,7 +12185,7 @@ function ContractDetailView({
       setGdocInst(null);
     },
     addToast: addToast
-  }), cronoVinculado && (() => {
+  }), tab === 'cronograma' && cronoVinculado && (() => {
     const aliq = cronSomaAliq(cronoVinculado.params?.tributos || CRON_TRIBUTOS_PADRAO);
     const pctBD = cronoVinculado.params?.pctBD ?? 15;
     const base = cronoVinculado.params?.base || 'LIQUIDO';
