@@ -18,7 +18,7 @@ const ORIGENS = [
   /^http:\/\/localhost(:\d+)?$/,
 ];
 const { chamarGemini } = require('../lib/gemini');
-const { validarPasse, cifrar, decifrar, buscar, resumo } = require('../lib/baseIA');
+const { validarPasse, cifrar, decifrar, buscar, resumo, adicionarExtra } = require('../lib/baseIA');
 const MAX_TOKENS = 16000;
 
 function origemPermitida(req) {
@@ -42,6 +42,17 @@ module.exports = async (req, res) => {
     try { s = validarPasse(req.body.passe); } catch {}
     if (!s || s.s !== 'main') { res.status(401).json({ error: { message: 'Sessão sem acesso à base.' } }); return; }
     try { res.status(200).json(await resumo()); }
+    catch (err) { res.status(500).json({ error: { message: err.message } }); }
+    return;
+  }
+  // Modelo anexado pelo usuário: o texto (extraído no navegador) entra na base privada
+  if (req.body && req.body.acao === 'adicionar_base') {
+    let s = null;
+    try { s = validarPasse(req.body.passe); } catch {}
+    if (!s || s.s !== 'main') { res.status(401).json({ error: { message: 'Sessão sem acesso à base: saia e entre de novo no sistema.' } }); return; }
+    const { nome, descricao, texto } = req.body;
+    if (!nome || typeof texto !== 'string' || texto.trim().length < 40) { res.status(400).json({ error: { message: 'Arquivo sem texto legível.' } }); return; }
+    try { res.status(200).json(await adicionarExtra({ nome, descricao, texto: texto.slice(0, 1500000), usuario: s.u })); }
     catch (err) { res.status(500).json({ error: { message: err.message } }); }
     return;
   }

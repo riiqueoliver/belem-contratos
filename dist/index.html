@@ -25874,6 +25874,143 @@ function iaGravarConversaAtiva(u, id) {
     id ? localStorage.setItem(iaChaveConversa(u), id) : localStorage.removeItem(iaChaveConversa(u));
   } catch {}
 }
+const IA_MODELO_TIPOS = '.pdf,.docx,.txt,.md';
+async function iaTextoDoArquivo(arquivo) {
+  const ext = (arquivo.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+  if (ext === '.txt' || ext === '.md') return arquivo.text();
+  if (ext === '.pdf') {
+    if (!window.pdfjsLib) throw new Error('Leitor de PDF ainda carregando. Tente de novo em alguns segundos.');
+    const pdf = await pdfjsLib.getDocument({
+      data: await arquivo.arrayBuffer()
+    }).promise;
+    let texto = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const c = await (await pdf.getPage(i)).getTextContent();
+      texto += c.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join('') + '\n\n';
+    }
+    return texto;
+  }
+  if (ext === '.docx') {
+    const JSZip = await iaJSZip();
+    const z = await JSZip.loadAsync(await arquivo.arrayBuffer());
+    const partes = Object.keys(z.files).filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n)).sort();
+    const xmls = await Promise.all(partes.map(n => z.file(n).async('string')));
+    return xmls.map(x => x.replace(/<w:tab\/>/g, '\t').replace(/<\/w:tc>/g, ' | ').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")).join('\n');
+  }
+  throw new Error('Formato não suportado. Use PDF, Word (.docx) ou texto (.txt).');
+}
+function IaAnexarModelo({
+  usarAgoraFixo,
+  onPronto,
+  onClose,
+  addToast
+}) {
+  const [arquivo, setArquivo] = useState(null);
+  const [descricao, setDescr] = useState('');
+  const [usarAgora, setUsar] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+  async function confirmar() {
+    if (!arquivo) return;
+    setEnviando(true);
+    setErro('');
+    try {
+      const texto = (await iaTextoDoArquivo(arquivo)).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (texto.replace(/\s/g, '').length < 40) throw new Error('Não encontrei texto neste arquivo. Se for um PDF digitalizado (imagem), envie a versão em Word ou PDF com texto.');
+      const nome = arquivo.name.replace(/\.[^.]+$/, '');
+      let naBase = false;
+      if (iaBaseDisponivel()) {
+        const r = await fetch('/api/ia', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            acao: 'adicionar_base',
+            passe: iaLerPasse(),
+            nome,
+            descricao: descricao.trim(),
+            texto
+          })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error?.message || 'Não foi possível guardar na base.');
+        naBase = true;
+      }
+      addToast?.(naBase ? `Modelo "${nome}" guardado na base de conhecimento.` : `Modelo "${nome}" anexado. A base não está disponível nesta sessão: saia e entre de novo para guardá-lo.`);
+      if (usarAgoraFixo || usarAgora) onPronto?.({
+        nome,
+        texto,
+        descricao: descricao.trim()
+      });
+      onClose();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+  return React.createElement("div", {
+    className: "fixed inset-0 z-[90] bg-black/40 flex items-center justify-center p-4",
+    onClick: () => !enviando && onClose()
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", null, React.createElement("h3", {
+    className: "text-base font-black text-gray-900"
+  }, "Anexar arquivo modelo"), React.createElement("p", {
+    className: "text-xs text-gray-500 mt-1"
+  }, "O assistente usa o modelo como base de estrutura e linguagem. Ele tamb\xE9m passa a fazer parte da base de conhecimento do NGCC.")), React.createElement("label", {
+    className: "flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-3 py-3 hover:border-teal-400 hover:bg-teal-50 transition-colors"
+  }, React.createElement(Paperclip, {
+    className: "w-4 h-4 text-gray-400 flex-shrink-0"
+  }), React.createElement("span", {
+    className: `text-sm truncate ${arquivo ? 'text-gray-800 font-semibold' : 'text-gray-500'}`
+  }, arquivo ? arquivo.name : 'Escolher arquivo (PDF, Word ou texto)'), React.createElement("input", {
+    type: "file",
+    accept: IA_MODELO_TIPOS,
+    className: "hidden",
+    onChange: e => {
+      setArquivo(e.target.files?.[0] || null);
+      setErro('');
+    }
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-xs font-semibold text-gray-600 mb-1"
+  }, "Para que serve este modelo? ", React.createElement("span", {
+    className: "font-normal text-gray-400"
+  }, "(opcional)")), React.createElement("textarea", {
+    rows: 2,
+    value: descricao,
+    onChange: e => setDescr(e.target.value),
+    placeholder: "Ex.: modelo de ETP para contrata\xE7\xE3o de software como servi\xE7o",
+    className: "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-400 resize-none"
+  })), !usarAgoraFixo && React.createElement("label", {
+    className: "flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: usarAgora,
+    onChange: e => setUsar(e.target.checked),
+    className: "w-4 h-4",
+    style: {
+      accentColor: '#0D9488'
+    }
+  }), "Usar agora na conversa"), erro && React.createElement("p", {
+    className: "text-xs text-red-600"
+  }, erro), React.createElement("div", {
+    className: "flex justify-end gap-2"
+  }, React.createElement("button", {
+    onClick: onClose,
+    disabled: enviando,
+    className: "text-sm font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50"
+  }, "Cancelar"), React.createElement("button", {
+    onClick: confirmar,
+    disabled: !arquivo || enviando,
+    className: "text-sm font-bold px-4 py-2 rounded-xl text-white disabled:opacity-40",
+    style: {
+      background: '#0D9488'
+    }
+  }, enviando ? 'Lendo e guardando…' : 'Anexar'))));
+}
 function AssistenteChat({
   currentUser,
   dados,
@@ -25881,13 +26018,23 @@ function AssistenteChat({
   compacto,
   addToast,
   conversaId,
-  setConversaId
+  setConversaId,
+  modeloInicial,
+  onModeloRecebido
 }) {
   const [mensagens, setMensagens] = useState([]);
   const [entrada, setEntrada] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [status, setStatus] = useState('');
   const [ouvindo, setOuvindo] = useState(false);
+  const [modelo, setModelo] = useState(null);
+  const [anexando, setAnexando] = useState(false);
+  useEffect(() => {
+    if (modeloInicial) {
+      setModelo(modeloInicial);
+      onModeloRecebido?.();
+    }
+  }, [modeloInicial]);
   const fimRef = useRef(null);
   const dadosRef = useRef(dados);
   const reconRef = useRef(null);
@@ -25954,7 +26101,13 @@ function AssistenteChat({
   async function salvarMensagens(id, lista) {
     const enxuta = lista.slice(-80).map(m => ({
       ...m,
-      texto: String(m.texto || '').slice(0, 30000)
+      texto: String(m.texto || '').slice(0, 30000),
+      ...(m.modelo ? {
+        modelo: {
+          ...m.modelo,
+          texto: String(m.modelo.texto || '').slice(0, 20000)
+        }
+      } : {})
     }));
     await db.collection(IA_COL.conversas).doc(id).set({
       mensagens: enxuta,
@@ -26009,8 +26162,17 @@ function AssistenteChat({
       role: 'user',
       texto,
       em: Date.now(),
-      pagina: pagina || ''
+      pagina: pagina || '',
+      ...(modelo ? {
+        modelo: {
+          nome: modelo.nome,
+          descricao: modelo.descricao || '',
+          texto: modelo.texto.slice(0, 60000)
+        }
+      } : {})
     };
+    const comModelo = !!modelo;
+    setModelo(null);
     let lista = [...mensagens, msgUsuario];
     setMensagens(lista);
     try {
@@ -26038,6 +26200,7 @@ function AssistenteChat({
       const historico = [];
       for (const m of lista.slice(-24)) {
         let t = m.texto || '';
+        if (m.modelo?.texto) t += `\n\n[Modelo anexado pelo usuário: "${m.modelo.nome}"${m.modelo.descricao ? ` (${m.modelo.descricao})` : ''}. ` + 'Use-o como base de estrutura, seções, linguagem e formatação para esta demanda, adaptando o conteúdo ao caso; não copie dados que não se aplicam.]\n' + '"""\n' + m.modelo.texto + '\n"""';
         if (m.docs?.length) t += '\n\n[Documentos salvos nesta resposta: ' + m.docs.map(x => `${x.titulo} (id ${x.id})`).join('; ') + ']';
         if (m.acoes?.length) t += '\n\n[Gravações propostas: ' + m.acoes.map(a => `${a.resumo} → ${a.status}`).join('; ') + ']';
         if (!t.trim()) continue;
@@ -26056,7 +26219,7 @@ function AssistenteChat({
         acoes: [],
         aprendizados: []
       };
-      const qualidade = IA_DOC_TECNICO.test(texto) ? 'alta' : 'rapida';
+      const qualidade = comModelo || IA_DOC_TECNICO.test(texto) ? 'alta' : 'rapida';
       const msgs = historico;
       let textoFinal = '';
       for (let passo = 0; passo < IA_MAX_PASSOS; passo++) {
@@ -26175,7 +26338,11 @@ function AssistenteChat({
     style: {
       background: BLUE
     }
-  }, m.texto)) : React.createElement("div", {
+  }, m.modelo && React.createElement("span", {
+    className: "flex items-center gap-1.5 text-[11px] font-semibold opacity-80 mb-1"
+  }, React.createElement(Paperclip, {
+    className: "w-3 h-3"
+  }), " Modelo: ", m.modelo.nome), m.texto)) : React.createElement("div", {
     key: idx,
     className: "flex gap-2 items-start"
   }, React.createElement(IaAvatar, {
@@ -26214,9 +26381,32 @@ function AssistenteChat({
     ref: fimRef
   })), React.createElement("div", {
     className: `border-t border-gray-100 bg-white ${compacto ? 'p-2' : 'px-6 py-3'}`
-  }, React.createElement("div", {
+  }, modelo && React.createElement("div", {
+    className: "flex items-center gap-2 mb-2 w-fit max-w-full rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs text-teal-800"
+  }, React.createElement(Paperclip, {
+    className: "w-3.5 h-3.5 flex-shrink-0"
+  }), React.createElement("span", {
+    className: "truncate"
+  }, "Modelo para esta demanda: ", React.createElement("b", null, modelo.nome)), React.createElement("button", {
+    onClick: () => setModelo(null),
+    title: "Remover modelo",
+    className: "text-teal-600 hover:text-red-500 flex-shrink-0"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5"
+  }))), anexando && React.createElement(IaAnexarModelo, {
+    usarAgoraFixo: true,
+    addToast: addToast,
+    onPronto: setModelo,
+    onClose: () => setAnexando(false)
+  }), React.createElement("div", {
     className: "flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-2 py-1.5 focus-within:border-teal-400 focus-within:bg-white transition-colors"
-  }, React.createElement("textarea", {
+  }, React.createElement("button", {
+    onClick: () => setAnexando(true),
+    title: "Anexar arquivo modelo",
+    className: "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-gray-500 hover:bg-gray-200 transition-colors"
+  }, React.createElement(Paperclip, {
+    className: "w-4 h-4"
+  })), React.createElement("textarea", {
     ref: textoRef,
     value: entrada,
     onChange: ev => setEntrada(ev.target.value),
@@ -26295,6 +26485,8 @@ function AssistentePage({
   const [filtroTipo, setFiltroTipo] = useState('');
   const [buscaDoc, setBuscaDoc] = useState('');
   const [visao, setVisao] = useState('meus');
+  const [anexandoModelo, setAnexandoModelo] = useState(false);
+  const [modeloPendente, setModeloPendente] = useState(null);
   const [recebidos, setRecebidos] = useState([]);
   const setConversaId = id => {
     setConversaIdS(id);
@@ -26426,18 +26618,37 @@ function AssistentePage({
     pagina: `Módulo ${IA_NOME}`,
     addToast: addToast,
     conversaId: conversaId,
-    setConversaId: setConversaId
+    setConversaId: setConversaId,
+    modeloInicial: modeloPendente,
+    onModeloRecebido: () => setModeloPendente(null)
   })))), aba === 'documentos' && React.createElement("div", {
     className: "flex-1 overflow-y-auto px-6 py-5"
   }, React.createElement("div", {
     className: "max-w-5xl mx-auto"
+  }, anexandoModelo && React.createElement(IaAnexarModelo, {
+    addToast: addToast,
+    onClose: () => setAnexandoModelo(false),
+    onPronto: m => {
+      setModeloPendente(m);
+      setAba('conversa');
+    }
+  }), React.createElement("div", {
+    className: "flex items-center justify-between gap-3 flex-wrap mb-3"
   }, React.createElement("div", {
-    className: "flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit mb-3"
+    className: "flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit"
   }, [['meus', 'Meus documentos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`]].map(([k, r]) => React.createElement("button", {
     key: k,
     onClick: () => setVisao(k),
     className: `px-3 py-1.5 rounded-md ${visao === k ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`
-  }, r, k === 'recebidos' && naoLidosRecebidos > 0 ? ' •' : ''))), visao === 'recebidos' ? React.createElement("div", {
+  }, r, k === 'recebidos' && naoLidosRecebidos > 0 ? ' •' : ''))), React.createElement("button", {
+    onClick: () => setAnexandoModelo(true),
+    className: "flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white hover:opacity-90",
+    style: {
+      background: '#0D9488'
+    }
+  }, React.createElement(Paperclip, {
+    className: "w-3.5 h-3.5"
+  }), " Anexar arquivo modelo")), visao === 'recebidos' ? React.createElement("div", {
     className: "space-y-3"
   }, recebidos.length === 0 && React.createElement("p", {
     className: "text-sm text-gray-400 text-center py-10"
