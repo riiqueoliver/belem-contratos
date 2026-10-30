@@ -17791,6 +17791,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
       documentos:   COL('ia_documentos'),
       memoria:      COL('ia_memoria'),
       conhecimento: COL('ia_conhecimento'),
+      envios:       COL('ia_envios'),      // documentos enviados de um usuário para outro
     };
     const IA_TIPOS_DOC = { gdoc:'GDoc', memorando:'Memorando', despacho:'Despacho', email:'E-mail', oficio:'Ofício',
                            dfd:'DFD', etp:'ETP', tr:'TR', extrato:'Extrato DOM', outro:'Documento' };
@@ -18369,9 +18370,50 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       return <div className={`ia-md ${className}`} dangerouslySetInnerHTML={{ __html: iaMdHtml(md) }} />;
     }
 
-    function IaDocCard({ doc, abertoInicial, addToast }) {
+    function IaDocCard({ doc, abertoInicial, addToast, currentUser, usuarios = [] }) {
       const [aberto, setAberto] = useState(!!abertoInicial);
       const [conteudo, setConteudo] = useState(null);
+      const [enviando, setEnviando] = useState(false);     // painel de envio aberto
+      const [destino, setDestino] = useState('');
+      const [mensagem, setMensagem] = useState('');
+      const [ocupado, setOcupado] = useState(false);
+      const [excluido, setExcluido] = useState(false);
+      const podeExcluir = currentUser && (currentUser.role === 'admin' || !doc.criadoPor || doc.criadoPor === currentUser.username);
+      const opcoes = usuarios
+        .filter(u => u.username && u.username !== currentUser?.username && !ARCANJO_ONLY.has(u.username))
+        .filter((u, i, arr) => arr.findIndex(x => x.username === u.username) === i)
+        .sort((a, b) => String(a.nome || a.name || a.username).localeCompare(String(b.nome || b.name || b.username)));
+
+      async function enviar() {
+        const u = opcoes.find(x => x.username === destino);
+        if (!u) return;
+        setOcupado(true);
+        try {
+          await db.collection(IA_COL.envios).add({
+            docId: doc.id, titulo: doc.titulo || 'Documento', tipo: doc.tipo || 'outro', numero: doc.numero || '',
+            de: currentUser.username, deNome: currentUser.name || currentUser.username,
+            para: u.username, paraNome: u.name || u.nome || u.username,
+            mensagem: mensagem.trim(), lido: false,
+            criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          addToast?.(`✅ Documento enviado para ${u.name || u.username}.`);
+          setEnviando(false); setDestino(''); setMensagem('');
+        } catch (e) { addToast?.('❌ Não foi possível enviar: ' + e.message); }
+        setOcupado(false);
+      }
+      async function excluir() {
+        if (!confirm(`Excluir o documento "${doc.titulo}"?\n\nEle some da lista de documentos e de quem o recebeu. Essa ação não pode ser desfeita.`)) return;
+        try {
+          const envios = await db.collection(IA_COL.envios).where('docId', '==', doc.id).get();
+          const lote = db.batch();
+          envios.forEach(e => lote.delete(e.ref));
+          lote.delete(db.collection(IA_COL.documentos).doc(doc.id));
+          await lote.commit();
+          setExcluido(true);
+          addToast?.('🗑️ Documento excluído.');
+        } catch (e) { addToast?.('❌ Não foi possível excluir: ' + e.message); }
+      }
+      if (excluido) return <p className="mt-2 text-[11px] text-slate-400 italic">Documento excluído.</p>;
       useEffect(() => {
         if (!aberto || conteudo !== null) return;
         db.collection(IA_COL.documentos).doc(doc.id).get()
@@ -18396,7 +18438,34 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                     className="text-[11px] font-semibold text-teal-700 hover:underline">Copiar</button>
             <button onClick={async () => { try { await iaBaixarWord(doc.titulo, await obter()); } catch (e) { addToast?.('❌ ' + e.message); } }}
                     className="text-[11px] font-semibold text-teal-700 hover:underline">Baixar Word</button>
+            {currentUser && (
+              <button onClick={() => setEnviando(v => !v)} className="text-[11px] font-semibold text-teal-700 hover:underline">Enviar</button>
+            )}
+            {podeExcluir && (
+              <button onClick={excluir} title="Excluir documento" className="text-[11px] font-semibold text-red-600 hover:underline">Excluir</button>
+            )}
           </div>
+          {enviando && (
+            <div className="px-3 py-2.5 border-t border-teal-100 bg-white flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-slate-600">Enviar para</span>
+                <select value={destino} onChange={e => setDestino(e.target.value)}
+                        className="flex-1 min-w-[180px] px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
+                  <option value="">Escolha o usuário…</option>
+                  {opcoes.map(u => <option key={u.username} value={u.username}>{u.name || u.nome || u.username}</option>)}
+                </select>
+              </div>
+              <textarea value={mensagem} onChange={e => setMensagem(e.target.value)} rows={2} placeholder="Mensagem (opcional)"
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs resize-none outline-none focus:border-teal-400" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEnviando(false)} className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200">Cancelar</button>
+                <button onClick={enviar} disabled={!destino || ocupado}
+                        className="px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: '#0D9488' }}>
+                  {ocupado ? 'Enviando…' : 'Enviar documento'}
+                </button>
+              </div>
+            </div>
+          )}
           {aberto && (
             <div className="px-4 py-3 max-h-[480px] overflow-y-auto border-t border-teal-100">
               {conteudo === null ? <p className="text-xs text-gray-400">Carregando…</p> : <IaMarkdown md={conteudo} className="ia-doc" />}
@@ -18635,7 +18704,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   <div className={`rounded-2xl rounded-tl-md px-3.5 py-2 text-sm ${m.erro ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-white text-gray-800 border border-gray-100 shadow-sm'}`}>
                     <IaMarkdown md={m.texto} />
                   </div>
-                  {(m.docs || []).map(d => <IaDocCard key={d.id} doc={d} abertoInicial={idx === ultimoIdxIA && !compacto} addToast={addToast} />)}
+                  {(m.docs || []).map(d => <IaDocCard key={d.id} doc={{ ...d, criadoPor: d.criadoPor || currentUser.username }} abertoInicial={idx === ultimoIdxIA && !compacto}
+                                                      addToast={addToast} currentUser={currentUser} usuarios={dados.users || []} />)}
                   {(m.acoes || []).map(a => <IaAcaoCard key={a.id} acao={a} onDecidir={(ac, ok) => decidirAcao(idx, ac, ok)} />)}
                   {m.aprendizados?.length > 0 && (
                     <p className="mt-1 text-[10px] text-teal-700">Aprendi: {m.aprendizados.join(' · ')}</p>
@@ -18690,12 +18760,27 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [baseQtd, setBaseQtd]       = useState(null);
       const [filtroTipo, setFiltroTipo] = useState('');
       const [buscaDoc, setBuscaDoc]     = useState('');
+      const [visao, setVisao]           = useState('todos');    // todos | recebidos | meus
+      const [recebidos, setRecebidos]   = useState([]);
       const setConversaId = id => { setConversaIdS(id); iaGravarConversaAtiva(currentUser.username, id); };
 
       useEffect(() => db.collection(IA_COL.conversas).where('usuario', '==', currentUser.username).onSnapshot(snap => {
         setConversas(snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (b.atualizadoEm?.seconds || 0) - (a.atualizadoEm?.seconds || 0)));
       }, () => {}), []);
+      useEffect(() => db.collection(IA_COL.envios).where('para', '==', currentUser.username).onSnapshot(s => {
+        setRecebidos(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0)));
+      }, () => {}), []);
+      // Ao abrir a caixa de recebidos, marca tudo como lido
+      useEffect(() => {
+        if (aba !== 'documentos' || visao !== 'recebidos') return;
+        const naoLidos = recebidos.filter(r => !r.lido);
+        if (!naoLidos.length) return;
+        const lote = db.batch();
+        naoLidos.forEach(r => lote.update(db.collection(IA_COL.envios).doc(r.id), { lido: true }));
+        lote.commit().catch(() => {});
+      }, [aba, visao, recebidos]);
+      const naoLidosRecebidos = recebidos.filter(r => !r.lido).length;
       useEffect(() => {
         if (aba === 'documentos') return db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).onSnapshot(s => setDocumentos(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
         if (aba === 'memoria') {
@@ -18708,6 +18793,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       }, [aba]);
 
       const docsFiltrados = documentos
+        .filter(d => visao !== 'meus' || d.criadoPor === currentUser.username)
         .filter(d => !filtroTipo || d.tipo === filtroTipo)
         .filter(d => { const t = iaNorm(buscaDoc).split(/\s+/).filter(Boolean); const s = iaNorm(`${d.titulo} ${d.numero} ${d.contrato} ${d.criadoPorNome}`); return t.every(x => s.includes(x)); });
 
@@ -18720,9 +18806,14 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               <p className="text-xs text-gray-500">Agente de IA do NGCC · documentos, consultas, vencimentos e gravações no sistema</p>
             </div>
             <div className="flex rounded-xl bg-gray-100 p-1 text-xs font-bold">
-              {[['conversa', 'Conversa'], ['documentos', 'Documentos gerados'], ['memoria', 'Memória e base']].map(([k, r]) => (
+              {[['conversa', 'Conversa'], ['documentos', 'Documentos'], ['memoria', 'Memória e base']].map(([k, r]) => (
                 <button key={k} onClick={() => setAba(k)}
-                        className={`px-3 py-1.5 rounded-lg transition-colors ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}>{r}</button>
+                        className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}>
+                  {r}
+                  {k === 'documentos' && naoLidosRecebidos > 0 && (
+                    <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: '#0D9488' }}>{naoLidosRecebidos}</span>
+                  )}
+                </button>
               ))}
             </div>
           </div>
@@ -18767,6 +18858,29 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           {aba === 'documentos' && (
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="max-w-5xl mx-auto">
+                <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit mb-3">
+                  {[['todos', 'Todos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`], ['meus', 'Meus']].map(([k, r]) => (
+                    <button key={k} onClick={() => setVisao(k)}
+                            className={`px-3 py-1.5 rounded-md ${visao === k ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
+                      {r}{k === 'recebidos' && naoLidosRecebidos > 0 ? ' •' : ''}
+                    </button>
+                  ))}
+                </div>
+                {visao === 'recebidos' ? (
+                  <div className="space-y-3">
+                    {recebidos.length === 0 && <p className="text-sm text-gray-400 text-center py-10">Nenhum documento recebido.</p>}
+                    {recebidos.map(r => (
+                      <div key={r.id}>
+                        <p className="text-[11px] text-slate-500 px-1">
+                          <b className="text-slate-700">{r.deNome || r.de}</b> enviou em {iaDataCurta(r.criadoEm)}{!r.lido && <span className="ml-1.5 font-bold" style={{ color: '#0D9488' }}>· novo</span>}
+                        </p>
+                        {r.mensagem && <p className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 mt-1">{r.mensagem}</p>}
+                        <IaDocCard doc={{ id: r.docId, titulo: r.titulo, tipo: r.tipo, numero: r.numero, criadoPor: r.de }} addToast={addToast}
+                                   currentUser={currentUser} usuarios={dados.users || []} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (<>
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   <input value={buscaDoc} onChange={e => setBuscaDoc(e.target.value)} placeholder="Buscar por título, número, contrato ou autor"
                          className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:border-teal-400" />
@@ -18781,10 +18895,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   {docsFiltrados.map(d => (
                     <div key={d.id}>
                       <p className="text-[10px] text-gray-400 px-1">{iaDataCurta(d.criadoEm)} · {d.criadoPorNome || d.criadoPor}{d.contrato ? ` · Contrato ${d.contrato}` : ''}{d.substitui ? ' · revisão' : ''}</p>
-                      <IaDocCard doc={d} addToast={addToast} />
+                      <IaDocCard doc={d} addToast={addToast} currentUser={currentUser} usuarios={dados.users || []} />
                     </div>
                   ))}
                 </div>
+                </>)}
               </div>
             </div>
           )}
@@ -18827,7 +18942,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
     }
 
     /* ─── Botão flutuante (todas as páginas) ──────────────────────────── */
-    function AssistentePin({ currentUser, dados, pagina, addToast, onAbrirModulo }) {
+    function AssistentePin({ currentUser, dados, pagina, addToast, onAbrirModulo, recebidos = 0 }) {
       const [aberto, setAberto] = useState(false);
       const [conversaId, setConversaIdS] = useState(() => iaLerConversaAtiva(currentUser.username));
       const setConversaId = id => { setConversaIdS(id); iaGravarConversaAtiva(currentUser.username, id); };
@@ -18860,6 +18975,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   className="ia-pin fixed z-[65] bottom-5 right-5 w-16 h-16 rounded-full bg-white flex items-center justify-center transition-transform hover:scale-105"
                   style={{ boxShadow: '0 8px 28px rgba(37,99,235,.45)', border: '3px solid #2563EB' }}>
             {aberto ? <X className="w-6 h-6 text-teal-700" /> : <IaAvatar size={56} />}
+            {!aberto && recebidos > 0 && (
+              <span title={`${recebidos} documento(s) recebido(s)`}
+                    className="absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
+                    style={{ background: '#0D9488' }}>{recebidos > 9 ? '9+' : recebidos}</span>
+            )}
             {!aberto && qtdAlertas > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
                     style={{ background: '#ef4444' }}>{qtdAlertas > 9 ? '9+' : qtdAlertas}</span>
@@ -19631,6 +19751,22 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           .then(r => { if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`); })
           .catch(() => {});                          // silencioso: o portal do governo oscila
       }, [dbReady, currentUser, leadSync]);
+
+      // Documentos do assistente recebidos e ainda não lidos: contador no menu e aviso na chegada
+      const [iaRecebidosNovos, setIaRecebidosNovos] = useState(0);
+      useEffect(() => {
+        if (!currentUser) { setIaRecebidosNovos(0); return; }
+        let primeiraLeitura = true;
+        return db.collection(IA_COL.envios).where('para', '==', currentUser.username).where('lido', '==', false).onSnapshot(s => {
+          setIaRecebidosNovos(s.size);
+          if (!primeiraLeitura) s.docChanges().forEach(c => {
+            if (c.type !== 'added') return;
+            const d = c.doc.data();
+            addToast(`${d.deNome || d.de} te enviou um documento: ${d.titulo}. Veja em ${IA_NOME} › Documentos › Recebidos.`);
+          });
+          primeiraLeitura = false;
+        }, () => {});
+      }, [currentUser?.username]);
 
       // Ao abrir qualquer outra página pelo menu, o assistente sai da frente
       // (fica antes dos returns antecipados para manter a ordem dos hooks)
@@ -20596,7 +20732,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={IaMenuIcon} label={IA_NOME}
-                  active={showAssistentePage}
+                  active={showAssistentePage} badge={iaRecebidosNovos}
                   onClick={abrirAssistente} />
               )}
 
@@ -22123,7 +22259,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           </div>{/* fim flex-1 conteúdo principal */}
 
           {!showAssistentePage && !ARCANJO_ONLY.has(currentUser.username) && (
-            <AssistentePin currentUser={currentUser} dados={dadosIA} pagina={paginaAtual} addToast={addToast} onAbrirModulo={abrirAssistente} />
+            <AssistentePin currentUser={currentUser} dados={dadosIA} pagina={paginaAtual} addToast={addToast} onAbrirModulo={abrirAssistente} recebidos={iaRecebidosNovos} />
           )}
         </div>
       );

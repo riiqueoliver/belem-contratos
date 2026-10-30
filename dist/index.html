@@ -25436,7 +25436,8 @@ const IA_COL = {
   conversas: COL('ia_conversas'),
   documentos: COL('ia_documentos'),
   memoria: COL('ia_memoria'),
-  conhecimento: COL('ia_conhecimento')
+  conhecimento: COL('ia_conhecimento'),
+  envios: COL('ia_envios')
 };
 const IA_TIPOS_DOC = {
   gdoc: 'GDoc',
@@ -26375,10 +26376,63 @@ function IaMarkdown({
 function IaDocCard({
   doc,
   abertoInicial,
-  addToast
+  addToast,
+  currentUser,
+  usuarios = []
 }) {
   const [aberto, setAberto] = useState(!!abertoInicial);
   const [conteudo, setConteudo] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const [destino, setDestino] = useState('');
+  const [mensagem, setMensagem] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [excluido, setExcluido] = useState(false);
+  const podeExcluir = currentUser && (currentUser.role === 'admin' || !doc.criadoPor || doc.criadoPor === currentUser.username);
+  const opcoes = usuarios.filter(u => u.username && u.username !== currentUser?.username && !ARCANJO_ONLY.has(u.username)).filter((u, i, arr) => arr.findIndex(x => x.username === u.username) === i).sort((a, b) => String(a.nome || a.name || a.username).localeCompare(String(b.nome || b.name || b.username)));
+  async function enviar() {
+    const u = opcoes.find(x => x.username === destino);
+    if (!u) return;
+    setOcupado(true);
+    try {
+      await db.collection(IA_COL.envios).add({
+        docId: doc.id,
+        titulo: doc.titulo || 'Documento',
+        tipo: doc.tipo || 'outro',
+        numero: doc.numero || '',
+        de: currentUser.username,
+        deNome: currentUser.name || currentUser.username,
+        para: u.username,
+        paraNome: u.name || u.nome || u.username,
+        mensagem: mensagem.trim(),
+        lido: false,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      addToast?.(`✅ Documento enviado para ${u.name || u.username}.`);
+      setEnviando(false);
+      setDestino('');
+      setMensagem('');
+    } catch (e) {
+      addToast?.('❌ Não foi possível enviar: ' + e.message);
+    }
+    setOcupado(false);
+  }
+  async function excluir() {
+    if (!confirm(`Excluir o documento "${doc.titulo}"?\n\nEle some da lista de documentos e de quem o recebeu. Essa ação não pode ser desfeita.`)) return;
+    try {
+      const envios = await db.collection(IA_COL.envios).where('docId', '==', doc.id).get();
+      const lote = db.batch();
+      envios.forEach(e => lote.delete(e.ref));
+      lote.delete(db.collection(IA_COL.documentos).doc(doc.id));
+      await lote.commit();
+      setExcluido(true);
+      addToast?.('🗑️ Documento excluído.');
+    } catch (e) {
+      addToast?.('❌ Não foi possível excluir: ' + e.message);
+    }
+  }
+  if (excluido) return React.createElement("p", {
+    className: "mt-2 text-[11px] text-slate-400 italic"
+  }, "Documento exclu\xEDdo.");
   useEffect(() => {
     if (!aberto || conteudo !== null) return;
     db.collection(IA_COL.documentos).doc(doc.id).get().then(d => setConteudo(d.exists ? d.data().conteudo || '' : '(documento não encontrado)')).catch(err => setConteudo('Erro ao carregar: ' + err.message));
@@ -26423,7 +26477,47 @@ function IaDocCard({
       }
     },
     className: "text-[11px] font-semibold text-teal-700 hover:underline"
-  }, "Baixar Word")), aberto && React.createElement("div", {
+  }, "Baixar Word"), currentUser && React.createElement("button", {
+    onClick: () => setEnviando(v => !v),
+    className: "text-[11px] font-semibold text-teal-700 hover:underline"
+  }, "Enviar"), podeExcluir && React.createElement("button", {
+    onClick: excluir,
+    title: "Excluir documento",
+    className: "text-[11px] font-semibold text-red-600 hover:underline"
+  }, "Excluir")), enviando && React.createElement("div", {
+    className: "px-3 py-2.5 border-t border-teal-100 bg-white flex flex-col gap-2"
+  }, React.createElement("div", {
+    className: "flex flex-wrap items-center gap-2"
+  }, React.createElement("span", {
+    className: "text-xs text-slate-600"
+  }, "Enviar para"), React.createElement("select", {
+    value: destino,
+    onChange: e => setDestino(e.target.value),
+    className: "flex-1 min-w-[180px] px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"
+  }, React.createElement("option", {
+    value: ""
+  }, "Escolha o usu\xE1rio\u2026"), opcoes.map(u => React.createElement("option", {
+    key: u.username,
+    value: u.username
+  }, u.name || u.nome || u.username)))), React.createElement("textarea", {
+    value: mensagem,
+    onChange: e => setMensagem(e.target.value),
+    rows: 2,
+    placeholder: "Mensagem (opcional)",
+    className: "w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs resize-none outline-none focus:border-teal-400"
+  }), React.createElement("div", {
+    className: "flex justify-end gap-2"
+  }, React.createElement("button", {
+    onClick: () => setEnviando(false),
+    className: "px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200"
+  }, "Cancelar"), React.createElement("button", {
+    onClick: enviar,
+    disabled: !destino || ocupado,
+    className: "px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50",
+    style: {
+      background: '#0D9488'
+    }
+  }, ocupado ? 'Enviando…' : 'Enviar documento'))), aberto && React.createElement("div", {
     className: "px-4 py-3 max-h-[480px] overflow-y-auto border-t border-teal-100"
   }, conteudo === null ? React.createElement("p", {
     className: "text-xs text-gray-400"
@@ -26804,9 +26898,14 @@ function AssistenteChat({
     md: m.texto
   })), (m.docs || []).map(d => React.createElement(IaDocCard, {
     key: d.id,
-    doc: d,
+    doc: {
+      ...d,
+      criadoPor: d.criadoPor || currentUser.username
+    },
     abertoInicial: idx === ultimoIdxIA && !compacto,
-    addToast: addToast
+    addToast: addToast,
+    currentUser: currentUser,
+    usuarios: dados.users || []
   })), (m.acoes || []).map(a => React.createElement(IaAcaoCard, {
     key: a.id,
     acao: a,
@@ -26905,6 +27004,8 @@ function AssistentePage({
   const [baseQtd, setBaseQtd] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('');
   const [buscaDoc, setBuscaDoc] = useState('');
+  const [visao, setVisao] = useState('todos');
+  const [recebidos, setRecebidos] = useState([]);
   const setConversaId = id => {
     setConversaIdS(id);
     iaGravarConversaAtiva(currentUser.username, id);
@@ -26915,6 +27016,23 @@ function AssistentePage({
       ...d.data()
     })).sort((a, b) => (b.atualizadoEm?.seconds || 0) - (a.atualizadoEm?.seconds || 0)));
   }, () => {}), []);
+  useEffect(() => db.collection(IA_COL.envios).where('para', '==', currentUser.username).onSnapshot(s => {
+    setRecebidos(s.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })).sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0)));
+  }, () => {}), []);
+  useEffect(() => {
+    if (aba !== 'documentos' || visao !== 'recebidos') return;
+    const naoLidos = recebidos.filter(r => !r.lido);
+    if (!naoLidos.length) return;
+    const lote = db.batch();
+    naoLidos.forEach(r => lote.update(db.collection(IA_COL.envios).doc(r.id), {
+      lido: true
+    }));
+    lote.commit().catch(() => {});
+  }, [aba, visao, recebidos]);
+  const naoLidosRecebidos = recebidos.filter(r => !r.lido).length;
   useEffect(() => {
     if (aba === 'documentos') return db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).onSnapshot(s => setDocumentos(s.docs.map(d => ({
       id: d.id,
@@ -26937,7 +27055,7 @@ function AssistentePage({
       }))), () => {});
     }
   }, [aba]);
-  const docsFiltrados = documentos.filter(d => !filtroTipo || d.tipo === filtroTipo).filter(d => {
+  const docsFiltrados = documentos.filter(d => visao !== 'meus' || d.criadoPor === currentUser.username).filter(d => !filtroTipo || d.tipo === filtroTipo).filter(d => {
     const t = iaNorm(buscaDoc).split(/\s+/).filter(Boolean);
     const s = iaNorm(`${d.titulo} ${d.numero} ${d.contrato} ${d.criadoPorNome}`);
     return t.every(x => s.includes(x));
@@ -26959,11 +27077,16 @@ function AssistentePage({
     className: "text-xs text-gray-500"
   }, "Agente de IA do NGCC \xB7 documentos, consultas, vencimentos e grava\xE7\xF5es no sistema")), React.createElement("div", {
     className: "flex rounded-xl bg-gray-100 p-1 text-xs font-bold"
-  }, [['conversa', 'Conversa'], ['documentos', 'Documentos gerados'], ['memoria', 'Memória e base']].map(([k, r]) => React.createElement("button", {
+  }, [['conversa', 'Conversa'], ['documentos', 'Documentos'], ['memoria', 'Memória e base']].map(([k, r]) => React.createElement("button", {
     key: k,
     onClick: () => setAba(k),
-    className: `px-3 py-1.5 rounded-lg transition-colors ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`
-  }, r)))), aba === 'conversa' && React.createElement("div", {
+    className: `px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`
+  }, r, k === 'documentos' && naoLidosRecebidos > 0 && React.createElement("span", {
+    className: "min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center",
+    style: {
+      background: '#0D9488'
+    }
+  }, naoLidosRecebidos))))), aba === 'conversa' && React.createElement("div", {
     className: "flex-1 flex min-h-0"
   }, React.createElement("aside", {
     className: "w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0"
@@ -27019,6 +27142,40 @@ function AssistentePage({
   }, React.createElement("div", {
     className: "max-w-5xl mx-auto"
   }, React.createElement("div", {
+    className: "flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit mb-3"
+  }, [['todos', 'Todos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`], ['meus', 'Meus']].map(([k, r]) => React.createElement("button", {
+    key: k,
+    onClick: () => setVisao(k),
+    className: `px-3 py-1.5 rounded-md ${visao === k ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`
+  }, r, k === 'recebidos' && naoLidosRecebidos > 0 ? ' •' : ''))), visao === 'recebidos' ? React.createElement("div", {
+    className: "space-y-3"
+  }, recebidos.length === 0 && React.createElement("p", {
+    className: "text-sm text-gray-400 text-center py-10"
+  }, "Nenhum documento recebido."), recebidos.map(r => React.createElement("div", {
+    key: r.id
+  }, React.createElement("p", {
+    className: "text-[11px] text-slate-500 px-1"
+  }, React.createElement("b", {
+    className: "text-slate-700"
+  }, r.deNome || r.de), " enviou em ", iaDataCurta(r.criadoEm), !r.lido && React.createElement("span", {
+    className: "ml-1.5 font-bold",
+    style: {
+      color: '#0D9488'
+    }
+  }, "\xB7 novo")), r.mensagem && React.createElement("p", {
+    className: "text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 mt-1"
+  }, r.mensagem), React.createElement(IaDocCard, {
+    doc: {
+      id: r.docId,
+      titulo: r.titulo,
+      tipo: r.tipo,
+      numero: r.numero,
+      criadoPor: r.de
+    },
+    addToast: addToast,
+    currentUser: currentUser,
+    usuarios: dados.users || []
+  })))) : React.createElement(React.Fragment, null, React.createElement("div", {
     className: "flex flex-wrap items-center gap-2 mb-4"
   }, React.createElement("input", {
     value: buscaDoc,
@@ -27046,8 +27203,10 @@ function AssistentePage({
     className: "text-[10px] text-gray-400 px-1"
   }, iaDataCurta(d.criadoEm), " \xB7 ", d.criadoPorNome || d.criadoPor, d.contrato ? ` · Contrato ${d.contrato}` : '', d.substitui ? ' · revisão' : ''), React.createElement(IaDocCard, {
     doc: d,
-    addToast: addToast
-  })))))), aba === 'memoria' && React.createElement("div", {
+    addToast: addToast,
+    currentUser: currentUser,
+    usuarios: dados.users || []
+  }))))))), aba === 'memoria' && React.createElement("div", {
     className: "flex-1 overflow-y-auto px-6 py-5"
   }, React.createElement("div", {
     className: "max-w-4xl mx-auto space-y-5"
@@ -27093,7 +27252,8 @@ function AssistentePin({
   dados,
   pagina,
   addToast,
-  onAbrirModulo
+  onAbrirModulo,
+  recebidos = 0
 }) {
   const [aberto, setAberto] = useState(false);
   const [conversaId, setConversaIdS] = useState(() => iaLerConversaAtiva(currentUser.username));
@@ -27168,7 +27328,13 @@ function AssistentePin({
     className: "w-6 h-6 text-teal-700"
   }) : React.createElement(IaAvatar, {
     size: 56
-  }), !aberto && qtdAlertas > 0 && React.createElement("span", {
+  }), !aberto && recebidos > 0 && React.createElement("span", {
+    title: `${recebidos} documento(s) recebido(s)`,
+    className: "absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white",
+    style: {
+      background: '#0D9488'
+    }
+  }, recebidos > 9 ? '9+' : recebidos), !aberto && qtdAlertas > 0 && React.createElement("span", {
     className: "absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white",
     style: {
       background: '#ef4444'
@@ -28019,6 +28185,23 @@ function App() {
       if (r.novos > 0) addToast(`🎯 ${r.novos} nova(s) oportunidade(s) no PNCP hoje.`);
     }).catch(() => {});
   }, [dbReady, currentUser, leadSync]);
+  const [iaRecebidosNovos, setIaRecebidosNovos] = useState(0);
+  useEffect(() => {
+    if (!currentUser) {
+      setIaRecebidosNovos(0);
+      return;
+    }
+    let primeiraLeitura = true;
+    return db.collection(IA_COL.envios).where('para', '==', currentUser.username).where('lido', '==', false).onSnapshot(s => {
+      setIaRecebidosNovos(s.size);
+      if (!primeiraLeitura) s.docChanges().forEach(c => {
+        if (c.type !== 'added') return;
+        const d = c.doc.data();
+        addToast(`${d.deNome || d.de} te enviou um documento: ${d.titulo}. Veja em ${IA_NOME} › Documentos › Recebidos.`);
+      });
+      primeiraLeitura = false;
+    }, () => {});
+  }, [currentUser?.username]);
   useEffect(() => {
     if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showCampanhaPage) setShowAssistentePage(false);
   }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage, showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, showCampanhaPage]);
@@ -29405,6 +29588,7 @@ function App() {
     icon: IaMenuIcon,
     label: IA_NOME,
     active: showAssistentePage,
+    badge: iaRecebidosNovos,
     onClick: abrirAssistente
   }), SYS.id === 'main' && currentUser.username === 'henriquecorreia' && React.createElement(SidebarBtn, {
     icon: Megaphone,
@@ -31382,7 +31566,8 @@ function App() {
     dados: dadosIA,
     pagina: paginaAtual,
     addToast: addToast,
-    onAbrirModulo: abrirAssistente
+    onAbrirModulo: abrirAssistente,
+    recebidos: iaRecebidosNovos
   }));
 }
 const IS_PAINEL_TV = typeof window !== 'undefined' && /^\/gcsp\/painel\/?$/i.test(window.location.pathname || '');
