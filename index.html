@@ -4610,9 +4610,19 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [editingId,    setEditingId]    = useState(null);
       const [editDraft,    setEditDraft]    = useState({});
       const [saving,       setSaving]       = useState(false);
+      const [expanded,     setExpanded]     = useState(() => new Set());
 
       const isAdmin = currentUser?.role === 'admin';
       const soma = arr => arr.reduce((s, c) => s + (parseBRL(c.billingValue) || 0), 0);
+
+      function toggleGroup(cn) {
+        const abrindo = !expanded.has(cn);
+        setExpanded(prev => { const n = new Set(prev); if (n.has(cn)) n.delete(cn); else n.add(cn); return n; });
+        if (abrindo) setTimeout(() => {
+          const el = document.getElementById('grp-' + cn);
+          if (el) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+        }, 60);
+      }
 
       // Situação de cada parcela, do ponto de vista de quem acompanha
       function situacao(c) {
@@ -4685,6 +4695,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           return { ...g, nfs };
         }).filter(g => g.nfs.length > 0);
       }, [groups, search, statusFilter, stepFilter]);
+      const autoOpen = !!search || statusFilter !== 'all' || stepFilter !== null;
 
       function startEdit(c) {
         setEditingId(c.id);
@@ -4820,31 +4831,74 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               <p className="text-xs text-gray-300 mt-1">Tente ajustar os filtros ou o ano</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-              {/* Cabeçalho das colunas (desktop) */}
-              <div className={`hidden lg:grid ${COLS} gap-4 px-5 py-2.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400`}>
-                <span>Competência</span>
-                <span>NF</span>
-                <span className="text-right">Valor</span>
-                <span>Etapa</span>
-                <span>Situação</span>
-                <span>GDoc</span>
-                <span />
-              </div>
+            <div className="space-y-2">
+              {filtered.map(({ cn, meta, nfs, sigla, total }) => {
+                // Com busca/filtro ativo, os contratos já vêm abertos
+                const aberto = autoOpen || expanded.has(cn);
+                const sits   = nfs.map(situacao);
+                const pior   = ['late','waiting','open','paid'].find(k => sits.some(s => s.key === k)) || 'paid';
+                const geral  = {
+                  late:    { label:'Parcela atrasada',     cor:'#dc2626' },
+                  waiting: { label:'Aguardando pagamento', cor:'#d97706' },
+                  open:    { label:'Em andamento',         cor:'#64748b' },
+                  paid:    { label:'Tudo pago',            cor: GREEN    },
+                }[pior];
+                const recebidoG = soma(nfs.filter((c, i) => sits[i].key === 'paid'));
+                return (
+                <div key={cn} id={'grp-' + cn} className="bg-white rounded-2xl border border-gray-100 overflow-hidden" style={{scrollMarginTop: 90}}>
 
-              {filtered.map(({ cn, meta, nfs, sigla, total }) => (
-                <div key={cn}>
-                  {/* ── Linha do contrato ── */}
-                  <button onClick={() => onOpenContract(cn)}
-                          className="w-full flex items-center gap-3 px-5 py-2.5 bg-slate-50 border-y border-gray-100 text-left hover:bg-slate-100 transition-colors group">
-                    <span className="text-xs font-black flex-shrink-0" style={{color: BLUE}}>{cn}</span>
-                    {sigla && <span className="text-[11px] font-semibold text-gray-400 flex-shrink-0">{sigla}</span>}
-                    <span className="text-xs text-gray-500 truncate flex-1 min-w-0">{meta.object || 'Sem descrição'}</span>
-                    <span className="text-xs font-bold text-gray-600 flex-shrink-0">{fmtCurrencyShort(total)}</span>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
+                  {/* ── Resumo do contrato (clique expande) ── */}
+                  <button onClick={() => toggleGroup(cn)}
+                          className="w-full text-left px-5 py-4 grid grid-cols-2 lg:grid-cols-[minmax(0,1fr)_190px_120px_120px_170px_16px] gap-x-4 gap-y-3 items-center hover:bg-slate-50 transition-colors">
+                    <div className="col-span-2 lg:col-span-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black" style={{color: BLUE}}>{cn}</span>
+                        {sigla && <span className="text-[11px] font-semibold text-gray-400">{sigla}</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">{meta.object || 'Sem descrição'}</p>
+                    </div>
+
+                    {/* Um quadradinho por NF do ano, na cor da situação */}
+                    <div className="col-span-2 lg:col-span-1">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">{nfs.length} NF{nfs.length !== 1 ? 's' : ''} em {statsYear}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {nfs.map((c, i) => (
+                          <span key={c.id} className="w-3 h-3 rounded-sm"
+                                title={`${fmtMonth(c.refMonth || (c.nfDate || '').slice(0,7))} · ${sits[i].label}`}
+                                style={{background: sits[i].key === 'open' ? '#cbd5e1' : sits[i].cor}} />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Faturado</p>
+                      <p className="text-sm font-bold text-gray-800">{fmtCurrencyShort(total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">A receber</p>
+                      <p className="text-sm font-bold text-gray-800">{fmtCurrencyShort(total - recebidoG)}</p>
+                    </div>
+                    <div className="col-span-2 lg:col-span-1 flex items-center gap-1.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background: geral.cor}} />
+                      <span className="text-xs font-semibold truncate" style={{color: pior === 'open' ? '#475569' : geral.cor}}>{geral.label}</span>
+                    </div>
+                    <ChevronDown className={`hidden lg:block w-4 h-4 text-gray-400 transition-transform ${aberto ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* ── Parcelas ── */}
+                  {aberto && (
+                  <div className="border-t border-gray-100">
+                  {/* Cabeçalho das colunas (desktop) */}
+                  <div className={`hidden lg:grid ${COLS} gap-4 px-5 py-2 bg-slate-50 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400`}>
+                    <span>Competência</span>
+                    <span>NF</span>
+                    <span className="text-right">Valor</span>
+                    <span>Etapa</span>
+                    <span>Situação</span>
+                    <span>GDoc</span>
+                    <span />
+                  </div>
+
+                  {/* ── Parcelas (clique abre o detalhe no contrato) ── */}
                   <div className="divide-y divide-gray-100">
                     {nfs.map(c => {
                       const s       = situacao(c);
@@ -4854,7 +4908,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       const gdocUrl = /^https?:\/\//i.test(c.gdoc || '');
                       return (
                         <div key={c.id} className={isEditing ? 'bg-blue-50/50' : ''}>
-                          <div className={`grid grid-cols-2 ${COLS} gap-x-4 gap-y-2 px-5 py-3 items-center group hover:bg-slate-50 transition-colors`}>
+                          <div onClick={() => { if (!isEditing) onOpenContract(cn, { tab:'parcelas', instId: c.id }); }}
+                               title={isEditing ? '' : 'Abrir esta parcela no contrato'}
+                               className={`grid grid-cols-2 ${COLS} gap-x-4 gap-y-2 px-5 py-3 items-center group hover:bg-slate-50 transition-colors ${isEditing ? '' : 'cursor-pointer'}`}>
                             {/* Competência */}
                             <div>
                               <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 lg:hidden">Competência</p>
@@ -4911,12 +4967,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                             <div className="hidden lg:flex justify-end">
                               {isAdmin && (
                                 isEditing ? (
-                                  <button onClick={() => setEditingId(null)} title="Cancelar edição"
+                                  <button onClick={e => { e.stopPropagation(); setEditingId(null); }} title="Cancelar edição"
                                           className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100">
                                     <X className="w-3.5 h-3.5 text-gray-400" />
                                   </button>
                                 ) : (
-                                  <button onClick={() => startEdit(c)} title="Editar parcela"
+                                  <button onClick={e => { e.stopPropagation(); startEdit(c); }} title="Editar parcela"
                                           className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-blue-50 transition-all">
                                     <Edit2 className="w-3.5 h-3.5" style={{color: BLUE}} />
                                   </button>
@@ -4963,8 +5019,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       );
                     })}
                   </div>
+                  <button onClick={() => onOpenContract(cn, { tab:'parcelas' })}
+                          className="w-full flex items-center justify-center gap-1.5 px-5 py-2.5 border-t border-gray-100 text-xs font-bold hover:bg-slate-50 transition-colors"
+                          style={{color: BLUE}}>
+                    Abrir as parcelas do contrato <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -6663,7 +6727,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                   onNotify, onSavePdf, onDeletePdf, onAddInstallment, apiKey,
                                   onDeleteInstallment, onSaveContractPdf, onDeleteContractPdf,
                                   currentUser, onUpdateNfData, onDelete,
-                                  cronogramas, addToast,
+                                  cronogramas, addToast, focus,
                                   onSaveLiquidacao, onDeleteLiquidacao }) {
 
       // Cronograma financeiro vinculado a este contrato (se houver)
@@ -6734,10 +6798,21 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [quickPdfUploading,      setQuickPdfUploading]      = useState(false);
       const [showEncerrar,           setShowEncerrar]           = useState(false);
       // ── aba ativa da tela do contrato ──
-      const [tab, setTab] = useState('geral');
+      const [tab, setTab] = useState(() => focus?.tab || 'geral');
 
       useEffect(() => { if (!editMode) setEditForm(buildForm()); }, [contractNumber, contractMeta, editMode]);
-      useEffect(() => { setTab('geral'); }, [contractNumber]);
+      // Aba inicial; se veio da tela de Parcelas com uma parcela escolhida, abre e rola até ela
+      useEffect(() => {
+        setTab(focus?.tab || 'geral');
+        if (focus?.instId == null) return;
+        const i = installments.findIndex(c => c.id === focus.instId);
+        if (i < 0) return;
+        setOpenIdx(i);
+        setTimeout(() => {
+          const el = document.getElementById('parcela-' + focus.instId);
+          if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+        }, 120);
+      }, [contractNumber, focus]);
 
       // ── derivados ──
       const meta         = contractMeta[contractNumber] || {};
@@ -8144,7 +8219,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   const canAdvance = !needsPdf && !isDone && (!isPayStep || !!payDraft);
 
                   return (
-                    <div key={c.id} className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden border-l-[5px] ${cfg.left}`}>
+                    <div key={c.id} id={'parcela-' + c.id} style={{scrollMarginTop: 130}}
+                         className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden border-l-[5px] ${cfg.left}`}>
 
                       {/* ── Cabeçalho do accordion ── */}
                       <button onClick={() => setOpenIdx(isOpen ? null : idx)}
@@ -19324,6 +19400,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
       // ── Estado da página de detalhe ──
       const [activeContractNumber, setActiveContractNumber] = useState(null);
+      // Ao abrir um contrato pela tela de Parcelas: aba inicial e parcela a destacar
+      const [contractFocus,        setContractFocus]        = useState(null);
       const [showNfListView,       setShowNfListView]       = useState(false);
       // Os botões do menu só desligam os módulos que já conheciam; ao abrir qualquer outro, fecha Relatórios
       useEffect(() => {
@@ -21479,7 +21557,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 setStatsYear={setStatsYear}
                 availableYears={availableYears}
                 currentUser={currentUser}
-                onOpenContract={cn => { setShowInstallmentsPage(false); setActiveContractNumber(cn); }}
+                onOpenContract={(cn, focus) => { setContractFocus(focus ? { cn, ...focus } : null); setShowInstallmentsPage(false); setActiveContractNumber(cn); }}
                 onUpdateNfData={handleUpdateNfData}
               />
             ) : showContractsPage && !activeContractNumber ? (
@@ -21501,7 +21579,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 contractMeta={contractMeta}
                 pdfStorage={pdfStorage}
                 contractAdditives={contractAdditives}
-                onBack={() => { handleCloseContractDetail(); /* se veio da página de contratos, volta para ela */ }}
+                focus={contractFocus && contractFocus.cn === activeContractNumber ? contractFocus : null}
+                onBack={() => { setContractFocus(null); handleCloseContractDetail(); /* se veio da página de contratos, volta para ela */ }}
                 onSaveEdit={handleSaveContractEdit}
                 onAdvance={handleAdvance}
                 onUndo={handleUndo}
