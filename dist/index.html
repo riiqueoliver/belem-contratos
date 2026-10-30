@@ -4397,82 +4397,177 @@ function LoginScreen({
       setError(err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found' ? 'O login com Google ainda não foi ativado no sistema.' : err.code === 'auth/unauthorized-domain' ? 'Este endereço não está autorizado para login com Google.' : err.code === 'auth/popup-blocked' ? 'O navegador bloqueou a janela do Google. Libere pop-ups para este site.' : 'Falha ao entrar com o Google. Tente novamente.');
     }
   }
+  const ehGcsp = SYS.id === 'gcsp';
+  const fundoPainel = ehGcsp ? 'linear-gradient(140deg, #0B4A5E 0%, #0E7490 55%, #1592A8 100%)' : 'linear-gradient(140deg, #0B2B5E 0%, #183F86 50%, #2457A6 100%)';
+  const destaque = ehGcsp ? '#7DD3E0' : '#8FD694';
+  const campo = 'w-full border border-slate-200 bg-slate-50 rounded-xl pl-11 pr-3 py-3 text-sm text-slate-800 placeholder-slate-400 ' + 'focus:outline-none focus:bg-white focus:border-transparent focus:ring-2 transition-colors';
   return React.createElement("div", {
-    className: "min-h-screen flex items-center justify-center bg-slate-100 px-4"
-  }, React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-  }, React.createElement("div", {
-    className: "px-8 pt-8 pb-6 text-center",
+    className: "min-h-screen flex",
     style: {
-      background: BLUE
+      background: '#EEF2F7'
     }
-  }, SYS.id === 'gcsp' ? React.createElement("div", {
-    className: "flex items-center justify-center gap-3.5"
-  }, React.createElement("img", {
-    src: "gcsp-symbol-white.png",
+  }, React.createElement("aside", {
+    className: "hidden lg:flex relative overflow-hidden flex-col justify-between text-white px-16 py-14",
+    style: {
+      width: '56%',
+      background: fundoPainel
+    }
+  }, React.createElement("div", {
+    className: "absolute pointer-events-none",
+    style: {
+      width: 760,
+      height: 760,
+      borderRadius: '50%',
+      right: -260,
+      bottom: -300,
+      background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 60%, transparent 70%)'
+    }
+  }), React.createElement("div", {
+    className: "absolute pointer-events-none",
+    style: {
+      width: 420,
+      height: 420,
+      borderRadius: '50%',
+      right: -140,
+      top: -150,
+      border: '1px solid rgba(255,255,255,0.14)'
+    }
+  }), React.createElement("div", {
+    className: "absolute pointer-events-none",
+    style: {
+      width: 520,
+      height: 520,
+      borderRadius: '50%',
+      left: -260,
+      bottom: -240,
+      border: '1px solid rgba(255,255,255,0.10)'
+    }
+  }), React.createElement("div", {
+    className: "relative"
+  }, ehGcsp ? React.createElement("img", {
+    src: "gcsp-lockup-white.png",
     alt: "GCSP",
     style: {
-      height: 62,
-      width: 62,
-      objectFit: 'contain',
-      flexShrink: 0
-    },
-    onError: e => e.currentTarget.style.display = 'none'
-  }), React.createElement("div", {
-    className: "text-left"
-  }, React.createElement("p", {
-    className: "text-white font-black tracking-tight",
-    style: {
-      fontSize: 34,
-      lineHeight: 1
-    }
-  }, "GCSP"), React.createElement("p", {
-    className: "text-white/75 font-medium mt-1",
-    style: {
-      fontSize: 11.5,
-      lineHeight: 1.35,
-      maxWidth: 180
-    }
-  }, "Ger\xEAncia de Contratos, Suprimentos e Patrim\xF4nio"))) : React.createElement("img", {
-    src: "belemdigital-logo.png",
-    alt: "Bel\xE9m Digital",
-    style: {
-      height: 70,
+      height: 58,
       width: 'auto',
-      maxWidth: 300,
-      margin: '0 auto 0',
-      display: 'block',
       objectFit: 'contain'
     },
     onError: e => e.currentTarget.style.display = 'none'
-  })), React.createElement("form", {
+  }) : React.createElement("img", {
+    src: "belemdigital-logo.png",
+    alt: "Gest\xE3o de Contratos",
+    style: {
+      height: 64,
+      width: 'auto',
+      objectFit: 'contain'
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  })), React.createElement("div", {
+    className: "relative max-w-xl"
+  }, React.createElement("p", {
+    className: "text-[12px] font-bold tracking-[0.22em] uppercase mb-5",
+    style: {
+      color: destaque
+    }
+  }, ehGcsp ? 'Contratos, suprimentos e patrimônio' : 'Sua central de contratos'), React.createElement("h1", {
+    className: "font-black tracking-tight leading-[1.02]",
+    style: {
+      fontSize: 'clamp(44px, 4.6vw, 68px)'
+    }
+  }, ehGcsp ? React.createElement(React.Fragment, null, "Controle do in\xEDcio", React.createElement("br", null), "ao fim.") : React.createElement(React.Fragment, null, "Cada contrato", React.createElement("br", null), "sob controle.")), React.createElement("p", {
+    className: "mt-6 text-[17px] leading-relaxed text-white/80 max-w-lg"
+  }, ehGcsp ? 'Contratos, suprimentos e patrimônio reunidos em um ambiente seguro, simples e conectado.' : 'Vigências, parcelas, propostas e documentos reunidos em um só lugar, com alertas e um assistente de IA para o dia a dia.')), React.createElement("div", {
+    className: "relative flex items-center gap-2 text-sm text-white/75"
+  }, React.createElement(KeyRound, {
+    className: "w-4 h-4"
+  }), "Acesso restrito a usu\xE1rios autorizados")), React.createElement("main", {
+    className: "flex-1 flex flex-col items-center justify-center px-5 py-10"
+  }, React.createElement("div", {
+    className: "lg:hidden mb-6"
+  }, ehGcsp ? React.createElement("img", {
+    src: "gcsp-symbol.png",
+    alt: "GCSP",
+    style: {
+      height: 56,
+      width: 'auto',
+      objectFit: 'contain'
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  }) : React.createElement("img", {
+    src: "gestao-contratos-cor.png",
+    alt: "Gest\xE3o de Contratos",
+    style: {
+      height: 56,
+      width: 'auto',
+      objectFit: 'contain'
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  })), React.createElement("div", {
+    className: "w-full max-w-[440px] bg-white rounded-3xl border border-slate-100 px-8 sm:px-11 py-10",
+    style: {
+      boxShadow: '0 24px 60px -24px rgba(15,23,42,0.25)'
+    }
+  }, React.createElement("p", {
+    className: "text-[11px] font-bold tracking-[0.18em] uppercase leading-relaxed",
+    style: {
+      color: BLUE
+    }
+  }, "Bem-vindo ao ", ehGcsp ? 'GCSP' : 'Gestão de Contratos', React.createElement("br", null), React.createElement("span", {
+    className: "opacity-70"
+  }, ehGcsp ? 'Gerência de Contratos, Suprimentos e Patrimônio' : 'Belém Digital · NGCC')), React.createElement("h2", {
+    className: "mt-3 text-[28px] font-black text-slate-900 tracking-tight"
+  }, "Acesse sua conta"), React.createElement("p", {
+    className: "text-sm text-slate-500 mt-1"
+  }, "Use seu usu\xE1rio e senha do sistema para continuar."), React.createElement("form", {
     onSubmit: handleSubmit,
-    className: "px-8 py-6 space-y-4"
+    className: "mt-7 space-y-4"
   }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-xs font-semibold text-gray-600 mb-1.5"
-  }, "Usu\xE1rio"), React.createElement("input", {
+    className: "block text-[13px] font-semibold text-slate-700 mb-1.5"
+  }, "Usu\xE1rio"), React.createElement("div", {
+    className: "relative"
+  }, React.createElement(UserCircle, {
+    className: "w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+  }), React.createElement("input", {
     value: username,
     onChange: e => setUsername(e.target.value),
     required: true,
     placeholder: "seu.usuario",
     autoComplete: "username",
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-xs font-semibold text-gray-600 mb-1.5"
-  }, "Senha"), React.createElement("div", {
+    className: campo,
+    style: {
+      '--tw-ring-color': BLUE
+    }
+  }))), React.createElement("div", null, React.createElement("div", {
+    className: "flex items-center justify-between mb-1.5"
+  }, React.createElement("label", {
+    className: "text-[13px] font-semibold text-slate-700"
+  }, "Senha"), React.createElement("button", {
+    type: "button",
+    onClick: () => setShowForgot(true),
+    className: "text-xs font-semibold hover:underline",
+    style: {
+      color: BLUE
+    }
+  }, "Esqueci minha senha")), React.createElement("div", {
     className: "relative"
-  }, React.createElement("input", {
+  }, React.createElement(KeyRound, {
+    className: "w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+  }), React.createElement("input", {
     type: showPass ? 'text' : 'password',
     value: password,
     onChange: e => setPassword(e.target.value),
     required: true,
-    placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+    placeholder: "Digite sua senha",
     autoComplete: "current-password",
-    className: "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+    className: campo + ' pr-11',
+    style: {
+      '--tw-ring-color': BLUE
+    }
   }), React.createElement("button", {
     type: "button",
     onClick: () => setShowPass(p => !p),
-    className: "absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+    title: showPass ? 'Ocultar senha' : 'Mostrar senha',
+    className: "absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
   }, showPass ? React.createElement(EyeOff, {
     className: "w-4 h-4"
   }) : React.createElement(Eye, {
@@ -4495,24 +4590,25 @@ function LoginScreen({
   }, "Solicitar acesso")), React.createElement("button", {
     type: "submit",
     disabled: loading,
-    className: "w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity",
+    className: "w-full text-white py-3.5 rounded-xl font-bold text-[15px] disabled:opacity-60 hover:brightness-110 transition",
     style: {
-      background: BLUE
+      background: ehGcsp ? 'linear-gradient(90deg, #0E7490, #1592A8)' : `linear-gradient(90deg, ${BLUE}, #2457A6)`,
+      boxShadow: '0 10px 24px -10px rgba(36,87,166,0.7)'
     }
   }, loading ? 'Verificando...' : 'Entrar'), React.createElement("div", {
-    className: "flex items-center gap-3 text-[11px] text-gray-400"
+    className: "flex items-center gap-3 pt-2 text-[11px] font-semibold tracking-wider uppercase text-slate-400"
   }, React.createElement("span", {
-    className: "flex-1 h-px bg-gray-200"
-  }), "ou", React.createElement("span", {
-    className: "flex-1 h-px bg-gray-200"
+    className: "flex-1 h-px bg-slate-200"
+  }), "Outras formas de acesso", React.createElement("span", {
+    className: "flex-1 h-px bg-slate-200"
   })), React.createElement("button", {
     type: "button",
     onClick: entrarComGoogle,
     disabled: loading,
-    className: "w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+    className: "w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 transition-colors"
   }, React.createElement("svg", {
     viewBox: "0 0 48 48",
-    className: "w-5 h-5",
+    className: "w-5 h-5 flex-shrink-0",
     "aria-hidden": "true"
   }, React.createElement("path", {
     fill: "#FFC107",
@@ -4526,20 +4622,37 @@ function LoginScreen({
   }), React.createElement("path", {
     fill: "#1976D2",
     d: "M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.2 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"
-  })), "Entrar com Google"), React.createElement("div", {
-    className: "flex items-center justify-between pt-1"
-  }, React.createElement("button", {
+  })), React.createElement("span", {
+    className: "flex-1 text-left"
+  }, "Entrar com a conta Google"), React.createElement(ChevronRight, {
+    className: "w-4 h-4 text-slate-400"
+  })), React.createElement("button", {
     type: "button",
-    onClick: () => setShowForgot(true),
-    className: "text-xs font-semibold hover:underline transition-colors",
+    onClick: () => setShowRegister(true),
+    className: "w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+  }, React.createElement(UserPlus, {
+    className: "w-5 h-5 flex-shrink-0",
     style: {
       color: BLUE
     }
-  }, "Esqueci a senha"), React.createElement("button", {
-    type: "button",
-    onClick: () => setShowRegister(true),
-    className: "text-xs font-semibold hover:underline transition-colors text-gray-500 hover:text-gray-700"
-  }, "Solicitar Cadastro"))), showForgot && React.createElement(ForgotPasswordModal, {
+  }), React.createElement("span", {
+    className: "flex-1 text-left"
+  }, "Solicitar acesso ao sistema"), React.createElement(ChevronRight, {
+    className: "w-4 h-4 text-slate-400"
+  })))), !ehGcsp && React.createElement("div", {
+    className: "mt-8 flex flex-col items-center gap-2"
+  }, React.createElement("p", {
+    className: "text-[10px] font-semibold tracking-[0.2em] uppercase text-slate-400"
+  }, "Uma solu\xE7\xE3o"), React.createElement("img", {
+    src: "belem-digital-azul.png",
+    alt: "Bel\xE9m Digital",
+    style: {
+      height: 30,
+      width: 'auto',
+      objectFit: 'contain'
+    },
+    onError: e => e.currentTarget.style.display = 'none'
+  })), showForgot && React.createElement(ForgotPasswordModal, {
     onClose: () => setShowForgot(false)
   }), showRegister && React.createElement(RegisterModal, {
     onClose: () => setShowRegister(false),

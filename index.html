@@ -2882,90 +2882,163 @@ Regras:
         }
       }
 
+      const ehGcsp = SYS.id === 'gcsp';
+      // Paleta: azul-marinho do sistema → azul do logo novo (GCSP mantém o petróleo)
+      const fundoPainel = ehGcsp
+        ? 'linear-gradient(140deg, #0B4A5E 0%, #0E7490 55%, #1592A8 100%)'
+        : 'linear-gradient(140deg, #0B2B5E 0%, #183F86 50%, #2457A6 100%)';
+      const destaque = ehGcsp ? '#7DD3E0' : '#8FD694';
+      const campo = 'w-full border border-slate-200 bg-slate-50 rounded-xl pl-11 pr-3 py-3 text-sm text-slate-800 placeholder-slate-400 ' +
+                    'focus:outline-none focus:bg-white focus:border-transparent focus:ring-2 transition-colors';
+
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="px-8 pt-8 pb-6 text-center" style={{background: BLUE}}>
-              {SYS.id === 'gcsp' ? (
-                <div className="flex items-center justify-center gap-3.5">
-                  <img src="gcsp-symbol-white.png" alt="GCSP"
-                       style={{height:62, width:62, objectFit:'contain', flexShrink:0}}
-                       onError={e => e.currentTarget.style.display='none'} />
-                  <div className="text-left">
-                    <p className="text-white font-black tracking-tight" style={{fontSize:34, lineHeight:1}}>GCSP</p>
-                    <p className="text-white/75 font-medium mt-1" style={{fontSize:11.5, lineHeight:1.35, maxWidth:180}}>
-                      Gerência de Contratos, Suprimentos e Patrimônio
-                    </p>
-                  </div>
-                </div>
+        <div className="min-h-screen flex" style={{background:'#EEF2F7'}}>
+          {/* ── Painel institucional (telas largas) ── */}
+          <aside className="hidden lg:flex relative overflow-hidden flex-col justify-between text-white px-16 py-14"
+                 style={{width:'56%', background: fundoPainel}}>
+            {/* Formas decorativas */}
+            <div className="absolute pointer-events-none" style={{width:760, height:760, borderRadius:'50%', right:-260, bottom:-300,
+                 background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 60%, transparent 70%)'}} />
+            <div className="absolute pointer-events-none" style={{width:420, height:420, borderRadius:'50%', right:-140, top:-150,
+                 border:'1px solid rgba(255,255,255,0.14)'}} />
+            <div className="absolute pointer-events-none" style={{width:520, height:520, borderRadius:'50%', left:-260, bottom:-240,
+                 border:'1px solid rgba(255,255,255,0.10)'}} />
+
+            <div className="relative">
+              {ehGcsp ? (
+                <img src="gcsp-lockup-white.png" alt="GCSP" style={{height:58, width:'auto', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
               ) : (
-                <img src="belemdigital-logo.png" alt="Belém Digital"
-                     style={{height:70, width:'auto', maxWidth:300, margin:'0 auto 0', display:'block', objectFit:'contain'}}
+                <img src="belemdigital-logo.png" alt="Gestão de Contratos" style={{height:64, width:'auto', objectFit:'contain'}}
                      onError={e => e.currentTarget.style.display='none'} />
               )}
             </div>
-            <form onSubmit={handleSubmit} className="px-8 py-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Usuário</label>
-                <input value={username} onChange={e => setUsername(e.target.value)} required
-                       placeholder="seu.usuario" autoComplete="username"
-                       className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Senha</label>
-                <div className="relative">
-                  <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
-                         placeholder="••••••••" autoComplete="current-password"
-                         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" />
-                  <button type="button" onClick={() => setShowPass(p => !p)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              {avisoSessao === 'inatividade' && !error && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">🔒 Sua sessão foi encerrada após 30 minutos sem uso. Entre novamente.</p>}
-              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-              {googleNegado && (
-                <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900">
-                  <p className="mb-2">O e-mail <b>{googleNegado.email}</b> ainda não tem acesso a este sistema. Solicite o acesso: o administrador vai analisar e você receberá a resposta neste e-mail.</p>
-                  <button type="button" onClick={() => setShowRegister(true)}
-                          className="px-3 py-1.5 rounded-lg font-bold text-white" style={{background: BLUE}}>Solicitar acesso</button>
-                </div>
+
+            <div className="relative max-w-xl">
+              <p className="text-[12px] font-bold tracking-[0.22em] uppercase mb-5" style={{color: destaque}}>
+                {ehGcsp ? 'Contratos, suprimentos e patrimônio' : 'Sua central de contratos'}
+              </p>
+              <h1 className="font-black tracking-tight leading-[1.02]" style={{fontSize:'clamp(44px, 4.6vw, 68px)'}}>
+                {ehGcsp ? <>Controle do início<br />ao fim.</> : <>Cada contrato<br />sob controle.</>}
+              </h1>
+              <p className="mt-6 text-[17px] leading-relaxed text-white/80 max-w-lg">
+                {ehGcsp
+                  ? 'Contratos, suprimentos e patrimônio reunidos em um ambiente seguro, simples e conectado.'
+                  : 'Vigências, parcelas, propostas e documentos reunidos em um só lugar, com alertas e um assistente de IA para o dia a dia.'}
+              </p>
+            </div>
+
+            <div className="relative flex items-center gap-2 text-sm text-white/75">
+              <KeyRound className="w-4 h-4" />
+              Acesso restrito a usuários autorizados
+            </div>
+          </aside>
+
+          {/* ── Cartão de acesso ── */}
+          <main className="flex-1 flex flex-col items-center justify-center px-5 py-10">
+            {/* Em telas estreitas o painel some: o logo vem para cima do cartão */}
+            <div className="lg:hidden mb-6">
+              {ehGcsp ? (
+                <img src="gcsp-symbol.png" alt="GCSP" style={{height:56, width:'auto', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
+              ) : (
+                <img src="gestao-contratos-cor.png" alt="Gestão de Contratos" style={{height:56, width:'auto', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
               )}
-              <button type="submit" disabled={loading}
-                      className="w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
-                      style={{background: BLUE}}>
-                {loading ? 'Verificando...' : 'Entrar'}
-              </button>
-              <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                <span className="flex-1 h-px bg-gray-200" />ou<span className="flex-1 h-px bg-gray-200" />
-              </div>
-              <button type="button" onClick={entrarComGoogle} disabled={loading}
-                      className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors">
-                <svg viewBox="0 0 48 48" className="w-5 h-5" aria-hidden="true">
-                  <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-                  <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-                  <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-                  <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.2 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-                </svg>
-                Entrar com Google
-              </button>
-              <div className="flex items-center justify-between pt-1">
-                <button type="button" onClick={() => setShowForgot(true)}
-                        className="text-xs font-semibold hover:underline transition-colors"
-                        style={{color: BLUE}}>
-                  Esqueci a senha
+            </div>
+
+            <div className="w-full max-w-[440px] bg-white rounded-3xl border border-slate-100 px-8 sm:px-11 py-10"
+                 style={{boxShadow:'0 24px 60px -24px rgba(15,23,42,0.25)'}}>
+              <p className="text-[11px] font-bold tracking-[0.18em] uppercase leading-relaxed" style={{color: BLUE}}>
+                Bem-vindo ao {ehGcsp ? 'GCSP' : 'Gestão de Contratos'}<br />
+                <span className="opacity-70">{ehGcsp ? 'Gerência de Contratos, Suprimentos e Patrimônio' : 'Belém Digital · NGCC'}</span>
+              </p>
+              <h2 className="mt-3 text-[28px] font-black text-slate-900 tracking-tight">Acesse sua conta</h2>
+              <p className="text-sm text-slate-500 mt-1">Use seu usuário e senha do sistema para continuar.</p>
+
+              <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Usuário</label>
+                  <div className="relative">
+                    <UserCircle className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input value={username} onChange={e => setUsername(e.target.value)} required
+                           placeholder="seu.usuario" autoComplete="username"
+                           className={campo} style={{'--tw-ring-color': BLUE}} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700">Senha</label>
+                    <button type="button" onClick={() => setShowForgot(true)}
+                            className="text-xs font-semibold hover:underline" style={{color: BLUE}}>
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
+                           placeholder="Digite sua senha" autoComplete="current-password"
+                           className={campo + ' pr-11'} style={{'--tw-ring-color': BLUE}} />
+                    <button type="button" onClick={() => setShowPass(p => !p)} title={showPass ? 'Ocultar senha' : 'Mostrar senha'}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {avisoSessao === 'inatividade' && !error && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">🔒 Sua sessão foi encerrada após 30 minutos sem uso. Entre novamente.</p>}
+                {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+                {googleNegado && (
+                  <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900">
+                    <p className="mb-2">O e-mail <b>{googleNegado.email}</b> ainda não tem acesso a este sistema. Solicite o acesso: o administrador vai analisar e você receberá a resposta neste e-mail.</p>
+                    <button type="button" onClick={() => setShowRegister(true)}
+                            className="px-3 py-1.5 rounded-lg font-bold text-white" style={{background: BLUE}}>Solicitar acesso</button>
+                  </div>
+                )}
+
+                <button type="submit" disabled={loading}
+                        className="w-full text-white py-3.5 rounded-xl font-bold text-[15px] disabled:opacity-60 hover:brightness-110 transition"
+                        style={{background: ehGcsp ? 'linear-gradient(90deg, #0E7490, #1592A8)' : `linear-gradient(90deg, ${BLUE}, #2457A6)`,
+                                boxShadow:'0 10px 24px -10px rgba(36,87,166,0.7)'}}>
+                  {loading ? 'Verificando...' : 'Entrar'}
+                </button>
+
+                <div className="flex items-center gap-3 pt-2 text-[11px] font-semibold tracking-wider uppercase text-slate-400">
+                  <span className="flex-1 h-px bg-slate-200" />Outras formas de acesso<span className="flex-1 h-px bg-slate-200" />
+                </div>
+
+                <button type="button" onClick={entrarComGoogle} disabled={loading}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 transition-colors">
+                  <svg viewBox="0 0 48 48" className="w-5 h-5 flex-shrink-0" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+                    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+                    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+                    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.2 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+                  </svg>
+                  <span className="flex-1 text-left">Entrar com a conta Google</span>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
                 <button type="button" onClick={() => setShowRegister(true)}
-                        className="text-xs font-semibold hover:underline transition-colors text-gray-500 hover:text-gray-700">
-                  Solicitar Cadastro
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors">
+                  <UserPlus className="w-5 h-5 flex-shrink-0" style={{color: BLUE}} />
+                  <span className="flex-1 text-left">Solicitar acesso ao sistema</span>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
+              </form>
+            </div>
+
+            {!ehGcsp && (
+              <div className="mt-8 flex flex-col items-center gap-2">
+                <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-slate-400">Uma solução</p>
+                <img src="belem-digital-azul.png" alt="Belém Digital" style={{height:30, width:'auto', objectFit:'contain'}}
+                     onError={e => e.currentTarget.style.display='none'} />
               </div>
-            </form>
+            )}
+
             {showForgot    && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
             {showRegister  && <RegisterModal onClose={() => setShowRegister(false)} onSubmit={onRegister}
                                              inicial={googleNegado ? { name: googleNegado.nome, email: googleNegado.email } : undefined} />}
-          </div>
+          </main>
         </div>
       );
     }
