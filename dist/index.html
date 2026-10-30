@@ -4067,7 +4067,8 @@ function ResetPasswordScreen({
 }
 function RegisterModal({
   onClose,
-  onSubmit
+  onSubmit,
+  inicial
 }) {
   const [form, setForm] = useState({
     name: '',
@@ -4076,7 +4077,8 @@ function RegisterModal({
     phone: '',
     email: '',
     password: '',
-    confirm: ''
+    confirm: '',
+    ...(inicial || {})
   });
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -4287,6 +4289,7 @@ function LoginScreen({
   const [showPass, setShowPass] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [googleNegado, setGoogleNegado] = useState(null);
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
@@ -4319,6 +4322,7 @@ function LoginScreen({
   async function entrarComGoogle() {
     setLoading(true);
     setError('');
+    setGoogleNegado(null);
     try {
       const provedor = new firebase.auth.GoogleAuthProvider();
       provedor.setCustomParameters({
@@ -4343,6 +4347,14 @@ function LoginScreen({
         return;
       }
       await firebase.auth().signOut().catch(() => {});
+      if (data.codigo === 'nao_autorizado') {
+        setGoogleNegado({
+          email: data.email,
+          nome: data.nome
+        });
+        setLoading(false);
+        return;
+      }
       setError(data.error || 'Não foi possível entrar com o Google.');
       setLoading(false);
     } catch (err) {
@@ -4433,7 +4445,18 @@ function LoginScreen({
     className: "w-4 h-4"
   })))), error && React.createElement("p", {
     className: "text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-  }, error), React.createElement("button", {
+  }, error), googleNegado && React.createElement("div", {
+    className: "text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900"
+  }, React.createElement("p", {
+    className: "mb-2"
+  }, "O e-mail ", React.createElement("b", null, googleNegado.email), " ainda n\xE3o tem acesso a este sistema. Solicite o acesso: o administrador vai analisar e voc\xEA receber\xE1 a resposta neste e-mail."), React.createElement("button", {
+    type: "button",
+    onClick: () => setShowRegister(true),
+    className: "px-3 py-1.5 rounded-lg font-bold text-white",
+    style: {
+      background: BLUE
+    }
+  }, "Solicitar acesso")), React.createElement("button", {
     type: "submit",
     disabled: loading,
     className: "w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity",
@@ -4484,7 +4507,11 @@ function LoginScreen({
     onClose: () => setShowForgot(false)
   }), showRegister && React.createElement(RegisterModal, {
     onClose: () => setShowRegister(false),
-    onSubmit: onRegister
+    onSubmit: onRegister,
+    inicial: googleNegado ? {
+      name: googleNegado.nome,
+      email: googleNegado.email
+    } : undefined
   })));
 }
 function ProfileDrawer({
@@ -27257,12 +27284,33 @@ function App() {
       email: pending.email || '',
       role: 'user'
     });
+    const aviso = await notificarCadastro(pending, 'aprovado');
     await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
-    addToast(`✅ Usuário ${pending.name} aprovado com sucesso.`);
+    addToast(`✅ Usuário ${pending.name} aprovado com sucesso. ${aviso}`);
   }
   async function handleRejectUser(pending) {
+    const aviso = await notificarCadastro(pending, 'recusado');
     await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
-    addToast(`🗑️ Solicitação de ${pending.name} recusada e removida.`);
+    addToast(`🗑️ Solicitação de ${pending.name} recusada e removida. ${aviso}`);
+  }
+  async function notificarCadastro(pending, decisao) {
+    try {
+      const resp = await fetch('/api/notificar-cadastro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          passe: iaLerPasse(),
+          pendenteId: pending.id,
+          decisao
+        })
+      });
+      const j = await resp.json().catch(() => ({}));
+      return resp.ok ? `Aviso enviado para ${j.email}.` : `⚠️ E-mail não enviado: ${j.error || 'erro ' + resp.status}`;
+    } catch (e) {
+      return '⚠️ E-mail não enviado: falha de conexão.';
+    }
   }
   async function handleToggleAdmin(user) {
     const newRole = user.role === 'admin' ? 'user' : 'admin';

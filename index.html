@@ -2684,8 +2684,8 @@ Regras:
     /* ═══════════════════════════════════════════════════════
        MODAL DE SOLICITAÇÃO DE CADASTRO
     ═══════════════════════════════════════════════════════ */
-    function RegisterModal({ onClose, onSubmit }) {
-      const [form, setForm] = useState({ name:'', username:'', funcional:'', phone:'', email:'', password:'', confirm:'' });
+    function RegisterModal({ onClose, onSubmit, inicial }) {
+      const [form, setForm] = useState({ name:'', username:'', funcional:'', phone:'', email:'', password:'', confirm:'', ...(inicial || {}) });
       const [error, setError] = useState('');
       const [done, setDone]   = useState(false);
       const [loading, setLoading] = useState(false);
@@ -2818,6 +2818,7 @@ Regras:
       const [showPass,     setShowPass]     = useState(false);
       const [showForgot,   setShowForgot]   = useState(false);
       const [showRegister, setShowRegister] = useState(false);
+      const [googleNegado, setGoogleNegado] = useState(null);   // { email, nome } quando a conta Google não tem acesso
 
       async function handleSubmit(e) {
         e.preventDefault();
@@ -2839,7 +2840,7 @@ Regras:
       // Login com Google: o Google confirma a identidade e o servidor só deixa entrar
       // se o e-mail for de um usuário já autorizado pelo admin (/api/login-google).
       async function entrarComGoogle() {
-        setLoading(true); setError('');
+        setLoading(true); setError(''); setGoogleNegado(null);
         try {
           const provedor = new firebase.auth.GoogleAuthProvider();
           provedor.setCustomParameters({ prompt: 'select_account' });
@@ -2853,6 +2854,7 @@ Regras:
           const data = await resp.json().catch(() => ({}));
           if (resp.ok && data.user) { iaGuardarPasse(data.iaPasse); onLogin(data.user); return; }
           await firebase.auth().signOut().catch(() => {});
+          if (data.codigo === 'nao_autorizado') { setGoogleNegado({ email: data.email, nome: data.nome }); setLoading(false); return; }
           setError(data.error || 'Não foi possível entrar com o Google.'); setLoading(false);
         } catch (err) {
           setLoading(false);
@@ -2907,6 +2909,13 @@ Regras:
                 </div>
               </div>
               {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+              {googleNegado && (
+                <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-900">
+                  <p className="mb-2">O e-mail <b>{googleNegado.email}</b> ainda não tem acesso a este sistema. Solicite o acesso: o administrador vai analisar e você receberá a resposta neste e-mail.</p>
+                  <button type="button" onClick={() => setShowRegister(true)}
+                          className="px-3 py-1.5 rounded-lg font-bold text-white" style={{background: BLUE}}>Solicitar acesso</button>
+                </div>
+              )}
               <button type="submit" disabled={loading}
                       className="w-full text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
                       style={{background: BLUE}}>
@@ -2938,7 +2947,8 @@ Regras:
               </div>
             </form>
             {showForgot    && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
-            {showRegister  && <RegisterModal onClose={() => setShowRegister(false)} onSubmit={onRegister} />}
+            {showRegister  && <RegisterModal onClose={() => setShowRegister(false)} onSubmit={onRegister}
+                                             inicial={googleNegado ? { name: googleNegado.nome, email: googleNegado.email } : undefined} />}
           </div>
         </div>
       );
@@ -19090,12 +19100,26 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           email:     pending.email     || '',
           role:      'user',
         });
+        const aviso = await notificarCadastro(pending, 'aprovado');
         await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
-        addToast(`✅ Usuário ${pending.name} aprovado com sucesso.`);
+        addToast(`✅ Usuário ${pending.name} aprovado com sucesso. ${aviso}`);
       }
       async function handleRejectUser(pending) {
+        const aviso = await notificarCadastro(pending, 'recusado');
         await db.collection(COL('pendingUsers')).doc(String(pending.id)).delete();
-        addToast(`🗑️ Solicitação de ${pending.name} recusada e removida.`);
+        addToast(`🗑️ Solicitação de ${pending.name} recusada e removida. ${aviso}`);
+      }
+      // Avisa o solicitante por e-mail. Roda antes de apagar a solicitação, porque o
+      // servidor lê o e-mail de destino dela. Se falhar, a aprovação/recusa segue mesmo assim.
+      async function notificarCadastro(pending, decisao) {
+        try {
+          const resp = await fetch('/api/notificar-cadastro', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ passe: iaLerPasse(), pendenteId: pending.id, decisao }),
+          });
+          const j = await resp.json().catch(() => ({}));
+          return resp.ok ? `Aviso enviado para ${j.email}.` : `⚠️ E-mail não enviado: ${j.error || 'erro ' + resp.status}`;
+        } catch (e) { return '⚠️ E-mail não enviado: falha de conexão.'; }
       }
       async function handleToggleAdmin(user) {
         const newRole = user.role === 'admin' ? 'user' : 'admin';

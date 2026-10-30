@@ -39,7 +39,8 @@ module.exports = async (req, res) => {
     const snap = await getDb().collection(usersCol).get();
     const achados = snap.docs.map(d => d.data()).filter(u => String(u.email || '').trim().toLowerCase() === email);
     if (achados.length === 0) {
-      res.status(403).json({ error: `O e-mail ${email} não está autorizado neste sistema. Peça ao administrador para cadastrá-lo no seu usuário.` });
+      res.status(403).json({ codigo: 'nao_autorizado', email, nome: conta.name || '',
+                             error: `O e-mail ${email} ainda não tem acesso a este sistema. Solicite o acesso; o administrador vai analisar o pedido.` });
       return;
     }
     if (achados.length > 1) {
