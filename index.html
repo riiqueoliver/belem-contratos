@@ -20253,7 +20253,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                    ? {background:'#7b61c7', boxShadow:'4px 0 24px rgba(90,55,160,0.22)'}
                    : {background: BLUE,     boxShadow:'4px 0 24px rgba(11,43,94,0.18)'}}>
 
-            {/* Logo / Home */}
+            {/* Logo / Home — só no GCSP e no Arcanjo's; no sistema principal o logo fica no cabeçalho */}
+            {(SYS.id === 'gcsp' || ARCANJO_ONLY.has(currentUser.username)) && (<>
             <button onClick={handleGoHome} title="Início"
                     className="mb-4 mt-1 focus:outline-none group relative">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/15"
@@ -20267,12 +20268,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                       ? <img src="gcsp-symbol-white.png" alt="GCSP"
                              style={{height:30, width:30, objectFit:'contain'}}
                              onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='block'; }} />
-                      : <>
-                          <img src="gc-simbolo-branco.png" alt="Gestão de Contratos"
-                               style={{height:32, width:32, objectFit:'contain'}}
-                               onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex'; }} />
-                          <span style={{display:'none'}} className="text-white font-black text-xs">SGC</span>
-                        </>}
+                      : null}
                     {SYS.id === 'gcsp' && <span style={{display:'none'}} className="text-white font-black text-xs">GCSP</span>}
                   </>
                 )}
@@ -20286,9 +20282,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
             {/* Divider */}
             <div className="w-8 h-px mb-3" style={{background:'rgba(255,255,255,0.15)'}} />
+            </>)}
 
             {/* Nav principal */}
-            <nav className="flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible">
+            <nav className={`flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible ${SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) ? 'pt-2' : ''}`}>
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Home} label="Início"
                   active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage}

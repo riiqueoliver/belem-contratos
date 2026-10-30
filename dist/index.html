@@ -28825,7 +28825,7 @@ function App() {
       background: BLUE,
       boxShadow: '4px 0 24px rgba(11,43,94,0.18)'
     }
-  }, React.createElement("button", {
+  }, (SYS.id === 'gcsp' || ARCANJO_ONLY.has(currentUser.username)) && React.createElement(React.Fragment, null, React.createElement("button", {
     onClick: handleGoHome,
     title: "In\xEDcio",
     className: "mb-4 mt-1 focus:outline-none group relative"
@@ -28857,24 +28857,7 @@ function App() {
       e.currentTarget.style.display = 'none';
       e.currentTarget.nextSibling.style.display = 'block';
     }
-  }) : React.createElement(React.Fragment, null, React.createElement("img", {
-    src: "gc-simbolo-branco.png",
-    alt: "Gest\xE3o de Contratos",
-    style: {
-      height: 32,
-      width: 32,
-      objectFit: 'contain'
-    },
-    onError: e => {
-      e.currentTarget.style.display = 'none';
-      e.currentTarget.nextSibling.style.display = 'flex';
-    }
-  }), React.createElement("span", {
-    style: {
-      display: 'none'
-    },
-    className: "text-white font-black text-xs"
-  }, "SGC")), SYS.id === 'gcsp' && React.createElement("span", {
+  }) : null, SYS.id === 'gcsp' && React.createElement("span", {
     style: {
       display: 'none'
     },
@@ -28889,8 +28872,8 @@ function App() {
     style: {
       background: 'rgba(255,255,255,0.15)'
     }
-  }), React.createElement("nav", {
-    className: "flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible"
+  })), React.createElement("nav", {
+    className: `flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible ${SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) ? 'pt-2' : ''}`
   }, !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: Home,
     label: "In\xEDcio",
