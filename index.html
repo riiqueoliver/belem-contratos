@@ -17629,18 +17629,26 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
     // Memória, base e documentos recentes mudam pouco: ficam em cache por 2 minutos
     // (e são recarregados quando o próprio assistente salva algo).
-    const iaCache = { em: 0, valor: null, pendente: null };
+    // Documentos são privados: cada usuário só vê os que criou e os que recebeu por envio.
+    const iaCache = { em: 0, valor: null, pendente: null, usuario: null };
     function iaInvalidarContexto() { iaCache.em = 0; }
-    async function iaContexto() {
+    const iaPorData = (a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0);
+    // Ids dos documentos que outros usuários enviaram para este
+    async function iaIdsRecebidos(username) {
+      const s = await db.collection(IA_COL.envios).where('para', '==', username).get();
+      return new Set(s.docs.map(d => d.data().docId).filter(Boolean));
+    }
+    async function iaContexto(username) {
+      if (iaCache.usuario !== username) { iaCache.valor = null; iaCache.em = 0; iaCache.usuario = username; }
       if (iaCache.valor && Date.now() - iaCache.em < 120000) return iaCache.valor;
       if (!iaCache.pendente) {
         iaCache.pendente = Promise.all([
           db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(),
-          db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get(),
+          db.collection(IA_COL.documentos).where('criadoPor', '==', username || '').get(),
         ]).then(([mem, docs]) => {
           iaCache.valor = {
             memorias: mem.docs.map(d => d.data()).reverse(),
-            docsRecentes: docs.docs.map(d => ({ id: d.id, ...d.data() })),
+            docsRecentes: docs.docs.map(d => ({ id: d.id, ...d.data() })).sort(iaPorData).slice(0, 15),
           };
           iaCache.em = Date.now();
           return iaCache.valor;
@@ -17670,13 +17678,20 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       }
       if (nome === 'alertas_vencimentos') return { alertas: iaAlertas(dados, Number(e.dias) || 60) };
       if (nome === 'buscar_documentos') {
+        const recebidosIds = await iaIdsRecebidos(usuario.username);
+        const podeVer = (id, x) => x.criadoPor === usuario.username || recebidosIds.has(id);
         if (e.id) {
           const d = await db.collection(IA_COL.documentos).doc(e.id).get();
-          return d.exists ? { id: d.id, ...iaEnxugar({ ...d.data(), conteudo: undefined }), conteudo: d.data().conteudo } : { erro: 'Documento não encontrado.' };
+          if (!d.exists || !podeVer(d.id, d.data())) return { erro: 'Documento não encontrado entre os seus documentos ou os que você recebeu.' };
+          return { id: d.id, ...iaEnxugar({ ...d.data(), conteudo: undefined }), conteudo: d.data().conteudo };
         }
-        const snap = await db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).get();
+        const [meus, recebidos] = await Promise.all([
+          db.collection(IA_COL.documentos).where('criadoPor', '==', usuario.username).get(),
+          Promise.all([...recebidosIds].map(id => db.collection(IA_COL.documentos).doc(id).get())),
+        ]);
         const termos = iaNorm(e.busca).split(/\s+/).filter(Boolean);
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const lista = [...meus.docs, ...recebidos.filter(d => d.exists)]
+          .map(d => ({ id: d.id, ...d.data() })).sort(iaPorData)
           .filter(x => !e.tipo || x.tipo === e.tipo)
           .filter(x => { const t = iaNorm(`${x.titulo} ${x.numero || ''} ${x.contrato || ''} ${x.conteudo}`); return termos.every(y => t.includes(y)); })
           .slice(0, 20)
@@ -18150,7 +18165,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => { fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [mensagens.length, ocupado, status]);
       useEffect(() => () => { try { reconRef.current?.stop(); } catch {} }, []);
       // Já busca memória e base ao abrir o chat, para a primeira mensagem não esperar por isso
-      useEffect(() => { iaContexto().catch(() => {}); }, []);
+      useEffect(() => { iaContexto(currentUser.username).catch(() => {}); }, []);
 
       const alertas = useMemo(() => iaAlertas(dados, 30), [dados.contractMeta, dados.contracts, dados.certidoes]);
       const primeiroNome = String(currentUser.name || currentUser.username).split(' ')[0];
@@ -18212,7 +18227,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           }
           salvarMensagens(id, lista).catch(err => console.warn('[Assistente] salvar:', err.message));
 
-          const contexto = await iaContexto();
+          const contexto = await iaContexto(currentUser.username);
           const system = iaSistema({ usuario: currentUser, pagina, ...contexto, baseOk: iaBaseDisponivel(), alertas: iaAlertas(dadosRef.current, 30) });
 
           // Histórico em texto (as ferramentas de turnos anteriores não são reenviadas)
@@ -18375,7 +18390,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [baseQtd, setBaseQtd]       = useState(null);
       const [filtroTipo, setFiltroTipo] = useState('');
       const [buscaDoc, setBuscaDoc]     = useState('');
-      const [visao, setVisao]           = useState('todos');    // todos | recebidos | meus
+      const [visao, setVisao]           = useState('meus');     // meus | recebidos (documentos são privados de quem criou)
       const [recebidos, setRecebidos]   = useState([]);
       const setConversaId = id => { setConversaIdS(id); iaGravarConversaAtiva(currentUser.username, id); };
 
@@ -18397,7 +18412,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       }, [aba, visao, recebidos]);
       const naoLidosRecebidos = recebidos.filter(r => !r.lido).length;
       useEffect(() => {
-        if (aba === 'documentos') return db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).onSnapshot(s => setDocumentos(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+        if (aba === 'documentos') return db.collection(IA_COL.documentos).where('criadoPor', '==', currentUser.username)
+          .onSnapshot(s => setDocumentos(s.docs.map(d => ({ id: d.id, ...d.data() })).sort(iaPorData)), () => {});
         if (aba === 'memoria') {
           if (!iaBaseDisponivel()) setBaseQtd(-1);
           else fetch('/api/ia', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -18408,7 +18424,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       }, [aba]);
 
       const docsFiltrados = documentos
-        .filter(d => visao !== 'meus' || d.criadoPor === currentUser.username)
+        .filter(d => d.criadoPor === currentUser.username)
         .filter(d => !filtroTipo || d.tipo === filtroTipo)
         .filter(d => { const t = iaNorm(buscaDoc).split(/\s+/).filter(Boolean); const s = iaNorm(`${d.titulo} ${d.numero} ${d.contrato} ${d.criadoPorNome}`); return t.every(x => s.includes(x)); });
 
@@ -18474,7 +18490,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="max-w-5xl mx-auto">
                 <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit mb-3">
-                  {[['todos', 'Todos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`], ['meus', 'Meus']].map(([k, r]) => (
+                  {[['meus', 'Meus documentos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`]].map(([k, r]) => (
                     <button key={k} onClick={() => setVisao(k)}
                             className={`px-3 py-1.5 rounded-md ${visao === k ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
                       {r}{k === 'recebidos' && naoLidosRecebidos > 0 ? ' •' : ''}

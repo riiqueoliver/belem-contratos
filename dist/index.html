@@ -25099,21 +25099,32 @@ async function iaChamar(corpo) {
 const iaCache = {
   em: 0,
   valor: null,
-  pendente: null
+  pendente: null,
+  usuario: null
 };
 function iaInvalidarContexto() {
   iaCache.em = 0;
 }
-async function iaContexto() {
+const iaPorData = (a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0);
+async function iaIdsRecebidos(username) {
+  const s = await db.collection(IA_COL.envios).where('para', '==', username).get();
+  return new Set(s.docs.map(d => d.data().docId).filter(Boolean));
+}
+async function iaContexto(username) {
+  if (iaCache.usuario !== username) {
+    iaCache.valor = null;
+    iaCache.em = 0;
+    iaCache.usuario = username;
+  }
   if (iaCache.valor && Date.now() - iaCache.em < 120000) return iaCache.valor;
   if (!iaCache.pendente) {
-    iaCache.pendente = Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(15).get()]).then(([mem, docs]) => {
+    iaCache.pendente = Promise.all([db.collection(IA_COL.memoria).orderBy('criadoEm', 'desc').limit(80).get(), db.collection(IA_COL.documentos).where('criadoPor', '==', username || '').get()]).then(([mem, docs]) => {
       iaCache.valor = {
         memorias: mem.docs.map(d => d.data()).reverse(),
         docsRecentes: docs.docs.map(d => ({
           id: d.id,
           ...d.data()
-        }))
+        })).sort(iaPorData).slice(0, 15)
       };
       iaCache.em = Date.now();
       return iaCache.valor;
@@ -25158,25 +25169,28 @@ async function iaExecutar(nome, e, ctx) {
     alertas: iaAlertas(dados, Number(e.dias) || 60)
   };
   if (nome === 'buscar_documentos') {
+    const recebidosIds = await iaIdsRecebidos(usuario.username);
+    const podeVer = (id, x) => x.criadoPor === usuario.username || recebidosIds.has(id);
     if (e.id) {
       const d = await db.collection(IA_COL.documentos).doc(e.id).get();
-      return d.exists ? {
+      if (!d.exists || !podeVer(d.id, d.data())) return {
+        erro: 'Documento não encontrado entre os seus documentos ou os que você recebeu.'
+      };
+      return {
         id: d.id,
         ...iaEnxugar({
           ...d.data(),
           conteudo: undefined
         }),
         conteudo: d.data().conteudo
-      } : {
-        erro: 'Documento não encontrado.'
       };
     }
-    const snap = await db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).get();
+    const [meus, recebidos] = await Promise.all([db.collection(IA_COL.documentos).where('criadoPor', '==', usuario.username).get(), Promise.all([...recebidosIds].map(id => db.collection(IA_COL.documentos).doc(id).get()))]);
     const termos = iaNorm(e.busca).split(/\s+/).filter(Boolean);
-    const lista = snap.docs.map(d => ({
+    const lista = [...meus.docs, ...recebidos.filter(d => d.exists)].map(d => ({
       id: d.id,
       ...d.data()
-    })).filter(x => !e.tipo || x.tipo === e.tipo).filter(x => {
+    })).sort(iaPorData).filter(x => !e.tipo || x.tipo === e.tipo).filter(x => {
       const t = iaNorm(`${x.titulo} ${x.numero || ''} ${x.contrato || ''} ${x.conteudo}`);
       return termos.every(y => t.includes(y));
     }).slice(0, 20).map(x => ({
@@ -25903,7 +25917,7 @@ function AssistenteChat({
     } catch {}
   }, []);
   useEffect(() => {
-    iaContexto().catch(() => {});
+    iaContexto(currentUser.username).catch(() => {});
   }, []);
   const alertas = useMemo(() => iaAlertas(dados, 30), [dados.contractMeta, dados.contracts, dados.certidoes]);
   const primeiroNome = String(currentUser.name || currentUser.username).split(' ')[0];
@@ -26013,7 +26027,7 @@ function AssistenteChat({
         setConversaId(id);
       }
       salvarMensagens(id, lista).catch(err => console.warn('[Assistente] salvar:', err.message));
-      const contexto = await iaContexto();
+      const contexto = await iaContexto(currentUser.username);
       const system = iaSistema({
         usuario: currentUser,
         pagina,
@@ -26280,7 +26294,7 @@ function AssistentePage({
   const [baseQtd, setBaseQtd] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('');
   const [buscaDoc, setBuscaDoc] = useState('');
-  const [visao, setVisao] = useState('todos');
+  const [visao, setVisao] = useState('meus');
   const [recebidos, setRecebidos] = useState([]);
   const setConversaId = id => {
     setConversaIdS(id);
@@ -26310,10 +26324,10 @@ function AssistentePage({
   }, [aba, visao, recebidos]);
   const naoLidosRecebidos = recebidos.filter(r => !r.lido).length;
   useEffect(() => {
-    if (aba === 'documentos') return db.collection(IA_COL.documentos).orderBy('criadoEm', 'desc').limit(300).onSnapshot(s => setDocumentos(s.docs.map(d => ({
+    if (aba === 'documentos') return db.collection(IA_COL.documentos).where('criadoPor', '==', currentUser.username).onSnapshot(s => setDocumentos(s.docs.map(d => ({
       id: d.id,
       ...d.data()
-    }))), () => {});
+    })).sort(iaPorData)), () => {});
     if (aba === 'memoria') {
       if (!iaBaseDisponivel()) setBaseQtd(-1);else fetch('/api/ia', {
         method: 'POST',
@@ -26331,7 +26345,7 @@ function AssistentePage({
       }))), () => {});
     }
   }, [aba]);
-  const docsFiltrados = documentos.filter(d => visao !== 'meus' || d.criadoPor === currentUser.username).filter(d => !filtroTipo || d.tipo === filtroTipo).filter(d => {
+  const docsFiltrados = documentos.filter(d => d.criadoPor === currentUser.username).filter(d => !filtroTipo || d.tipo === filtroTipo).filter(d => {
     const t = iaNorm(buscaDoc).split(/\s+/).filter(Boolean);
     const s = iaNorm(`${d.titulo} ${d.numero} ${d.contrato} ${d.criadoPorNome}`);
     return t.every(x => s.includes(x));
@@ -26419,7 +26433,7 @@ function AssistentePage({
     className: "max-w-5xl mx-auto"
   }, React.createElement("div", {
     className: "flex rounded-lg bg-slate-100 p-1 text-xs font-semibold w-fit mb-3"
-  }, [['todos', 'Todos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`], ['meus', 'Meus']].map(([k, r]) => React.createElement("button", {
+  }, [['meus', 'Meus documentos'], ['recebidos', `Recebidos${recebidos.length ? ` (${recebidos.length})` : ''}`]].map(([k, r]) => React.createElement("button", {
     key: k,
     onClick: () => setVisao(k),
     className: `px-3 py-1.5 rounded-md ${visao === k ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`
