@@ -208,6 +208,7 @@
     .ia-md th, .ia-md td { border: 1px solid #cbd5e1; padding: .3em .5em; text-align: left; vertical-align: top; } .ia-md th { background: #f1f5f9; font-weight: 700; }
     .ia-md blockquote { border-left: 3px solid #14B8A6; padding-left: .7em; color: #475569; margin: .4em 0; }
     .ia-md code { background: #f1f5f9; border-radius: 4px; padding: 0 .3em; font-size: .85em; }
+    .ia-centro { display: block; text-align: center; } .ia-direita { display: block; text-align: right; }
     .ia-doc { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.55; } .ia-doc p { text-align: justify; } .ia-doc h1 { text-align: center; }
     .ia-pontos { display: inline-flex; gap: 3px; } .ia-pontos i { width: 5px; height: 5px; border-radius: 50%; background: #14B8A6; animation: iaPonto 1s infinite ease-in-out; }
     .ia-pontos i:nth-child(2) { animation-delay: .15s; } .ia-pontos i:nth-child(3) { animation-delay: .3s; }
@@ -17902,8 +17903,9 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
           'com o nome do documento. Use termos específicos (nº do contrato, empresa, órgão, assunto) e refaça com outros termos se vier pouco.',
         input_schema:{ type:'object', properties:{ busca:{ type:'string' } }, required:['busca'] } },
       { name:'salvar_documento',
-        description:'Salva um documento finalizado. Obrigatório para todo documento entregue ao usuário. O conteúdo vai completo, em Markdown ' +
-          '(títulos com #, negrito com **, listas, tabelas com |). O documento aparece num cartão na conversa, com opções de copiar e baixar em Word.',
+        description:'Salva um documento finalizado. Obrigatório para todo documento entregue ao usuário. O conteúdo vai completo, em Markdown, ' +
+          'seguindo o padrão de formatação descrito nas instruções (# título, ## seções numeradas, ^^ centralizado, -> à direita, tabelas com |, ' +
+          '[colchetes] para campos a preencher). O cabeçalho da Belém Digital entra sozinho no Word: não escreva cabeçalho nem logo no texto.',
         input_schema:{ type:'object', properties:{
           tipo:{ type:'string', enum: Object.keys(IA_TIPOS_DOC) },
           titulo:{ type:'string' },
@@ -17961,8 +17963,22 @@ Regras:
 3. Antes de numerar ofício, memorando ou despacho, use proximo_numero. Ao emitir um número, registre com lembrar (categoria numeracao).
 4. Gravações em dados do sistema: use propor_gravacao. Nunca proponha exclusão.
 5. Aprenda: quando o usuário corrigir algo, disser uma preferência ou informar um fato duradouro, registre com lembrar. Antes de redigir um tipo de documento, veja com buscar_documentos como os anteriores foram feitos e siga o padrão.
-6. Estilo: português formal, claro e objetivo. Documentos oficiais com título centralizado, local e data por extenso ("Belém (PA), ${iaHojeExtenso()}."), parágrafos numerados quando couber, fecho "Atenciosamente," e assinatura com nome e cargo do usuário.
-7. Se a demanda for ambígua a ponto de mudar o documento, pergunte antes — no máximo três perguntas objetivas. Se dá para fazer com uma suposição razoável, faça e diga qual foi.
+6. Estilo: português formal, claro e objetivo. Padrão de formatação dos documentos (o Word sai com o cabeçalho da Belém Digital e da Prefeitura e rodapé com página — não escreva cabeçalho, logo nem "Belém Digital" no topo):
+   - "# TÍTULO DO DOCUMENTO" em maiúsculas (uma vez, no início).
+   - Logo abaixo, linhas de identificação centralizadas começando com "^^ ", uma por linha (ex.: "^^ **Nº [___/2026] – NGCC/BELÉM DIGITAL**", "^^ Processo GDOC nº ...").
+   - Seções com "## 1. Nome da Seção", numeradas; subseções com "### 1.1 ...".
+   - Parágrafos corridos, sem quebrar linha no meio da frase. Rótulos em negrito ("**Unidade:** ...") em listas com "- ".
+   - Tabelas em Markdown (| col | col |) para itens, valores, cronogramas e dotações.
+   - Local e data alinhados à direita: "-> Belém (PA), ${iaHojeExtenso()}."
+   - Assinatura centralizada: "^^ ______________________________", "^^ **NOME EM MAIÚSCULAS**", "^^ Cargo – Unidade".
+   - Campos que dependem do usuário entre [colchetes] (saem destacados em amarelo no Word).
+   - Em e-mails, não use # nem ^^: só texto, com saudação, corpo e assinatura simples.
+7. Conduza a montagem do documento com perguntas. Ao receber um pedido de documento (GDoc, ofício, memorando, despacho, e-mail formal, extrato, ata, DFD, ETP, TR):
+   a) Consulte antes o que já existe (consultar_dados, consultar_base, buscar_documentos) para não perguntar o que o sistema já sabe.
+   b) Se faltar informação essencial, NÃO redija ainda. Responda com um roteiro curto: uma frase dizendo o que vai montar e até 5 perguntas numeradas, objetivas, cada uma com uma sugestão entre parênteses quando houver (ex.: "3. Quem assina? (sugestão: Henrique Correia, Gestor Comercial)"). Termine dizendo que o usuário pode responder só o que souber ou escrever "pode redigir" para seguir com as sugestões.
+   c) Em DFD, ETP e TR, conduza em etapas: primeiro objeto, necessidade, quantidades, valor estimado e prazos; depois redija; ao final ofereça revisar seções específicas.
+   d) Se o pedido já trouxer tudo, ou o usuário disser "pode redigir", redija direto, usando [colchetes] no que faltar.
+   e) Depois de entregar, pergunte em uma linha se quer ajustar algo (ex.: tom, seções, valores).
 8. Dados pessoais: use só o necessário para a tarefa.
 9. Respostas no chat são curtas e diretas, em Markdown simples.
 
@@ -18179,25 +18195,147 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const p = [];
         while (i < linhas.length && linhas[i].trim() && !/^\s*(\||#{1,4}\s|>|[-*•]\s|\d+[.)]\s|-{3,}\s*$)/.test(linhas[i])) p.push(linhas[i++]);
         if (!p.length) p.push(linhas[i++]);
-        html += `<p>${p.map(inline).join('<br>')}</p>`;
+        html += `<p>${p.map(t => /^\s*\^\^/.test(t) ? `<span class="ia-centro">${inline(t.replace(/^\s*\^\^\s*/, ''))}</span>`
+                              : /^\s*->/.test(t) ? `<span class="ia-direita">${inline(t.replace(/^\s*->\s*/, ''))}</span>`
+                              : inline(t)).join('<br>')}</p>`;
       }
       return html;
     }
 
-    const IA_CSS_DOC = 'body{font-family:Arial,sans-serif;font-size:12pt;line-height:1.5;color:#111}' +
-      'h1,h2,h3,h4{font-family:Arial,sans-serif;color:#0B2B5E}h1{font-size:15pt;text-align:center}h2{font-size:13pt}h3{font-size:12pt}' +
-      'p{text-align:justify;margin:0 0 8pt}table{border-collapse:collapse;width:100%;margin:6pt 0}' +
-      'td,th{border:1px solid #555;padding:4pt 6pt;font-size:11pt;vertical-align:top}th{background:#E8EEF7}blockquote{margin:6pt 24pt;font-style:italic}';
+    // Markdown do assistente → corpo WordprocessingML no padrão das atas da BD.
+    // Convenções extras: linha começando com "^^ " fica centralizada; com "-> ", alinhada à direita.
+    function iaMdDocx(md) {
+      const AZUL = '0F265C', LARGURA = 9071;   // largura útil da página A4 com margens 3 cm / 2 cm (twips)
+      const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const runs = (texto, base = {}) => {
+        const partes = String(texto).split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|\[[^\]\n]{1,120}\])/g).filter(Boolean);
+        return partes.map(p => {
+          let t = p, b = !!base.b, i = !!base.i, hl = false;
+          if (/^\*\*[^*]+\*\*$/.test(p)) { t = p.slice(2, -2); b = true; }
+          else if (/^\*[^*]+\*$/.test(p)) { t = p.slice(1, -1); i = true; }
+          else if (/^\[[^\]]+\]$/.test(p)) hl = true;      // campo a preencher
+          const rPr = (b ? '<w:b/><w:bCs/>' : '') + (i ? '<w:i/><w:iCs/>' : '') + (hl ? '<w:highlight w:val="yellow"/>' : '') +
+                      (base.cor ? `<w:color w:val="${base.cor}"/>` : '') + (base.sz ? `<w:sz w:val="${base.sz}"/><w:szCs w:val="${base.sz}"/>` : '');
+          return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
+        }).join('');
+      };
+      const par = (conteudo, o = {}) => {
+        const pPr = (o.keepNext ? '<w:keepNext/>' : '') +
+          (o.borda || '') + (o.fundo ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.fundo}"/>` : '') + (o.tabs || '') +
+          `<w:spacing w:before="${o.antes || 0}" w:after="${o.depois ?? 120}" w:line="${o.linha || 276}" w:lineRule="auto"/>` +
+          (o.recuo || '') + `<w:jc w:val="${o.jc || 'both'}"/>`;
+        return `<w:p><w:pPr>${pPr}</w:pPr>${conteudo}</w:p>`;
+      };
+      const alinhamento = t => t.length > 95 ? 'both' : 'left';
 
-    function iaBaixarWord(titulo, md) {
-      const logo = window.location.origin + '/belem-digital-azul.png';
+      const linhas = String(md || '').replace(/\r/g, '').split('\n');
+      const ehSep = r => /^[\s|:-]+$/.test(r) && r.includes('-');
+      const celulas = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      let x = '', i = 0, primeiroTitulo = true;
+      while (i < linhas.length) {
+        const l = linhas[i];
+        if (!l.trim()) { i++; continue; }
+        // Tabela
+        if (/^\s*\|/.test(l)) {
+          const rows = [];
+          while (i < linhas.length && /^\s*\|/.test(linhas[i])) rows.push(linhas[i++]);
+          const temCab = rows.length > 1 && ehSep(rows[1]);
+          const dados = rows.filter(r => !ehSep(r)).map(celulas);
+          const nCol = Math.max(...dados.map(r => r.length));
+          // Largura de cada coluna proporcional ao texto mais longo dela (entre 8% e 60%)
+          const pesos = Array.from({ length: nCol }, (_, c) => Math.min(60, Math.max(6, ...dados.map(r => String(r[c] || '').replace(/\*\*/g, '').length))));
+          const soma = pesos.reduce((a, b) => a + b, 0);
+          const largs = pesos.map(p => Math.max(Math.round(LARGURA * 0.08), Math.round(LARGURA * p / soma)));
+          const bordas = '<w:tcBorders>' + ['top', 'left', 'bottom', 'right'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="A6B0C3"/>`).join('') + '</w:tcBorders>';
+          x += `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/>` +
+               `<w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
+               `<w:tblGrid>${largs.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>` +
+               dados.map((r, k) => {
+                 const cab = temCab && k === 0;
+                 return `<w:tr>${cab ? '<w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>' : '<w:trPr><w:cantSplit/></w:trPr>'}` +
+                   Array.from({ length: nCol }, (_, c) => `<w:tc><w:tcPr><w:tcW w:w="${largs[c]}" w:type="dxa"/>${bordas}` +
+                     (cab ? '<w:shd w:val="clear" w:color="auto" w:fill="EEF1F7"/>' : '') + '<w:vAlign w:val="center"/></w:tcPr>' +
+                     par(runs(r[c] || '', cab ? { b: true, cor: AZUL, sz: 20 } : { sz: 20 }), { depois: 0, linha: 252, jc: 'left' }) + '</w:tc>').join('') +
+                   '</w:tr>';
+               }).join('') + '</w:tbl>' + par('', { depois: 60 });
+          continue;
+        }
+        // Títulos
+        const h = l.match(/^(#{1,4})\s+(.*)$/);
+        if (h) {
+          const n = h[1].length, t = h[2].replace(/^\^\^\s*/, '');
+          if (n === 1) {
+            x += par(runs(t, { b: true, cor: AZUL, sz: 28 }), { jc: 'center', antes: primeiroTitulo ? 0 : 240, depois: 80, keepNext: true,
+              borda: `<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="4" w:color="${AZUL}"/></w:pBdr>` });
+            primeiroTitulo = false;
+          } else if (n === 2) {
+            x += par(runs(t, { b: true, cor: AZUL, sz: 22 }), { jc: 'left', antes: 240, depois: 120, keepNext: true, fundo: 'EEF1F7',
+              borda: `<w:pBdr><w:left w:val="single" w:sz="24" w:space="6" w:color="${AZUL}"/></w:pBdr>`, recuo: '<w:ind w:left="120"/>' });
+          } else {
+            x += par(runs(t, { b: true, cor: n === 3 ? AZUL : '1F2937', sz: 22 }), { jc: 'left', antes: 160, depois: 80, keepNext: true });
+          }
+          i++; continue;
+        }
+        // Linha separadora
+        if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)) {
+          x += par('', { depois: 120, borda: '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="D5DCE6"/></w:pBdr>' });
+          i++; continue;
+        }
+        // Citação
+        if (/^\s*>\s?/.test(l) && !/^\s*->/.test(l)) {
+          x += par(runs(l.replace(/^\s*>\s?/, ''), { i: true, cor: '475569' }), { recuo: '<w:ind w:left="567"/>',
+            borda: '<w:pBdr><w:left w:val="single" w:sz="12" w:space="8" w:color="A6B0C3"/></w:pBdr>' });
+          i++; continue;
+        }
+        // Lista (com marcador ou numerada, recuo de 1 nível para itens indentados)
+        const lst = l.match(/^(\s*)([-*•]|\d+[.)]|[a-z][.)])\s+(.*)$/);
+        if (lst) {
+          const nivel = lst[1].length >= 2 ? 1 : 0;
+          const esq = 567 + nivel * 425;
+          const marcador = /^[-*•]$/.test(lst[2]) ? (nivel ? '–' : '•') : lst[2];
+          x += par(`<w:r><w:t xml:space="preserve">${esc(marcador)}</w:t></w:r><w:r><w:tab/></w:r>` + runs(lst[3]),
+            { recuo: `<w:ind w:left="${esq}" w:hanging="340"/>`, tabs: `<w:tabs><w:tab w:val="left" w:pos="${esq}"/></w:tabs>`,
+              depois: 60, jc: alinhamento(lst[3]) });
+          i++; continue;
+        }
+        // Parágrafo: cada linha vira um parágrafo (linhas curtas não ficam esticadas)
+        let t = l.trim(), jc = null;
+        if (t.startsWith('^^')) { jc = 'center'; t = t.replace(/^\^\^\s*/, ''); }
+        else if (t.startsWith('->')) { jc = 'right'; t = t.replace(/^->\s*/, ''); }
+        const proxima = (linhas[i + 1] || '').trim();
+        const curta = t.length <= 95;
+        const assinatura = /^_{5,}$/.test(t);
+        x += par(runs(t), { jc: jc || alinhamento(t), antes: assinatura ? 560 : 0, depois: curta && proxima && !/^(#|\||-|\*|\d+[.)])/.test(proxima) ? 40 : 140 });
+        i++;
+      }
+      return x;
+    }
+
+    // JSZip é carregado sob demanda no build (não bloqueia a abertura do sistema)
+    function iaJSZip() {
+      if (window.JSZip) return Promise.resolve(window.JSZip);
+      return new Promise((ok, falha) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+        s.onload = () => window.JSZip ? ok(window.JSZip) : falha(new Error('JSZip não carregou'));
+        s.onerror = () => falha(new Error('Não foi possível carregar o gerador de Word.'));
+        document.head.appendChild(s);
+      });
+    }
+
+    // Gera o .docx no modelo oficial (cabeçalho Belém Digital + Prefeitura, rodapé com página)
+    async function iaBaixarWord(titulo, md) {
       const nome = String(titulo || 'documento').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
-      const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
-        `<head><meta charset="utf-8"><title>${nome}</title><style>${IA_CSS_DOC}</style></head><body>` +
-        `<p style="text-align:center"><img src="${logo}" width="240" alt="Belém Digital"></p>${iaMdHtml(md)}</body></html>`;
-      const url = URL.createObjectURL(new Blob(['﻿', html], { type: 'application/msword' }));
+      const JSZip = await iaJSZip();
+      const resp = await fetch('/modelo-documento-bd.docx');
+      if (!resp.ok) throw new Error('Modelo do documento não encontrado.');
+      const zip = await JSZip.loadAsync(await resp.arrayBuffer());
+      const xml = await zip.file('word/document.xml').async('string');
+      zip.file('word/document.xml', xml.replace('<!--CORPO-->', iaMdDocx(md)));
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = nome + '.doc';
+      a.href = url; a.download = nome + '.docx';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
@@ -18256,7 +18394,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <button onClick={() => setAberto(v => !v)} className="text-[11px] font-semibold text-teal-700 hover:underline">{aberto ? 'Ocultar' : 'Ver'}</button>
             <button onClick={async () => { const ok = await iaCopiar(await obter()); addToast?.(ok ? '📋 Documento copiado — cole no GDoc, e-mail ou Word.' : '❌ Não foi possível copiar.'); }}
                     className="text-[11px] font-semibold text-teal-700 hover:underline">Copiar</button>
-            <button onClick={async () => iaBaixarWord(doc.titulo, await obter())} className="text-[11px] font-semibold text-teal-700 hover:underline">Word</button>
+            <button onClick={async () => { try { await iaBaixarWord(doc.titulo, await obter()); } catch (e) { addToast?.('❌ ' + e.message); } }}
+                    className="text-[11px] font-semibold text-teal-700 hover:underline">Baixar Word</button>
           </div>
           {aberto && (
             <div className="px-4 py-3 max-h-[480px] overflow-y-auto border-t border-teal-100">
