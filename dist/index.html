@@ -30870,9 +30870,9 @@ function App() {
     className: "text-center text-[10px] text-gray-400 pb-4"
   }, React.createElement("p", null, "Desenvolvido por ", React.createElement("span", {
     className: "font-semibold text-gray-500"
-  }, "Neotrix"), " \xB7 2026")) : React.createElement("div", {
+  }, "Neotrix"), " \xB7 2026")) : SYS.id === 'gcsp' ? React.createElement("div", {
     className: "text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2"
-  }, React.createElement("p", null, SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)')))), !showAssistentePage && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(AssistentePin, {
+  }, React.createElement("p", null, "GCSP \xB7 Prefeitura Municipal de Bel\xE9m \xB7 SLA em dias \xFAteis (seg\u2013sex)")) : null)), !showAssistentePage && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(AssistentePin, {
     currentUser: currentUser,
     dados: dadosIA,
     pagina: paginaAtual,

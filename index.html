@@ -21790,10 +21790,12 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               <div className="text-center text-[10px] text-gray-400 pb-4">
                 <p>Desenvolvido por <span className="font-semibold text-gray-500">Neotrix</span> · 2026</p>
               </div>
-            ) : (
+            ) : SYS.id === 'gcsp' ? (
               <div className="text-center text-xs text-gray-400 pb-4 flex flex-col items-center gap-2">
-                <p>{SYS.id === 'gcsp' ? 'GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)' : 'Belém Digital · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)'}</p>
+                <p>GCSP · Prefeitura Municipal de Belém · SLA em dias úteis (seg–sex)</p>
               </div>
+            ) : (
+              null
             )}
           </main>
           </div>{/* fim flex-1 conteúdo principal */}
