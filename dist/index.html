@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Belém Digital – Gestão de Contratos</title>
-  <link rel="icon" type="image/png" href="simbologo2.PNG" />
+  <link rel="icon" type="image/png" href="gc-simbolo-cor.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -28740,13 +28740,12 @@ function App() {
       e.currentTarget.nextSibling.style.display = 'block';
     }
   }) : React.createElement(React.Fragment, null, React.createElement("img", {
-    src: "simbologo2.PNG",
-    alt: "SGC",
+    src: "gc-simbolo-branco.png",
+    alt: "Gest\xE3o de Contratos",
     style: {
-      height: 30,
-      width: 30,
-      objectFit: 'contain',
-      imageRendering: 'auto'
+      height: 32,
+      width: 32,
+      objectFit: 'contain'
     },
     onError: e => {
       e.currentTarget.style.display = 'none';
@@ -29154,7 +29153,19 @@ function App() {
     }
   }, React.createElement("div", {
     className: "flex items-center gap-3"
-  }, React.createElement("div", null, React.createElement("p", {
+  }, SYS.id === 'main' && !emArcanjo && React.createElement(React.Fragment, null, React.createElement("img", {
+    src: "gestao-contratos-cor.png",
+    alt: "Gest\xE3o de Contratos",
+    onClick: handleGoHome,
+    className: "cursor-pointer select-none",
+    style: {
+      height: 38,
+      width: 'auto',
+      objectFit: 'contain'
+    }
+  }), React.createElement("span", {
+    className: "w-px h-8 bg-gray-200"
+  })), React.createElement("div", null, React.createElement("p", {
     className: "text-sm font-bold leading-tight",
     style: {
       color: BLUE

@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Belém Digital – Gestão de Contratos</title>
-  <link rel="icon" type="image/png" href="simbologo2.PNG" />
+  <link rel="icon" type="image/png" href="gc-simbolo-cor.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -20191,8 +20191,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                              style={{height:30, width:30, objectFit:'contain'}}
                              onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='block'; }} />
                       : <>
-                          <img src="simbologo2.PNG" alt="SGC"
-                               style={{height:30, width:30, objectFit:'contain', imageRendering:'auto'}}
+                          <img src="gc-simbolo-branco.png" alt="Gestão de Contratos"
+                               style={{height:32, width:32, objectFit:'contain'}}
                                onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex'; }} />
                           <span style={{display:'none'}} className="text-white font-black text-xs">SGC</span>
                         </>}
@@ -20396,6 +20396,13 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <header className="bg-white sticky top-0 z-40 px-6 flex items-center justify-between"
                     style={{height:'56px', borderBottom:'1px solid #e2e8f0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)'}}>
               <div className="flex items-center gap-3">
+                {SYS.id === 'main' && !emArcanjo && (
+                  <>
+                    <img src="gestao-contratos-cor.png" alt="Gestão de Contratos" onClick={handleGoHome}
+                         className="cursor-pointer select-none" style={{height:38, width:'auto', objectFit:'contain'}} />
+                    <span className="w-px h-8 bg-gray-200" />
+                  </>
+                )}
                 <div>
                   <p className="text-sm font-bold leading-tight" style={{color: BLUE}}>
                     {saudacao}, {firstName}!
