@@ -710,6 +710,78 @@
       }
     }
 
+    /* Lê os campos da NFS-e direto do texto do PDF (sem IA). PDF digitalizado → { semTexto:true }.
+       Competência: vale a da descrição do serviço ("Referente a 02/2026", "COMPETENCIA: NOV 2025");
+       a do cabeçalho da NFS-e só entra se a descrição não trouxer nenhuma. */
+    const NF_MESES = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
+    function nfParseTexto(texto) {
+      const t = texto.replace(/\s+/g, ' ');
+      const r = {};
+      const num = /N[úu]mero\s*(?:\/\s*S[ée]rie|da\s*NFS-?e|da\s*nota(?:\s*fiscal)?)?\s*[:\-]?\s*(\d{1,10})\b/i.exec(t)
+               || /N[º°o]\.?\s*(?:da\s*)?NFS-?e\s*[:\-]?\s*(\d{1,10})\b/i.exec(t);
+      if (num) r.numero = num[1].replace(/^0+(?=\d)/, '');
+      const dt = /emiss[ãa]o[^0-9]{0,40}(\d{2}\/\d{2}\/\d{4})/i.exec(t);
+      if (dt) r.data_emissao = dt[1];
+      const vl = /Valor\s*(?:total\s*)?(?:da|do|dos)\s*(?:NFS-?e|nota(?:\s*fiscal)?|servi[çc]os?)\s*(?:\(R\$\))?\s*[:\-]?\s*(?:R\$\s*)?([\d.]+,\d{2})/i.exec(t)
+              || /Valor\s*(?:total|bruto)\s*(?:\(R\$\))?\s*[:\-]?\s*(?:R\$\s*)?([\d.]+,\d{2})/i.exec(t);
+      if (vl) r.valor = Number(vl[1].replace(/\./g, '').replace(',', '.'));
+      const competenciaEm = s => {
+        const m = /(?:refer[eê]n(?:te|cia)|compet[êe]ncia)[^0-9a-z]{0,6}(?:a[oos]?\s*|à\s*|m[êe]s\s*(?:de\s*)?)*(\d{1,2})\s*[\/\-.]\s*(\d{4})/i.exec(s);
+        if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[1].padStart(2, '0')}/${m[2]}`;
+        const n = /(?:refer[eê]n(?:te|cia)|compet[êe]ncia)[^a-z]{0,6}(?:a[oos]?\s*|à\s*|m[êe]s\s*(?:de\s*)?)*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?\s*(?:de\s*|\/\s*|-\s*)?(\d{4})/i.exec(s);
+        if (n) return `${String(NF_MESES[n[1].toLowerCase()]).padStart(2, '0')}/${n[2]}`;
+        return null;
+      };
+      const desc = /DESCRI[ÇC][ÃA]O\s*(?:DO\s*)?(?:DOS\s*)?SERVI[ÇC]OS?(?:\s*PRESTADOS?)?(.*?)(?:TRIBUTA[ÇC][ÃA]O|C[ÁA]LCULO\s*DO\s*ISS|VALOR\s*TOTAL|$)/i.exec(t);
+      r.competencia = (desc && competenciaEm(desc[1])) || competenciaEm(t);
+      return r;
+    }
+    async function nfLerPdf(arrayBuffer) {
+      if (!window.pdfjsLib) return { semTexto: true };
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let texto = '';
+        const campos = {};
+        for (let i = 1; i <= pdf.numPages; i++) {
+          // A NFS-e sai com os pedaços fora de ordem: remonta as linhas pela posição na página.
+          const itens = (await (await pdf.getPage(i)).getTextContent()).items
+            .filter(it => it.str && it.str.trim())
+            .map(it => ({ s: it.str.trim(), x: it.transform[4], y: it.transform[5] }))
+            .sort((a, b) => b.y - a.y || a.x - b.x);
+          // Na NFS-e de Belém o valor fica logo abaixo do rótulo, na mesma coluna
+          const abaixo = (rotulo, valor) => {
+            for (const r of itens.filter(it => rotulo.test(it.s))) {
+              const v = itens.filter(it => it.y < r.y - 2 && it.y > r.y - 25 && Math.abs(it.x - r.x) < 60 && valor.test(it.s))
+                             .sort((a, b) => (r.y - a.y) - (r.y - b.y) || Math.abs(a.x - r.x) - Math.abs(b.x - r.x))[0];
+              if (v) return v.s.match(valor)[0];
+            }
+            return null;
+          };
+          campos.numero       ??= abaixo(/^N[úu]mero(\s*\/\s*S[ée]rie|\s*da\s*NFS-?e)?$/i, /^\d{1,10}/);
+          campos.data_emissao ??= abaixo(/emiss[ãa]o/i, /\d{2}\/\d{2}\/\d{4}/);
+          campos.valor        ??= abaixo(/^Valor\s*(total\s*)?(da|do|dos)\s*(NFS-?e|nota|servi[çc]os?)/i, /^[\d.]+,\d{2}$/);
+          campos.competencia  ??= abaixo(/^Compet[êe]ncia$/i, /^\d{2}\/\d{4}$/);
+          const linhas = [];
+          for (const it of itens) {
+            const l = linhas[linhas.length - 1];
+            if (l && Math.abs(l.y - it.y) <= 3) l.itens.push(it);
+            else linhas.push({ y: it.y, itens: [it] });
+          }
+          texto += linhas.map(l => l.itens.sort((a, b) => a.x - b.x).map(it => it.s).join(' ')).join('\n') + '\n';
+        }
+        if (texto.replace(/\s/g, '').length < 40) return { semTexto: true };
+        // Rótulo e valor na mesma linha (outros layouts) entram pelo texto corrido;
+        // a competência da descrição do serviço tem prioridade sobre a do cabeçalho.
+        const r = nfParseTexto(texto);
+        return {
+          numero:       campos.numero ? campos.numero.replace(/^0+(?=\d)/, '') : r.numero,
+          data_emissao: campos.data_emissao || r.data_emissao,
+          valor:        campos.valor ? Number(campos.valor.replace(/\./g, '').replace(',', '.')) : r.valor,
+          competencia:  r.competencia || campos.competencia,
+        };
+      } catch { return { semTexto: true }; }
+    }
+
     function stepDeadline(nfDate, stepId) {
       const step = STEPS.find(s => s.id === stepId);
       if (!step || !step.sla) return null;
@@ -7047,12 +7119,32 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
 
       async function handleAnalyzeNF() {
-        if (!addForm.pdfBase64 || !apiKey) return;
+        if (!addForm.pdfBase64) return;
         setAddFormPdfLoading(true);
         try {
           const base64Data = addForm.pdfBase64.split(',')[1];
+          // 1º: PDF com texto (o normal da NFS-e) é lido aqui mesmo, na hora.
+          const bin = atob(base64Data), bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          let nf = await nfLerPdf(bytes.buffer);
+          // 2º: digitalizado ou sem número/valor reconhecível → IA (mais lenta)
+          if (nf.semTexto || !nf.numero || nf.valor == null) nf = await nfLerViaIA(base64Data);
+          preencherComNF(nf);
+        } catch (err) {
+          addToast(`❌ Erro na leitura da NF: ${err.message}`);
+        } finally {
+          setAddFormPdfLoading(false);
+        }
+      }
+
+      async function nfLerViaIA(base64Data) {
+        if (!apiKey) throw new Error('não foi possível ler o texto do PDF e a IA não está disponível.');
+        const ctrl = new AbortController();
+        const limite = setTimeout(() => ctrl.abort(), 90000);
+        try {
           const resp = await fetch('/api/ia', {
             method: 'POST',
+            signal: ctrl.signal,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'claude-haiku-4-5-20251001',
@@ -7070,7 +7162,16 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           if (data.error) throw new Error(data.error.message);
           let text = data.content[0].text.trim();
           if (text.startsWith('```')) text = text.replace(/```json?\n?/,'').replace(/```$/,'').trim();
-          const nf = JSON.parse(text);
+          return JSON.parse(text);
+        } catch (err) {
+          if (err.name === 'AbortError') throw new Error('a IA demorou demais para responder. Tente de novo ou preencha os campos à mão.');
+          throw err;
+        } finally {
+          clearTimeout(limite);
+        }
+      }
+
+      function preencherComNF(nf) {
           const isoDate  = brDateToIso(nf.data_emissao);
           const valorBRL = nf.valor != null
             ? Number(nf.valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
@@ -7091,11 +7192,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             refMonth:     compIso    || f.refMonth,   // competência da descrição, NÃO a data de emissão
           }));
           addToast(`🤖 NF lida: nº ${nf.numero || '–'} · Emissão ${nf.data_emissao || '–'} · Competência ${nf.competencia || '(não encontrada)'} · R$ ${valorBRL || '–'}`);
-        } catch (err) {
-          addToast(`❌ Erro na leitura da NF: ${err.message}`);
-        } finally {
-          setAddFormPdfLoading(false);
-        }
       }
 
       function handleSubmitAddForm(e) {
