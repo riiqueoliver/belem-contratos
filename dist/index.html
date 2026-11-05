@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" /><meta name="sgc-build" content="1793857297183" />
+  <meta charset="UTF-8" /><meta name="sgc-build" content="1793858316654" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
@@ -12924,6 +12924,816 @@ function ContractDetailView({
     onClose: () => setShowEncerrar(false),
     onConfirm: handleEncerrar
   }));
+}
+const AG_TIPOS = {
+  reuniao: {
+    rotulo: 'Reunião',
+    cor: BLUE
+  },
+  compromisso: {
+    rotulo: 'Compromisso',
+    cor: '#0E7490'
+  },
+  tarefa: {
+    rotulo: 'Tarefa',
+    cor: GREEN
+  },
+  prazo: {
+    rotulo: 'Prazo',
+    cor: '#b45309'
+  },
+  lembrete: {
+    rotulo: 'Lembrete',
+    cor: '#64748b'
+  }
+};
+const AG_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const AG_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const agPad = n => String(n).padStart(2, '0');
+const agIso = d => `${d.getFullYear()}-${agPad(d.getMonth() + 1)}-${agPad(d.getDate())}`;
+const agHoje = () => agIso(new Date());
+const agData = iso => new Date(iso + 'T12:00:00');
+const agSomaDias = (iso, n) => {
+  const d = agData(iso);
+  d.setDate(d.getDate() + n);
+  return agIso(d);
+};
+function agDataLonga(iso) {
+  const d = agData(iso);
+  const nome = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'][d.getDay()];
+  return `${nome}, ${d.getDate()} de ${AG_MESES[d.getMonth()]}`;
+}
+function agDataCurta(iso) {
+  if (!iso) return '';
+  const h = agHoje();
+  if (iso === h) return 'hoje';
+  if (iso === agSomaDias(h, 1)) return 'amanhã';
+  if (iso === agSomaDias(h, -1)) return 'ontem';
+  const d = agData(iso);
+  return `${AG_DIAS[d.getDay()]} ${agPad(d.getDate())}/${agPad(d.getMonth() + 1)}`;
+}
+const agVisivel = (ev, u) => ev.criadoPor === u || (ev.participantes || []).includes(u);
+const agOrdenar = (a, b) => (a.data || '').localeCompare(b.data || '') || (a.diaInteiro ? -1 : 0) - (b.diaInteiro ? -1 : 0) || (a.inicio || '').localeCompare(b.inicio || '');
+function tarefaInterpretar(texto, hojeIso = agHoje()) {
+  const original = String(texto || '').trim();
+  const sem = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const t = sem(original);
+  const hoje = agData(hojeIso);
+  let prazo = null,
+    ini = -1,
+    fim = -1,
+    hora = null;
+  const marcar = (m, iso) => {
+    prazo = iso;
+    ini = m.index;
+    fim = m.index + m[0].length;
+  };
+  const lig = '(?:\\s+(?:para|pra|ate|no|na|em|o|a)\\b)*\\s*(?:(?:\\bo\\s+)?\\bdia\\s+)?';
+  let m;
+  if (m = new RegExp(`${lig}(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?\\b`).exec(t)) {
+    let ano = m[3] ? +m[3] : hoje.getFullYear();
+    if (ano < 100) ano += 2000;
+    const d = new Date(ano, +m[2] - 1, +m[1], 12);
+    if (!m[3] && d < hoje && (hoje - d) / 864e5 > 60) d.setFullYear(ano + 1);
+    if (!isNaN(d) && d.getDate() === +m[1]) marcar(m, agIso(d));
+  } else if (m = new RegExp(`${lig}(depois de amanha|amanha|hoje)\\b`).exec(t)) {
+    marcar(m, agSomaDias(hojeIso, {
+      'hoje': 0,
+      'amanha': 1,
+      'depois de amanha': 2
+    }[m[1]]));
+  } else if (m = new RegExp(`${lig}(?:proxim[ao]\\s+)?(domingo|segunda|terca|quarta|quinta|sexta|sabado)(?:-feira)?\\b`).exec(t)) {
+    const alvo = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'].indexOf(m[1]);
+    let dif = (alvo - hoje.getDay() + 7) % 7;
+    if (dif === 0) dif = 7;
+    marcar(m, agSomaDias(hojeIso, dif));
+  } else if (m = new RegExp(`(?:\\s+(?:para|pra|ate|no|em)\\b)*\\s*(?:\\bo\\s+)?\\bdia\\s+(\\d{1,2})\\b`).exec(t)) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth(), +m[1], 12);
+    if (d < hoje && agIso(d) !== hojeIso) d.setMonth(d.getMonth() + 1);
+    if (d.getDate() === +m[1]) marcar(m, agIso(d));
+  }
+  let titulo = ini >= 0 ? original.slice(0, ini) + ' ' + original.slice(fim) : original;
+  const mh = /\s*(?:as|às|a partir das)\s*(\d{1,2})(?:[:h](\d{2}))?\s*h?\b/i.exec(titulo);
+  if (mh && +mh[1] < 24) {
+    hora = `${agPad(mh[1])}:${mh[2] || '00'}`;
+    titulo = titulo.replace(mh[0], ' ');
+  }
+  titulo = titulo.replace(/\s{2,}/g, ' ').replace(/[\s,;.\-–]+$/, '').trim();
+  if (titulo) titulo = titulo[0].toUpperCase() + titulo.slice(1);
+  return {
+    titulo: titulo || original,
+    prazo,
+    hora
+  };
+}
+async function agAvisar(eventoId, acao) {
+  try {
+    const r = await fetch('/api/agenda-convite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        passe: iaLerPasse(),
+        eventoId,
+        acao
+      })
+    });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? {
+      ok: true,
+      enviados: j.enviados || []
+    } : {
+      ok: false,
+      erro: j.error || `erro ${r.status}`
+    };
+  } catch {
+    return {
+      ok: false,
+      erro: 'falha de conexão'
+    };
+  }
+}
+function AgendaPage({
+  currentUser,
+  users,
+  eventos,
+  tarefas,
+  addToast
+}) {
+  const eu = currentUser.username;
+  const [aba, setAba] = useState('calendario');
+  const [mes, setMes] = useState(() => {
+    const d = new Date();
+    return {
+      ano: d.getFullYear(),
+      m: d.getMonth()
+    };
+  });
+  const [diaSel, setDiaSel] = useState(agHoje());
+  const [editando, setEditando] = useState(null);
+  const meus = useMemo(() => eventos.filter(e => agVisivel(e, eu)).sort(agOrdenar), [eventos, eu]);
+  const minhasTarefas = useMemo(() => tarefas.filter(t => t.dono === eu), [tarefas, eu]);
+  const nomeDe = u => users.find(x => x.username === u)?.name || u;
+  const celulas = useMemo(() => {
+    const primeiro = new Date(mes.ano, mes.m, 1, 12);
+    const inicio = new Date(primeiro);
+    inicio.setDate(1 - primeiro.getDay());
+    return Array.from({
+      length: 42
+    }, (_, i) => {
+      const d = new Date(inicio);
+      d.setDate(inicio.getDate() + i);
+      return agIso(d);
+    });
+  }, [mes]);
+  const porDia = useMemo(() => {
+    const mapa = {};
+    meus.forEach(e => {
+      (mapa[e.data] ||= {
+        ev: [],
+        tf: []
+      }).ev.push(e);
+    });
+    minhasTarefas.filter(t => t.prazo && !t.feita).forEach(t => {
+      (mapa[t.prazo] ||= {
+        ev: [],
+        tf: []
+      }).tf.push(t);
+    });
+    return mapa;
+  }, [meus, minhasTarefas]);
+  const hoje = agHoje();
+  const navegar = n => setMes(({
+    ano,
+    m
+  }) => {
+    const d = new Date(ano, m + n, 1);
+    return {
+      ano: d.getFullYear(),
+      m: d.getMonth()
+    };
+  });
+  const irHoje = () => {
+    const d = new Date();
+    setMes({
+      ano: d.getFullYear(),
+      m: d.getMonth()
+    });
+    setDiaSel(agHoje());
+  };
+  const novoEvento = (data = diaSel) => setEditando({
+    tipo: 'reuniao',
+    titulo: '',
+    data,
+    diaInteiro: false,
+    inicio: '09:00',
+    fim: '10:00',
+    local: '',
+    descricao: '',
+    participantes: [],
+    convidadosExternos: '',
+    avisar: true
+  });
+  async function alternarTarefa(t) {
+    await db.collection(COL('tarefas')).doc(t.id).update({
+      feita: !t.feita,
+      feitaEm: !t.feita ? new Date().toISOString() : null
+    });
+  }
+  const sel = porDia[diaSel] || {
+    ev: [],
+    tf: []
+  };
+  return React.createElement("div", {
+    className: "flex-1 flex flex-col px-6 py-6 max-w-6xl w-full mx-auto"
+  }, React.createElement("div", {
+    className: "flex flex-wrap items-center gap-3 mb-5"
+  }, React.createElement("h1", {
+    className: "text-xl font-bold",
+    style: {
+      color: BLUE
+    }
+  }, "Agenda"), React.createElement("div", {
+    className: "flex rounded-xl border border-gray-200 bg-white p-0.5"
+  }, [['calendario', 'Calendário'], ['tarefas', `Tarefas${minhasTarefas.filter(t => !t.feita).length ? ` (${minhasTarefas.filter(t => !t.feita).length})` : ''}`]].map(([k, r]) => React.createElement("button", {
+    key: k,
+    onClick: () => setAba(k),
+    className: `text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-colors ${aba === k ? 'text-white' : 'text-gray-500 hover:text-gray-800'}`,
+    style: aba === k ? {
+      background: BLUE
+    } : {}
+  }, r))), React.createElement("div", {
+    className: "flex-1"
+  }), aba === 'calendario' && React.createElement("div", {
+    className: "flex items-center gap-1.5"
+  }, React.createElement("button", {
+    onClick: () => navegar(-1),
+    className: "w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
+    title: "M\xEAs anterior"
+  }, "\u2039"), React.createElement("p", {
+    className: "text-sm font-semibold text-gray-700 w-36 text-center capitalize"
+  }, AG_MESES[mes.m], " ", mes.ano), React.createElement("button", {
+    onClick: () => navegar(1),
+    className: "w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
+    title: "Pr\xF3ximo m\xEAs"
+  }, "\u203A"), React.createElement("button", {
+    onClick: irHoje,
+    className: "text-xs font-semibold px-3 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+  }, "Hoje")), React.createElement("button", {
+    onClick: () => novoEvento(),
+    className: "text-xs font-bold px-4 h-8 rounded-lg text-white shadow-sm hover:opacity-90",
+    style: {
+      background: BLUE
+    }
+  }, "+ Novo evento")), aba === 'calendario' ? React.createElement("div", {
+    className: "grid lg:grid-cols-[1fr_300px] gap-5 items-start"
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 overflow-hidden"
+  }, React.createElement("div", {
+    className: "grid grid-cols-7 border-b border-gray-100"
+  }, AG_DIAS.map(d => React.createElement("p", {
+    key: d,
+    className: "text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center py-2"
+  }, d))), React.createElement("div", {
+    className: "grid grid-cols-7"
+  }, celulas.map((iso, i) => {
+    const doMes = agData(iso).getMonth() === mes.m;
+    const itens = porDia[iso] || {
+      ev: [],
+      tf: []
+    };
+    const lista = [...itens.ev.map(e => ({
+      k: 'e' + e.id,
+      cor: AG_TIPOS[e.tipo]?.cor || BLUE,
+      txt: `${e.diaInteiro ? '' : (e.inicio || '') + ' '}${e.titulo}`
+    })), ...itens.tf.map(t => ({
+      k: 't' + t.id,
+      cor: GREEN,
+      txt: `☐ ${t.titulo}`
+    }))];
+    return React.createElement("button", {
+      key: iso,
+      onClick: () => setDiaSel(iso),
+      onDoubleClick: () => novoEvento(iso),
+      className: `text-left min-h-[92px] p-1.5 border-gray-100 transition-colors ${i % 7 ? 'border-l' : ''} ${i >= 7 ? 'border-t' : ''} ${iso === diaSel ? 'bg-slate-50' : 'hover:bg-gray-50/70'}`
+    }, React.createElement("span", {
+      className: `inline-flex items-center justify-center text-[11px] font-semibold w-6 h-6 rounded-full ${iso === hoje ? 'text-white' : doMes ? 'text-gray-700' : 'text-gray-300'}`,
+      style: iso === hoje ? {
+        background: BLUE
+      } : {}
+    }, agData(iso).getDate()), React.createElement("div", {
+      className: "mt-0.5 space-y-0.5"
+    }, lista.slice(0, 3).map(x => React.createElement("p", {
+      key: x.k,
+      className: "text-[10px] leading-tight truncate text-gray-700 flex items-center gap-1"
+    }, React.createElement("span", {
+      className: "w-1.5 h-1.5 rounded-full flex-shrink-0",
+      style: {
+        background: x.cor
+      }
+    }), x.txt)), lista.length > 3 && React.createElement("p", {
+      className: "text-[10px] text-gray-400"
+    }, "+", lista.length - 3)));
+  }))), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 p-4 lg:sticky lg:top-4"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400"
+  }, diaSel === hoje ? 'Hoje' : 'Dia selecionado'), React.createElement("p", {
+    className: "text-sm font-bold text-gray-800 capitalize mb-3"
+  }, agDataLonga(diaSel)), sel.ev.length === 0 && sel.tf.length === 0 && React.createElement("p", {
+    className: "text-xs text-gray-400 mb-3"
+  }, "Nada marcado."), React.createElement("div", {
+    className: "space-y-2"
+  }, sel.ev.map(e => React.createElement("button", {
+    key: e.id,
+    onClick: () => setEditando({
+      ...e,
+      convidadosExternos: (e.convidadosExternos || []).join(', '),
+      avisar: true
+    }),
+    className: "w-full text-left rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50 p-2.5 transition-colors"
+  }, React.createElement("p", {
+    className: "text-[10px] font-semibold flex items-center gap-1.5",
+    style: {
+      color: AG_TIPOS[e.tipo]?.cor
+    }
+  }, React.createElement("span", {
+    className: "w-1.5 h-1.5 rounded-full",
+    style: {
+      background: AG_TIPOS[e.tipo]?.cor
+    }
+  }), AG_TIPOS[e.tipo]?.rotulo, " \xB7 ", e.diaInteiro ? 'dia inteiro' : `${e.inicio}${e.fim ? '–' + e.fim : ''}`), React.createElement("p", {
+    className: "text-xs font-semibold text-gray-800 mt-0.5"
+  }, e.titulo), e.local && React.createElement("p", {
+    className: "text-[11px] text-gray-500"
+  }, e.local), (e.participantes || []).length > 0 && React.createElement("p", {
+    className: "text-[10px] text-gray-400 mt-0.5 truncate"
+  }, "com ", [e.criadoPor, ...e.participantes].filter((u, i, a) => u !== eu && a.indexOf(u) === i).map(nomeDe).join(', ') || 'você'))), sel.tf.map(t => React.createElement("label", {
+    key: t.id,
+    className: "flex items-start gap-2 rounded-xl border border-gray-100 p-2.5 cursor-pointer hover:bg-gray-50"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!t.feita,
+    onChange: () => alternarTarefa(t),
+    className: "mt-0.5"
+  }), React.createElement("span", {
+    className: "text-xs text-gray-700"
+  }, t.titulo, t.hora && React.createElement("span", {
+    className: "text-gray-400"
+  }, " \xB7 ", t.hora))))), React.createElement("button", {
+    onClick: () => novoEvento(diaSel),
+    className: "w-full mt-3 text-xs font-semibold py-2 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
+  }, "+ Adicionar neste dia"))) : React.createElement(TarefasAba, {
+    tarefas: minhasTarefas,
+    eu: eu,
+    addToast: addToast,
+    onAlternar: alternarTarefa
+  }), editando && React.createElement(EventoModal, {
+    evento: editando,
+    eu: eu,
+    users: users,
+    addToast: addToast,
+    onFechar: () => setEditando(null)
+  }));
+}
+function TarefasAba({
+  tarefas,
+  eu,
+  addToast,
+  onAlternar
+}) {
+  const [texto, setTexto] = useState('');
+  const [verFeitas, setVerFeitas] = useState(false);
+  const previa = texto.trim() ? tarefaInterpretar(texto) : null;
+  const hoje = agHoje();
+  async function salvar(e) {
+    e?.preventDefault();
+    if (!texto.trim()) return;
+    const p = tarefaInterpretar(texto);
+    await db.collection(COL('tarefas')).add({
+      texto: texto.trim(),
+      titulo: p.titulo,
+      prazo: p.prazo,
+      hora: p.hora,
+      dono: eu,
+      feita: false,
+      criadoEm: new Date().toISOString()
+    });
+    setTexto('');
+    addToast(`✅ Tarefa salva${p.prazo ? ` para ${agDataCurta(p.prazo)}` : ''}.`);
+  }
+  async function mudarPrazo(t, prazo) {
+    await db.collection(COL('tarefas')).doc(t.id).update({
+      prazo: prazo || null
+    });
+  }
+  async function excluir(t) {
+    await db.collection(COL('tarefas')).doc(t.id).delete();
+    addToast('🗑️ Tarefa excluída.');
+  }
+  const abertas = tarefas.filter(t => !t.feita).sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999') || (a.hora || '').localeCompare(b.hora || ''));
+  const grupos = [['Atrasadas', abertas.filter(t => t.prazo && t.prazo < hoje), '#b91c1c'], ['Hoje', abertas.filter(t => t.prazo === hoje), BLUE], ['Próximos dias', abertas.filter(t => t.prazo && t.prazo > hoje), '#475569'], ['Sem data', abertas.filter(t => !t.prazo), '#94a3b8']];
+  const feitas = tarefas.filter(t => t.feita).sort((a, b) => (b.feitaEm || '').localeCompare(a.feitaEm || ''));
+  const Item = ({
+    t
+  }) => React.createElement("div", {
+    className: "group flex items-start gap-3 px-4 py-2.5 border-t border-gray-50 first:border-t-0"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!t.feita,
+    onChange: () => onAlternar(t),
+    className: "mt-1 cursor-pointer"
+  }), React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, React.createElement("p", {
+    className: `text-sm ${t.feita ? 'line-through text-gray-400' : 'text-gray-800'}`
+  }, t.titulo), t.texto && t.texto !== t.titulo && React.createElement("p", {
+    className: "text-[10px] text-gray-400 truncate",
+    title: t.texto
+  }, "\u201C", t.texto, "\u201D")), React.createElement("input", {
+    type: "date",
+    value: t.prazo || '',
+    onChange: e => mudarPrazo(t, e.target.value),
+    className: "text-[11px] text-gray-500 bg-transparent border border-transparent hover:border-gray-200 rounded-md px-1 py-0.5",
+    title: "Alterar a data"
+  }), t.hora && React.createElement("span", {
+    className: "text-[11px] text-gray-400 mt-1"
+  }, t.hora), React.createElement("button", {
+    onClick: () => excluir(t),
+    className: "text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 mt-0.5",
+    title: "Excluir"
+  }, React.createElement(X, {
+    className: "w-3.5 h-3.5"
+  })));
+  return React.createElement("div", {
+    className: "max-w-3xl w-full"
+  }, React.createElement("form", {
+    onSubmit: salvar,
+    className: "bg-white rounded-2xl border border-gray-200 p-4 mb-5"
+  }, React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("input", {
+    value: texto,
+    onChange: e => setTexto(e.target.value),
+    autoFocus: true,
+    placeholder: "Escreva a tarefa \u2014 ex.: elaborar minuta DFD projeto SEGBEL para dia 08/11/2026",
+    className: "flex-1 text-sm px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400"
+  }), React.createElement("button", {
+    type: "submit",
+    disabled: !texto.trim(),
+    className: "text-sm font-bold px-5 rounded-xl text-white disabled:opacity-40",
+    style: {
+      background: BLUE
+    }
+  }, "Salvar")), previa && React.createElement("p", {
+    className: "text-[11px] text-gray-500 mt-2"
+  }, React.createElement("b", {
+    className: "text-gray-700"
+  }, previa.titulo), previa.prazo ? React.createElement(React.Fragment, null, " \xB7 para ", React.createElement("b", {
+    className: "text-gray-700"
+  }, agDataCurta(previa.prazo), " (", previa.prazo.split('-').reverse().join('/'), ")")) : ' · sem data', previa.hora && React.createElement(React.Fragment, null, " \xB7 \xE0s ", previa.hora))), abertas.length === 0 && React.createElement("p", {
+    className: "text-sm text-gray-400 mb-5"
+  }, "Nenhuma tarefa pendente. \uD83C\uDF89"), grupos.filter(([, l]) => l.length).map(([rot, lista, cor]) => React.createElement("div", {
+    key: rot,
+    className: "mb-4"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest mb-1.5",
+    style: {
+      color: cor
+    }
+  }, rot, " \xB7 ", lista.length), React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 overflow-hidden"
+  }, lista.map(t => React.createElement(Item, {
+    key: t.id,
+    t: t
+  }))))), feitas.length > 0 && React.createElement("div", null, React.createElement("button", {
+    onClick: () => setVerFeitas(v => !v),
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 mb-1.5"
+  }, verFeitas ? '▾' : '▸', " Conclu\xEDdas \xB7 ", feitas.length), verFeitas && React.createElement("div", {
+    className: "bg-white rounded-2xl border border-gray-200 overflow-hidden"
+  }, feitas.slice(0, 50).map(t => React.createElement(Item, {
+    key: t.id,
+    t: t
+  })))));
+}
+function EventoModal({
+  evento,
+  eu,
+  users,
+  addToast,
+  onFechar
+}) {
+  const [f, setF] = useState(evento);
+  const [salvando, setSalvando] = useState(false);
+  const novo = !evento.id;
+  const podeEditar = novo || evento.criadoPor === eu;
+  const set = (k, v) => setF(x => ({
+    ...x,
+    [k]: v
+  }));
+  const outros = users.filter(u => u.username !== eu && u.username !== (evento.criadoPor || eu));
+  const emails = s => String(s || '').split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+  async function salvar() {
+    if (!f.titulo.trim()) {
+      addToast('⚠️ Dê um título ao evento.');
+      return;
+    }
+    if (!f.data) {
+      addToast('⚠️ Escolha a data.');
+      return;
+    }
+    if (!f.diaInteiro && f.fim && f.inicio && f.fim <= f.inicio) {
+      addToast('⚠️ O horário de término precisa ser depois do início.');
+      return;
+    }
+    setSalvando(true);
+    const dados = {
+      tipo: f.tipo,
+      titulo: f.titulo.trim(),
+      data: f.data,
+      diaInteiro: !!f.diaInteiro,
+      inicio: f.diaInteiro ? '' : f.inicio,
+      fim: f.diaInteiro ? '' : f.fim,
+      local: (f.local || '').trim(),
+      descricao: (f.descricao || '').trim(),
+      participantes: f.participantes || [],
+      convidadosExternos: emails(f.convidadosExternos),
+      atualizadoEm: new Date().toISOString()
+    };
+    try {
+      let id = evento.id;
+      if (novo) id = (await db.collection(COL('agenda')).add({
+        ...dados,
+        criadoPor: eu,
+        criadoEm: new Date().toISOString()
+      })).id;else await db.collection(COL('agenda')).doc(id).update(dados);
+      let msg = novo ? '✅ Evento criado.' : '✅ Evento atualizado.';
+      if (f.avisar && (dados.participantes.length || dados.convidadosExternos.length)) {
+        const r = await agAvisar(id, novo ? 'novo' : 'alterado');
+        msg += r.ok ? ` Convite enviado para ${r.enviados.length} pessoa(s).` : ` ⚠️ E-mail não enviado: ${r.erro}.`;
+      }
+      addToast(msg);
+      onFechar();
+    } catch (e) {
+      addToast('❌ Não foi possível salvar: ' + e.message);
+      setSalvando(false);
+    }
+  }
+  async function excluir() {
+    if (!confirm('Excluir este evento?' + ((f.participantes || []).length ? ' Os participantes serão avisados do cancelamento.' : ''))) return;
+    setSalvando(true);
+    if ((evento.participantes || []).length || (evento.convidadosExternos || []).length) await agAvisar(evento.id, 'cancelado');
+    await db.collection(COL('agenda')).doc(evento.id).delete();
+    addToast('🗑️ Evento excluído.');
+    onFechar();
+  }
+  const rotulo = 'block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1';
+  const campo = 'w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-600';
+  return ReactDOM.createPortal(React.createElement("div", {
+    className: "fixed inset-0 z-[300] flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.45)'
+    },
+    onClick: onFechar
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto slide-in",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "flex items-center justify-between px-5 py-3.5 border-b border-gray-100"
+  }, React.createElement("p", {
+    className: "text-sm font-bold text-gray-800"
+  }, novo ? 'Novo evento' : podeEditar ? 'Editar evento' : 'Evento'), React.createElement("button", {
+    onClick: onFechar,
+    className: "p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "px-5 py-4 space-y-3.5"
+  }, React.createElement("div", {
+    className: "flex flex-wrap gap-1.5"
+  }, Object.entries(AG_TIPOS).map(([k, t]) => React.createElement("button", {
+    key: k,
+    disabled: !podeEditar,
+    onClick: () => set('tipo', k),
+    className: `text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${f.tipo === k ? 'text-white' : 'text-gray-500 border-gray-200 bg-white hover:bg-gray-50'}`,
+    style: f.tipo === k ? {
+      background: t.cor,
+      borderColor: t.cor
+    } : {}
+  }, t.rotulo))), React.createElement("input", {
+    value: f.titulo,
+    onChange: e => set('titulo', e.target.value),
+    disabled: !podeEditar,
+    autoFocus: novo,
+    placeholder: "T\xEDtulo",
+    className: campo + ' font-semibold'
+  }), React.createElement("div", {
+    className: "grid grid-cols-3 gap-2"
+  }, React.createElement("div", {
+    className: "col-span-3 sm:col-span-1"
+  }, React.createElement("label", {
+    className: rotulo
+  }, "Data"), React.createElement("input", {
+    type: "date",
+    value: f.data,
+    onChange: e => set('data', e.target.value),
+    disabled: !podeEditar,
+    className: campo
+  })), !f.diaInteiro && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "In\xEDcio"), React.createElement("input", {
+    type: "time",
+    value: f.inicio,
+    onChange: e => set('inicio', e.target.value),
+    disabled: !podeEditar,
+    className: campo
+  })), React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "T\xE9rmino"), React.createElement("input", {
+    type: "time",
+    value: f.fim,
+    onChange: e => set('fim', e.target.value),
+    disabled: !podeEditar,
+    className: campo
+  })))), React.createElement("label", {
+    className: "flex items-center gap-2 text-xs text-gray-600"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!f.diaInteiro,
+    onChange: e => set('diaInteiro', e.target.checked),
+    disabled: !podeEditar
+  }), " Dia inteiro"), React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "Local ou link"), React.createElement("input", {
+    value: f.local,
+    onChange: e => set('local', e.target.value),
+    disabled: !podeEditar,
+    placeholder: "Sala, endere\xE7o ou link da reuni\xE3o",
+    className: campo
+  })), React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "Participantes"), React.createElement("div", {
+    className: "flex flex-wrap gap-1.5"
+  }, outros.map(u => {
+    const on = (f.participantes || []).includes(u.username);
+    return React.createElement("button", {
+      key: u.username,
+      disabled: !podeEditar,
+      onClick: () => set('participantes', on ? f.participantes.filter(x => x !== u.username) : [...(f.participantes || []), u.username]),
+      className: `text-xs px-2.5 py-1 rounded-full border transition-colors ${on ? 'text-white' : 'text-gray-600 border-gray-200 bg-white hover:bg-gray-50'}`,
+      style: on ? {
+        background: BLUE,
+        borderColor: BLUE
+      } : {}
+    }, on ? '✓ ' : '', u.name || u.username);
+  }), outros.length === 0 && React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "Nenhum outro usu\xE1rio no sistema."))), React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "Convidados de fora (e-mails)"), React.createElement("input", {
+    value: f.convidadosExternos,
+    onChange: e => set('convidadosExternos', e.target.value),
+    disabled: !podeEditar,
+    placeholder: "nome@exemplo.com, outro@exemplo.com",
+    className: campo
+  })), React.createElement("div", null, React.createElement("label", {
+    className: rotulo
+  }, "Descri\xE7\xE3o"), React.createElement("textarea", {
+    value: f.descricao,
+    onChange: e => set('descricao', e.target.value),
+    disabled: !podeEditar,
+    rows: 3,
+    placeholder: "Pauta, observa\xE7\xF5es\u2026",
+    className: campo
+  })), podeEditar && ((f.participantes || []).length > 0 || emails(f.convidadosExternos).length > 0) && React.createElement("label", {
+    className: "flex items-center gap-2 text-xs text-gray-600"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!f.avisar,
+    onChange: e => set('avisar', e.target.checked)
+  }), novo ? 'Enviar convite por e-mail aos participantes' : 'Avisar os participantes da alteração por e-mail'), !podeEditar && React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, "Criado por ", users.find(u => u.username === evento.criadoPor)?.name || evento.criadoPor, ". S\xF3 quem criou pode alterar.")), React.createElement("div", {
+    className: "flex items-center gap-2 px-5 py-3.5 border-t border-gray-100 bg-gray-50"
+  }, !novo && podeEditar && React.createElement("button", {
+    onClick: excluir,
+    disabled: salvando,
+    className: "text-xs font-semibold px-3 py-2 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50"
+  }, "Excluir"), React.createElement("div", {
+    className: "flex-1"
+  }), React.createElement("button", {
+    onClick: onFechar,
+    className: "text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+  }, podeEditar ? 'Cancelar' : 'Fechar'), podeEditar && React.createElement("button", {
+    onClick: salvar,
+    disabled: salvando,
+    className: "text-xs font-bold px-5 py-2 rounded-lg text-white disabled:opacity-60",
+    style: {
+      background: BLUE
+    }
+  }, salvando ? 'Salvando…' : 'Salvar')))), document.body);
+}
+function LembreteTarefas({
+  tarefas,
+  eventos,
+  eu,
+  nome,
+  onAbrirAgenda,
+  onFechar
+}) {
+  const hoje = agHoje();
+  const abertas = tarefas.filter(t => t.dono === eu && !t.feita).sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999'));
+  const eventosHoje = eventos.filter(e => e.data === hoje && agVisivel(e, eu)).sort(agOrdenar);
+  const h = new Date().getHours();
+  const saudacao = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+  async function concluir(t) {
+    await db.collection(COL('tarefas')).doc(t.id).update({
+      feita: true,
+      feitaEm: new Date().toISOString()
+    });
+  }
+  const etiqueta = t => !t.prazo ? {
+    txt: 'sem data',
+    cor: '#94a3b8'
+  } : t.prazo < hoje ? {
+    txt: `atrasada · ${agDataCurta(t.prazo)}`,
+    cor: '#b91c1c'
+  } : t.prazo === hoje ? {
+    txt: 'hoje',
+    cor: BLUE
+  } : {
+    txt: agDataCurta(t.prazo),
+    cor: '#475569'
+  };
+  return ReactDOM.createPortal(React.createElement("div", {
+    className: "fixed inset-0 z-[400] flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.45)'
+    }
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden slide-in"
+  }, React.createElement("div", {
+    className: "px-5 pt-5 pb-3"
+  }, React.createElement("p", {
+    className: "text-lg font-bold",
+    style: {
+      color: BLUE
+    }
+  }, saudacao, ", ", String(nome || eu).split(' ')[0], "!"), React.createElement("p", {
+    className: "text-xs text-gray-500 capitalize"
+  }, agDataLonga(hoje))), React.createElement("div", {
+    className: "px-5 pb-4 overflow-y-auto space-y-4"
+  }, eventosHoje.length > 0 && React.createElement("div", null, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Agenda de hoje"), eventosHoje.map(e => React.createElement("p", {
+    key: e.id,
+    className: "text-sm text-gray-700 py-1 flex items-center gap-2"
+  }, React.createElement("span", {
+    className: "w-1.5 h-1.5 rounded-full",
+    style: {
+      background: AG_TIPOS[e.tipo]?.cor
+    }
+  }), React.createElement("span", {
+    className: "text-gray-400 text-xs w-11"
+  }, e.diaInteiro ? 'dia' : e.inicio), e.titulo))), React.createElement("div", null, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5"
+  }, "Suas tarefas \xB7 ", abertas.length), abertas.length === 0 && React.createElement("p", {
+    className: "text-sm text-gray-400"
+  }, "Nenhuma tarefa pendente."), abertas.slice(0, 12).map(t => {
+    const et = etiqueta(t);
+    return React.createElement("label", {
+      key: t.id,
+      className: "flex items-start gap-2.5 py-1.5 cursor-pointer"
+    }, React.createElement("input", {
+      type: "checkbox",
+      onChange: () => concluir(t),
+      className: "mt-1",
+      title: "Marcar como feita"
+    }), React.createElement("span", {
+      className: "flex-1 text-sm text-gray-800 leading-snug"
+    }, t.titulo), React.createElement("span", {
+      className: "text-[10px] font-semibold whitespace-nowrap mt-0.5",
+      style: {
+        color: et.cor
+      }
+    }, et.txt));
+  }), abertas.length > 12 && React.createElement("p", {
+    className: "text-[11px] text-gray-400"
+  }, "e mais ", abertas.length - 12, " na agenda."))), React.createElement("div", {
+    className: "flex gap-2 px-5 py-3.5 border-t border-gray-100 bg-gray-50"
+  }, React.createElement("button", {
+    onClick: onAbrirAgenda,
+    className: "text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+  }, "Abrir agenda"), React.createElement("div", {
+    className: "flex-1"
+  }), React.createElement("button", {
+    onClick: onFechar,
+    className: "text-xs font-bold px-6 py-2 rounded-lg text-white",
+    style: {
+      background: BLUE
+    }
+  }, "Ok")))), document.body);
 }
 function DashKpiCard({
   icon,
@@ -27516,6 +28326,12 @@ function App() {
   const [gdocMovs, setGdocMovs] = useState([]);
   const [showAlertas, setShowAlertas] = useState(false);
   const [novaVersao, setNovaVersao] = useState(false);
+  const [showAgendaPage, setShowAgendaPage] = useState(false);
+  const [agendaEventos, setAgendaEventos] = useState([]);
+  const [tarefas, setTarefas] = useState([]);
+  const [tarefasProntas, setTarefasProntas] = useState(false);
+  const [showLembrete, setShowLembrete] = useState(false);
+  const lembrarAoLogar = useRef(false);
   const [showRelatoriosPage, setShowRelatoriosPage] = useState(false);
   const [showAssistentePage, setShowAssistentePage] = useState(false);
   const [activeHomeCard, setActiveHomeCard] = useState(null);
@@ -27666,6 +28482,19 @@ function App() {
         id: d.id
       })));
     }, () => {});
+    const unsubAgenda = db.collection(COL('agenda')).onSnapshot(snap => {
+      setAgendaEventos(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+    }, () => {});
+    const unsubTarefas = db.collection(COL('tarefas')).onSnapshot(snap => {
+      setTarefas(snap.docs.map(d => ({
+        ...d.data(),
+        id: d.id
+      })));
+      setTarefasProntas(true);
+    }, () => {});
     const unsubArcanjo = db.collection(COL('arcanjo_social')).orderBy('createdAt', 'desc').onSnapshot(snap => {
       setArcanjoRecords(snap.docs.map(d => ({
         ...d.data(),
@@ -27741,6 +28570,8 @@ function App() {
       unsubs.forEach(u => u());
       unsubGdocs();
       unsubGdocMovs();
+      unsubAgenda();
+      unsubTarefas();
       unsubArcanjo();
       unsubArcanjoPessoas();
       unsubArcanjoEventos();
@@ -27783,8 +28614,17 @@ function App() {
   const [contractFocus, setContractFocus] = useState(null);
   const [showNfListView, setShowNfListView] = useState(false);
   useEffect(() => {
-    if (showContractsPage || showInstallmentsPage || showProposalsPage || showGdocPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showAdmin || showForm || activeContractNumber) setShowRelatoriosPage(false);
+    if (showContractsPage || showInstallmentsPage || showProposalsPage || showGdocPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showAdmin || showForm || activeContractNumber) {
+      setShowRelatoriosPage(false);
+      setShowAgendaPage(false);
+    }
   }, [showContractsPage, showInstallmentsPage, showProposalsPage, showGdocPage, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, showProposalBI, showCronogramaPage, showCertidoesPage, showPropEmissao, showLeadsPage, showAdmin, showForm, activeContractNumber]);
+  useEffect(() => {
+    if (showRelatoriosPage) setShowAgendaPage(false);
+  }, [showRelatoriosPage]);
+  useEffect(() => {
+    if (showAgendaPage) setShowRelatoriosPage(false);
+  }, [showAgendaPage]);
   const [contractSearch, setContractSearch] = useState('');
   const [statsYear, setStatsYear] = useState(String(new Date().getFullYear()));
   const [showOverduePanel, setShowOverduePanel] = useState(false);
@@ -27933,6 +28773,7 @@ function App() {
     setShowNfListView(false);
     setShowPlusMenu(false);
     localStorage.setItem(SYS.sessionKey, String(user.id));
+    lembrarAoLogar.current = true;
     setCurrentUser(user);
     if (ARCANJO_ONLY.has(user.username)) setShowArcanjoPage(true);
   }
@@ -28140,6 +28981,7 @@ function App() {
     setShowNfListView(false);
   }
   function handleGoHome() {
+    setShowAgendaPage(false);
     setActiveContractNumber(null);
     setShowForm(false);
     setShowContractsList(false);
@@ -28483,8 +29325,33 @@ function App() {
     }, () => {});
   }, [currentUser?.username]);
   useEffect(() => {
-    if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes) setShowAssistentePage(false);
-  }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage, showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes]);
+    if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showAgendaPage) setShowAssistentePage(false);
+  }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage, showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage, showArcanjoGerencial, showArcanjoAcoes, showAgendaPage]);
+  useEffect(() => {
+    if (!currentUser || !tarefasProntas || showAgendaPage || SYS.id !== 'main' || ARCANJO_ONLY.has(currentUser.username)) return;
+    const verificar = () => {
+      const eu = currentUser.username,
+        hoje = agHoje();
+      const temAlgo = tarefas.some(t => t.dono === eu && !t.feita) || agendaEventos.some(e => e.data === hoje && agVisivel(e, eu));
+      if (!temAlgo) return;
+      const chave = `${SYS.prefix}lembrete-${eu}-${hoje}`;
+      let vistos = [];
+      try {
+        vistos = JSON.parse(localStorage.getItem(chave) || '[]');
+      } catch {}
+      const turno = new Date().getHours() >= 14 ? 'tarde' : 'manha';
+      const mostrar = lembrarAoLogar.current || vistos.length === 0 || turno === 'tarde' && !vistos.includes('tarde');
+      if (!mostrar) return;
+      lembrarAoLogar.current = false;
+      try {
+        localStorage.setItem(chave, JSON.stringify([...new Set([...vistos, turno])]));
+      } catch {}
+      setShowLembrete(true);
+    };
+    verificar();
+    const id = setInterval(verificar, 5 * 60000);
+    return () => clearInterval(id);
+  }, [currentUser, tarefasProntas, tarefas.length, agendaEventos.length, showAgendaPage]);
   if (!dbReady) return React.createElement("div", {
     className: "min-h-screen flex flex-col items-center justify-center gap-5",
     style: {
@@ -29445,7 +30312,7 @@ function App() {
     propostasEmitidas,
     users
   };
-  const paginaAtual = showForm ? 'Cadastro de contrato' : activeContractNumber ? `Contrato ${activeContractNumber}` : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas' : showGdocPage ? 'GDoc' : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas' : showLeadsPage ? 'Oportunidades' : showPropEmissao ? 'Emitir Proposta' : showCertidoesPage ? 'Certidões' : showCronogramaPage ? 'Cronograma Financeiro' : showInstallmentsPage ? 'Parcelas' : showContractsPage ? 'Contratos' : showAdmin ? 'Painel Admin' : 'Início';
+  const paginaAtual = showForm ? 'Cadastro de contrato' : activeContractNumber ? `Contrato ${activeContractNumber}` : showAgendaPage ? 'Agenda' : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas' : showGdocPage ? 'GDoc' : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas' : showLeadsPage ? 'Oportunidades' : showPropEmissao ? 'Emitir Proposta' : showCertidoesPage ? 'Certidões' : showCronogramaPage ? 'Cronograma Financeiro' : showInstallmentsPage ? 'Parcelas' : showContractsPage ? 'Contratos' : showAdmin ? 'Painel Admin' : 'Início';
   function abrirAssistente() {
     handleGoHome();
     setShowContractsList(false);
@@ -29834,6 +30701,17 @@ function App() {
       setShowCertidoesPage(true);
     }
   }), SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
+    icon: Calendar,
+    label: "Agenda",
+    active: showAgendaPage,
+    badge: tarefas.filter(t => t.dono === currentUser.username && !t.feita && t.prazo && t.prazo <= agHoje()).length,
+    onClick: () => {
+      handleGoHome();
+      setShowContractsList(false);
+      setShowNfListView(false);
+      setShowAgendaPage(true);
+    }
+  }), SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && React.createElement(SidebarBtn, {
     icon: ScrollText,
     label: "Relat\xF3rios de Execu\xE7\xE3o",
     active: showRelatoriosPage,
@@ -30075,8 +30953,21 @@ function App() {
   }), React.createElement("span", {
     className: "text-[11px] text-gray-400 font-medium"
   }, uniqueContractCount, " contrato", uniqueContractCount !== 1 ? 's' : '')))), React.createElement("main", {
-    className: showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
-  }, novaVersao && React.createElement("div", {
+    className: showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage || showAgendaPage ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"
+  }, showLembrete && React.createElement(LembreteTarefas, {
+    tarefas: tarefas,
+    eventos: agendaEventos,
+    eu: currentUser.username,
+    nome: currentUser.name,
+    onFechar: () => setShowLembrete(false),
+    onAbrirAgenda: () => {
+      setShowLembrete(false);
+      handleGoHome();
+      setShowContractsList(false);
+      setShowNfListView(false);
+      setShowAgendaPage(true);
+    }
+  }), novaVersao && React.createElement("div", {
     className: "fixed bottom-4 right-4 z-[250] bg-white border border-gray-200 shadow-xl rounded-xl px-4 py-3 flex items-center gap-3 slide-in"
   }, React.createElement("p", {
     className: "text-xs text-gray-700"
@@ -30758,6 +31649,12 @@ function App() {
   }), "Salvar Contrato")))), " "), showAssistentePage ? React.createElement(AssistentePage, {
     currentUser: currentUser,
     dados: dadosIA,
+    addToast: addToast
+  }) : showAgendaPage && SYS.id === 'main' ? React.createElement(AgendaPage, {
+    currentUser: currentUser,
+    users: users,
+    eventos: agendaEventos,
+    tarefas: tarefas,
     addToast: addToast
   }) : showRelatoriosPage && SYS.id === 'main' ? React.createElement(RelatoriosExecucaoPage, {
     currentUser: currentUser,
