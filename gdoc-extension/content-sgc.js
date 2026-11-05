@@ -1,5 +1,7 @@
 /* Roda no Sistema de Gestão de Contratos.
-   Observa o pacote de emissão gravado pelo sistema e repassa à extensão. */
+   1) Observa o pacote de emissão gravado pelo sistema e repassa à extensão.
+   2) Atende o botão "Verificar no GDoc" da parcela: pede a varredura do processo
+      e devolve o resumo para a página. */
 
 const KEY = 'gdoc-payload';
 let ultimoEnviado = null;
@@ -19,3 +21,13 @@ function repassar() {
 // Verifica ao carregar e periodicamente (o SGC grava no clique de "Abrir GDoc")
 repassar();
 setInterval(repassar, 1000);
+
+window.addEventListener('message', e => {
+  if (e.source !== window || e.data?.type !== 'SGC_GDOC_VERIFICAR') return;
+  const parcelaId = String(e.data.parcelaId || '');
+  document.documentElement.setAttribute('data-sgc-gdoc-ack', '1');   // "a extensão está aqui"
+  chrome.runtime.sendMessage({ type: 'VARREDURA_PARCELA', parcelaId }, resumo => {
+    if (chrome.runtime.lastError) resumo = { erro: 'A extensão foi recarregada. Atualize a página e tente de novo.' };
+    window.postMessage({ type: 'SGC_GDOC_RESULTADO', parcelaId, resumo }, location.origin);
+  });
+});

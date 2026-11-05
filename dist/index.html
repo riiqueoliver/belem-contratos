@@ -1782,6 +1782,53 @@ function quandoRelativo(iso) {
     minute: '2-digit'
   });
 }
+function GdocVerificarBtn({
+  parcelaId
+}) {
+  const [estado, setEstado] = React.useState(null);
+  React.useEffect(() => {
+    const ouvir = e => {
+      if (e.source !== window || e.data?.type !== 'SGC_GDOC_RESULTADO' || String(e.data.parcelaId) !== String(parcelaId)) return;
+      const r = e.data.resumo || {};
+      setEstado(r.erro === 'sessao' ? {
+        ok: false,
+        msg: 'Não consegui entrar no GDoc. Confira o login automático na extensão.'
+      } : r.erro ? {
+        ok: false,
+        msg: r.erro
+      } : {
+        ok: true,
+        msg: (r.movimentos || []).length ? `${r.movimentos.length} novidade(s) — veja no sininho.` : 'Nenhuma novidade no GDoc.'
+      });
+    };
+    window.addEventListener('message', ouvir);
+    return () => window.removeEventListener('message', ouvir);
+  }, [parcelaId]);
+  function verificar(e) {
+    e.stopPropagation();
+    setEstado('rodando');
+    document.documentElement.removeAttribute('data-sgc-gdoc-ack');
+    window.postMessage({
+      type: 'SGC_GDOC_VERIFICAR',
+      parcelaId: String(parcelaId)
+    }, location.origin);
+    setTimeout(() => {
+      if (!document.documentElement.hasAttribute('data-sgc-gdoc-ack')) setEstado(s => s === 'rodando' ? {
+        ok: false,
+        msg: 'Extensão SGC ↔ GDoc não encontrada neste navegador.'
+      } : s);
+    }, 3000);
+  }
+  return React.createElement("div", {
+    className: "mt-2"
+  }, React.createElement("button", {
+    onClick: verificar,
+    disabled: estado === 'rodando',
+    className: "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border border-purple-300 text-purple-700 bg-white hover:bg-purple-100 transition-colors disabled:opacity-60"
+  }, estado === 'rodando' ? '⏳ Verificando no GDoc…' : '🔄 Verificar no GDoc'), estado && estado !== 'rodando' && React.createElement("p", {
+    className: `text-[10px] mt-1 leading-snug ${estado.ok ? 'text-green-700' : 'text-amber-600'}`
+  }, estado.msg));
+}
 function AlertasPainel({
   movs,
   vencimentos,
@@ -12124,9 +12171,17 @@ function ContractDetailView({
         })),
         placeholder: "N\xBA do Gdoc",
         className: "w-full text-xs font-semibold text-purple-700 bg-transparent border-b border-purple-300 focus:outline-none focus:border-purple-500 pb-0.5"
-      }) : c.gdoc ? React.createElement("p", {
+      }) : c.gdoc ? React.createElement(React.Fragment, null, React.createElement("p", {
         className: "text-xs font-semibold text-purple-700 leading-tight break-all"
-      }, c.gdoc) : React.createElement("p", {
+      }, c.gdoc), c.gdocStatus?.setor && React.createElement("p", {
+        className: "text-[10px] text-purple-600 mt-1 leading-snug"
+      }, "\uD83D\uDCCD ", c.gdocStatus.setor, React.createElement("span", {
+        className: "text-purple-400"
+      }, " \xB7 verificado ", quandoRelativo(c.gdocStatus.verificadoEm))), c.gdocStatus?.erro && React.createElement("p", {
+        className: "text-[10px] text-amber-600 mt-1 leading-snug"
+      }, c.gdocStatus.erro), React.createElement(GdocVerificarBtn, {
+        parcelaId: c.id
+      })) : React.createElement("p", {
         className: "text-xs text-gray-300 italic"
       }, "\u2014"))));
     })(), React.createElement("div", {

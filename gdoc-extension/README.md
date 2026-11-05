@@ -33,7 +33,14 @@ Ela abre o GDoc numa janela minimizada, lê cada processo e fecha a janela.
 
 ## Quais parcelas são verificadas
 
-As do sistema principal com número de GDoc preenchido (ex.: `983/2026`) e ainda não pagas.
+Na varredura automática: as do sistema principal **cadastradas a partir de 05/11/2026**, com número
+de GDoc preenchido (ex.: `983/2026`) e ainda não pagas. As parcelas antigas ficam como estão.
+
+Na parcela há o botão **Verificar no GDoc**, que verifica na hora só aquele processo (vale também
+para parcela antiga, porque é um pedido explícito).
+
+Quando o mesmo GDoc é usado por mais de uma parcela em aberto, a NF e a NL só são aplicadas
+na parcela cuja competência aparece no nome do anexo (ex.: "NL 04 - ABRIL 2026").
 
 ## Regras de leitura
 

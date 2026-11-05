@@ -23,6 +23,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     varrer('manual').then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
     return true;
   }
+  // Botão "Verificar no GDoc" da parcela, no SGC
+  if (msg?.type === 'VARREDURA_PARCELA') {
+    varrer('parcela', String(msg.parcelaId || '')).then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
+    return true;
+  }
 });
 
 /* ───────────── agenda ───────────── */
@@ -30,6 +35,7 @@ const GDOC = 'https://gdoc.belem.pa.gov.br/gdocprocessos';
 const SGC_URL = 'https://belem-contratos.vercel.app/';
 const HORARIOS_PADRAO = [8, 12, 17];
 const ORIGEM = 'BELÉM DIGITAL';
+const INICIO_ACOMPANHAMENTO = new Date('2026-11-05T00:00:00-03:00').getTime();
 
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create('relogio', { periodInMinutes: 30 });
@@ -118,15 +124,30 @@ async function garantirSessao(tabId) {
 /* ───────────── regras de escolha dos anexos ───────────── */
 const ehNF = a => /NOTA\s+FISCAL/i.test(a.tipo);
 const ehNL = a => /LIQUIDA[ÇC][ÃA]O/i.test(a.tipo) || /^\s*NL\b/i.test(a.nome);
-// NF: a mais recente que não seja a "atestada" (a atestada só entra se for a única)
-function escolherNF(anexos) {
-  const nfs = anexos.filter(a => ehNF(a) && a.id);
-  return nfs.filter(a => !/ATESTAD/i.test(a.nome)).pop() || nfs.pop() || null;
+const MESES = { JAN:1, FEV:2, MAR:3, ABR:4, MAI:5, JUN:6, JUL:7, AGO:8, SET:9, OUT:10, NOV:11, DEZ:12 };
+// Competência escrita no nome do anexo: "ABRIL 2026", "DEZ 2025", "ABR/26", "03/2026"
+function competenciaDoNome(nome) {
+  const s = String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  const m = /\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[A-Z]*\.?\s*(?:DE\s*|\/\s*|-\s*)?(\d{4}|\d{2})?\b/.exec(s);
+  if (m) return { mes: MESES[m[1]], ano: m[2] ? (m[2].length === 2 ? 2000 + +m[2] : +m[2]) : null };
+  const n = /\b(0?[1-9]|1[0-2])\s*\/\s*(20\d{2})\b/.exec(s);
+  if (n) return { mes: +n[1], ano: +n[2] };
+  return null;
 }
-// NL: a mais recente que não seja minuta "p/ assinatura"
-function escolherNL(anexos) {
-  const nls = anexos.filter(a => ehNL(a) && a.id);
-  return nls.filter(a => !/P\/?\s*ASSINATURA|MINUTA/i.test(a.nome)).pop() || null;
+function confere(p, comp) {
+  const [a, m] = String(p.refMonth || '').split('-').map(Number);
+  return !!comp && comp.mes === m && (!comp.ano || comp.ano === a);
+}
+// NF: a mais recente que não seja a "atestada" (a atestada só entra se for a única).
+// NL: a mais recente que não seja minuta "p/ assinatura".
+// Processo compartilhado por várias parcelas: só vale o anexo cuja competência no nome
+// bate com a da parcela — sem isso, a NL de um mês marcaria as outras parcelas como pagas.
+function escolher(tipo, anexos, p, compartilhado) {
+  let lista = anexos.filter(a => (tipo === 'nf' ? ehNF(a) : ehNL(a)) && a.id);
+  if (tipo === 'nl') lista = lista.filter(a => !/P\/?\s*ASSINATURA|MINUTA/i.test(a.nome));
+  if (compartilhado) lista = lista.filter(a => confere(p, competenciaDoNome(a.nome)));
+  if (tipo === 'nf') return lista.filter(a => !/ATESTAD/i.test(a.nome)).pop() || lista.pop() || null;
+  return lista.pop() || null;
 }
 function numeroAno(p) {
   const s = String(p.gdoc || '');
@@ -138,7 +159,7 @@ function numeroAno(p) {
 }
 
 /* ───────────── varredura ───────────── */
-async function varrer(motivo) {
+async function varrer(motivo, soParcela) {
   const { varrendo } = await chrome.storage.local.get('varrendo');
   if (varrendo && Date.now() - varrendo < 20 * 60000) return { erro: 'Já existe uma varredura em andamento.' };
   await chrome.storage.local.set({ varrendo: Date.now() });
@@ -147,10 +168,28 @@ async function varrer(motivo) {
   const resumo = { motivo, inicio, verificados: 0, movimentos: [], avisos: [] };
   let janela = null;
   try {
-    const parcelas = (await SGC.listar('contracts'))
-      // Só parcelas ainda não pagas (etapa 5 = fluxo concluído)
-      .filter(p => p.gdoc && !/^https?:/i.test(p.gdoc) && !p.liquidacao && (p.currentStep || 1) <= 4 && numeroAno(p));
-    if (!parcelas.length) { resumo.avisos.push('Nenhuma parcela com GDoc em aberto.'); return resumo; }
+    const todas = await SGC.listar('contracts');
+    // Quantas parcelas ainda não pagas usam cada processo (as já pagas não disputam a NF/NL)
+    const porProcesso = new Map();
+    for (const p of todas) {
+      if (p.liquidacao || (p.currentStep || 1) > 4) continue;
+      const na = !/^https?:/i.test(p.gdoc || '') && numeroAno(p);
+      if (na) { const k = `${na.numero}/${na.ano}`; porProcesso.set(k, (porProcesso.get(k) || 0) + 1); }
+    }
+    // Só parcelas cadastradas a partir da implantação do acompanhamento (o id é o
+    // instante do cadastro) e ainda não pagas (etapa 5 = fluxo concluído).
+    // As parcelas antigas ficam como estão, salvo se marcadas com gdocAcompanhar.
+    // Pedido pelo botão da parcela: verifica só ela, mesmo que seja antiga
+    const parcelas = soParcela
+      ? todas.filter(p => p.__id === soParcela && p.gdoc && !/^https?:/i.test(p.gdoc) && numeroAno(p))
+      : todas.filter(p => p.gdoc && !/^https?:/i.test(p.gdoc) && !p.liquidacao
+          && (p.currentStep || 1) <= 4 && numeroAno(p)
+          && (p.gdocAcompanhar === true || Number(p.__id) >= INICIO_ACOMPANHAMENTO));
+    if (!parcelas.length) {
+      if (soParcela) resumo.erro = 'Parcela sem número de GDoc válido (ex.: 983/2026).';
+      else resumo.avisos.push('Nenhuma parcela com GDoc em aberto.');
+      return resumo;
+    }
 
     janela = await chrome.windows.create({ url: 'about:blank', state: 'minimized', focused: false });
     const tabId = janela.tabs[0].id;
@@ -176,7 +215,7 @@ async function varrer(motivo) {
         await abrirEm(tabId, GDOC + '/processos/pesquisa');
       }
       resumo.verificados++;
-      await registrar(tabId, p, chave, r, resumo);
+      await registrar(tabId, p, chave, r, resumo, (porProcesso.get(chave) || 1) > 1);
     }
   } catch (e) {
     resumo.erro = e.message || String(e);
@@ -193,7 +232,7 @@ async function varrer(motivo) {
 }
 
 /* Compara com o último estado salvo na parcela e grava o que mudou. */
-async function registrar(tabId, p, chave, r, resumo) {
+async function registrar(tabId, p, chave, r, resumo, compartilhado) {
   const antes = p.gdocStatus || {};
   const base = { parcelaId: p.__id, contractNumber: p.contractNumber || '', gdoc: chave,
                  criadoEm: new Date().toISOString(), lido: false };
@@ -226,8 +265,8 @@ async function registrar(tabId, p, chave, r, resumo) {
 
   // Nota fiscal e nota de liquidação: baixa o PDF e deixa para o sistema aplicar na parcela
   for (const [tipo, anexo, campo, prefixo] of [
-    ['nf', escolherNF(r.anexos), 'nfAnexoId', 'gdocnf_'],
-    ['nl', escolherNL(r.anexos), 'nlAnexoId', 'gdocnl_'],
+    ['nf', escolher('nf', r.anexos, p, compartilhado), 'nfAnexoId', 'gdocnf_'],
+    ['nl', escolher('nl', r.anexos, p, compartilhado), 'nlAnexoId', 'gdocnl_'],
   ]) {
     if (!anexo || antes[campo] === anexo.id) continue;
     const pdf = await rodar(tabId, id => window.__gdocBaixarAnexo(id), [anexo.id]);
