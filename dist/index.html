@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" /><meta name="sgc-build" content="1793856864350" />
+  <meta charset="UTF-8" /><meta name="sgc-build" content="1793857297183" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
@@ -2192,7 +2192,7 @@ async function nfLerPdf(arrayBuffer) {
     }
     if (texto.replace(/\s/g, '').length < 40) {
       try {
-        const o = await nfLerOCR(pdf);
+        const o = await Promise.race([nfLerOCR(pdf), new Promise((_, falha) => setTimeout(() => falha(new Error('OCR passou de 90 s')), 90000))]);
         if (o.numero || o.valor) return {
           ...o,
           viaOCR: true
@@ -28211,13 +28211,15 @@ function App() {
     addToast('🗑️ Nota de liquidação removida. A parcela voltou para "Aguardando pagamento".');
   }
   const gdocEmProcesso = useRef(new Set());
+  const movPendente = m => m.aplicado === false || m.aplicado === 'processando' && Date.now() - (m.processandoEm || 0) > 3 * 60000;
   async function aplicarMovGdoc(m) {
     const movRef = db.collection(COL('gdoc_movs')).doc(m.id);
     const reservou = await db.runTransaction(async tx => {
       const s = await tx.get(movRef);
-      if (!s.exists || s.data().aplicado !== false) return false;
+      if (!s.exists || !movPendente(s.data())) return false;
       tx.update(movRef, {
-        aplicado: 'processando'
+        aplicado: 'processando',
+        processandoEm: Date.now()
       });
       return true;
     }).catch(() => false);
@@ -28248,7 +28250,8 @@ function App() {
       }) => {
         const upd = {};
         if (!atual.nfNumber && numero) upd.nfNumber = String(numero);
-        if ((!atual.nfDate || atual.nfDateEstimada) && dataIso) {
+        const provisoria = atual.nfDateEstimada || atual.nfDate === `${atual.refMonth}-01`;
+        if ((!atual.nfDate || provisoria) && dataIso && dataIso !== atual.nfDate) {
           upd.nfDate = dataIso;
           upd.nfDateEstimada = false;
         }
@@ -28256,11 +28259,11 @@ function App() {
         return upd;
       };
       if (m.tipo === 'nf') {
-        const nf = await nfLerPdf(b64ParaBuffer(base64));
         const nfSlot = await db.collection(COL('pdfs')).doc(String(c.id)).get();
         if (!nfSlot.exists) await db.collection(COL('pdfs')).doc(String(c.id)).set({
           data: base64
         });
+        const nf = await nfLerPdf(b64ParaBuffer(base64));
         const numNome = (/NOTA\s+FISCAL\s*(?:N[º°.o]?\s*)?(\d{1,10})/i.exec(m.anexoNome || '') || [])[1];
         const upd = dadosNF({
           numero: nf.numero || numNome,
@@ -28318,7 +28321,7 @@ function App() {
   }
   useEffect(() => {
     if (!contracts.length || novaVersao) return;
-    gdocMovs.filter(m => m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id)).forEach(m => {
+    gdocMovs.filter(m => movPendente(m) && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id)).forEach(m => {
       gdocEmProcesso.current.add(m.id);
       aplicarMovGdoc(m);
     });

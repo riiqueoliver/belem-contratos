@@ -1082,7 +1082,8 @@
         if (texto.replace(/\s/g, '').length < 40) {
           // Digitalizada: tenta o OCR antes de desistir (cerca de 10 s)
           try {
-            const o = await nfLerOCR(pdf);
+            const o = await Promise.race([nfLerOCR(pdf),
+              new Promise((_, falha) => setTimeout(() => falha(new Error('OCR passou de 90 s')), 90000))]);
             if (o.numero || o.valor) return { ...o, viaOCR: true };
           } catch (e) { console.warn('OCR da NF', e); }
           return { semTexto: true };
@@ -19946,12 +19947,15 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       /* NF e NL que a extensão trouxe do GDoc: lê o PDF e aplica na parcela.
          A reserva em transação evita que duas abas abertas processem o mesmo item. */
       const gdocEmProcesso = useRef(new Set());
+      // Pendente: ainda não aplicado, ou preso em "processando" há mais de 3 min (aba fechada no meio)
+      const movPendente = m => m.aplicado === false ||
+        (m.aplicado === 'processando' && Date.now() - (m.processandoEm || 0) > 3 * 60000);
       async function aplicarMovGdoc(m) {
         const movRef = db.collection(COL('gdoc_movs')).doc(m.id);
         const reservou = await db.runTransaction(async tx => {
           const s = await tx.get(movRef);
-          if (!s.exists || s.data().aplicado !== false) return false;
-          tx.update(movRef, { aplicado: 'processando' });
+          if (!s.exists || !movPendente(s.data())) return false;
+          tx.update(movRef, { aplicado: 'processando', processandoEm: Date.now() });
           return true;
         }).catch(() => false);
         if (!reservou) return;
@@ -19970,15 +19974,18 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           const dadosNF = ({ numero, dataIso, valor }) => {
             const upd = {};
             if (!atual.nfNumber && numero) upd.nfNumber = String(numero);
-            if ((!atual.nfDate || atual.nfDateEstimada) && dataIso) { upd.nfDate = dataIso; upd.nfDateEstimada = false; }
+            // Data provisória: marcada no cadastro, ou o dia 1º da competência que o cadastro preenche sozinho
+            const provisoria = atual.nfDateEstimada || atual.nfDate === `${atual.refMonth}-01`;
+            if ((!atual.nfDate || provisoria) && dataIso && dataIso !== atual.nfDate) { upd.nfDate = dataIso; upd.nfDateEstimada = false; }
             if (!parseBRL(atual.billingValue) && valor) upd.billingValue = fmtCurrencyRaw(valor);
             return upd;
           };
 
           if (m.tipo === 'nf') {
-            const nf = await nfLerPdf(b64ParaBuffer(base64));
+            // Anexa o PDF antes de ler: mesmo que a leitura falhe, a NF fica na parcela
             const nfSlot = await db.collection(COL('pdfs')).doc(String(c.id)).get();
             if (!nfSlot.exists) await db.collection(COL('pdfs')).doc(String(c.id)).set({ data: base64 });
+            const nf = await nfLerPdf(b64ParaBuffer(base64));
             // NF digitalizada: o número sai do nome do anexo no GDoc ("NOTA FISCAL 532")
             const numNome = (/NOTA\s+FISCAL\s*(?:N[º°.o]?\s*)?(\d{1,10})/i.exec(m.anexoNome || '') || [])[1];
             const upd = dadosNF({ numero: nf.numero || numNome, dataIso: nf.data_emissao ? brParaIso(nf.data_emissao) : null, valor: nf.valor });
@@ -20020,7 +20027,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => {
         // Aba com versão desatualizada não processa: as regras de leitura mudam entre versões
         if (!contracts.length || novaVersao) return;
-        gdocMovs.filter(m => m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id))
+        gdocMovs.filter(m => movPendente(m) && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id))
           .forEach(m => { gdocEmProcesso.current.add(m.id); aplicarMovGdoc(m); });
       }, [gdocMovs, contracts, novaVersao]);
 
