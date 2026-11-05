@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "SGC → GDoc · Emissão automática de processos",
-  "version": "1.0.0",
-  "description": "Cria o processo de cobrança no GDoc automaticamente a partir da NF cadastrada no Sistema de Gestão de Contratos.",
-  "permissions": ["storage", "scripting"],
+  "name": "SGC ↔ GDoc · Emissão e acompanhamento de processos",
+  "version": "2.0.0",
+  "description": "Preenche o processo de cobrança no GDoc a partir da NF do SGC e acompanha os processos das parcelas: tramitação, NF e nota de liquidação.",
+  "permissions": ["storage", "scripting", "alarms", "notifications", "tabs"],
   "host_permissions": [
     "https://gdoc.belem.pa.gov.br/*",
-    "https://belem-contratos.vercel.app/*"
+    "https://belem-contratos.vercel.app/*",
+    "https://firestore.googleapis.com/*"
   ],
   "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "SGC ↔ GDoc", "default_icon": "icone.png" },
+  "options_page": "opcoes.html",
   "content_scripts": [
     {
       "matches": ["https://belem-contratos.vercel.app/*"],
@@ -22,5 +25,5 @@
       "run_at": "document_idle"
     }
   ],
-  "icons": {}
+  "icons": { "128": "icone.png" }
 }

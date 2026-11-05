@@ -710,6 +710,95 @@
       }
     }
 
+    /* ═══════════════════════════════════════════════════════
+       ACOMPANHAMENTO DO GDOC — a extensão "SGC ↔ GDoc" varre os processos
+       das parcelas com o login do usuário e grava em gdoc_movs o que mudou
+       (tramitação, NF anexada, NL anexada). Os PDFs vêm em pdfs/gdocnf_<id>
+       e pdfs/gdocnl_<id>; o sistema lê e aplica na parcela.
+       ═══════════════════════════════════════════════════════ */
+    const GDOC_MOV_TIPOS = {
+      tramitacao: { rotulo:'Tramitação',        cor:'#2563eb', fundo:'#eff6ff' },
+      nf:         { rotulo:'NF anexada',        cor:'#0E7490', fundo:'#ecfeff' },
+      nl:         { rotulo:'NL – parcela paga', cor:'#15803d', fundo:'#f0fdf4' },
+      aviso:      { rotulo:'Aviso',             cor:'#b45309', fundo:'#fffbeb' },
+    };
+    function b64ParaBuffer(b64) {
+      const bin = atob(String(b64 || '').replace(/^data:[^,]*,/, ''));
+      const u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      return u.buffer;
+    }
+    function brParaIso(br) {          // "05/11/2026" → "2026-11-05"
+      const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(br || ''));
+      return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : null;
+    }
+    function quandoRelativo(iso) {
+      const d = new Date(iso); if (isNaN(d)) return '';
+      const min = Math.round((Date.now() - d) / 60000);
+      if (min < 1)  return 'agora';
+      if (min < 60) return `há ${min} min`;
+      if (min < 60 * 24) return `há ${Math.round(min / 60)} h`;
+      return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    }
+
+    /* Painel do sininho: movimentações do GDoc + vencimentos de contrato */
+    function AlertasPainel({ movs, vencimentos, onAbrirMov, onVerContratos, onMarcarLidas, onFechar }) {
+      const naoLidas = movs.filter(m => !m.lido).length;
+      const ref = React.useRef(null);
+      React.useEffect(() => {
+        const fora = e => { if (ref.current && !ref.current.contains(e.target)) onFechar(); };
+        document.addEventListener('mousedown', fora);
+        return () => document.removeEventListener('mousedown', fora);
+      }, [onFechar]);
+      return (
+        <div ref={ref} className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-2xl border border-gray-200 z-[200] overflow-hidden slide-in">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100" style={{background:'#f8fafc'}}>
+            <p className="text-sm font-bold text-gray-800">Alertas e movimentações</p>
+            {naoLidas > 0 && (
+              <button onClick={onMarcarLidas} className="text-[11px] font-semibold hover:underline" style={{color: BLUE}}>
+                Marcar todas como lidas
+              </button>
+            )}
+          </div>
+          {vencimentos > 0 && (
+            <button onClick={onVerContratos} className="w-full text-left px-4 py-2.5 border-b border-gray-100 hover:bg-red-50/60 flex items-center gap-2">
+              <Bell className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+              <span className="text-xs text-gray-700"><b className="text-red-600">{vencimentos}</b> contrato{vencimentos !== 1 ? 's' : ''} com vencimento em até 30 dias</span>
+            </button>
+          )}
+          <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Processos no GDoc</p>
+          <div className="max-h-[420px] overflow-y-auto">
+            {movs.length === 0 && (
+              <p className="px-4 pb-4 pt-1 text-xs text-gray-400">Nenhuma movimentação registrada ainda. A extensão do GDoc verifica os processos 3 vezes ao dia.</p>
+            )}
+            {movs.map(m => {
+              const t = GDOC_MOV_TIPOS[m.tipo] || GDOC_MOV_TIPOS.aviso;
+              return (
+                <button key={m.id} onClick={() => onAbrirMov(m)}
+                  className={`w-full text-left px-4 py-2.5 border-t border-gray-50 hover:bg-slate-50 flex gap-3 ${m.lido ? '' : 'bg-blue-50/40'}`}>
+                  <span className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{background: m.lido ? '#e2e8f0' : t.cor}} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{color: t.cor, background: t.fundo}}>{t.rotulo}</span>
+                      <span className="text-[10px] text-gray-400">{quandoRelativo(m.criadoEm)}</span>
+                    </span>
+                    <span className="block text-xs font-semibold text-gray-800 mt-1 truncate">
+                      GDoc {m.gdoc}{m.contractNumber ? ` · Contrato ${m.contractNumber}` : ''}
+                    </span>
+                    <span className="block text-[11px] text-gray-600 leading-snug">{m.descricao}</span>
+                    {m.resultado && <span className="block text-[11px] text-gray-500 mt-0.5">{m.resultado}</span>}
+                    {m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && (
+                      <span className="block text-[10px] text-amber-600 mt-0.5">Importando o PDF para a parcela…</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     /* Lê os campos da NFS-e direto do texto do PDF (sem IA). PDF digitalizado → { semTexto:true }.
        Competência: vale a da descrição do serviço ("Referente a 02/2026", "COMPETENCIA: NOV 2025");
        a do cabeçalho da NFS-e só entra se a descrição não trouxer nenhuma. */
@@ -5041,6 +5130,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                        className="text-xs font-semibold hover:underline" style={{color: BLUE}}>Abrir processo</a>
                                   : <p className="text-[11px] font-mono text-gray-600 truncate" title={c.gdoc}>{c.gdoc.replace(/\/B[ÉE]LEMDIGITAL$/i, '')}</p>
                               ) : <p className="text-[11px] text-gray-300">sem processo</p>}
+                              {c.gdocStatus?.setor && (
+                                <p className="text-[10px] text-gray-500 truncate" title={`Verificado ${quandoRelativo(c.gdocStatus.verificadoEm)}${c.gdocStatus.situacao ? ' · ' + c.gdocStatus.situacao : ''}`}>
+                                  📍 {c.gdocStatus.setor}
+                                </p>
+                              )}
                             </div>
 
                             {/* Ações (admin) */}
@@ -18995,6 +19089,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [arcanjoPessoas,       setArcanjoPessoas]       = useState([]);
       const [arcanjoEventos,       setArcanjoEventos]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
+      const [gdocMovs,             setGdocMovs]             = useState([]);
+      const [showAlertas,          setShowAlertas]          = useState(false);
       const [showRelatoriosPage,   setShowRelatoriosPage]   = useState(false);
       const [showAssistentePage,   setShowAssistentePage]   = useState(false);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
@@ -19119,6 +19215,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const unsubGdocs = db.collection(COL('gdocs')).onSnapshot(snap => {
           setGdocs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
+        // Movimentações dos processos no GDoc, gravadas pela extensão
+        const unsubGdocMovs = db.collection(COL('gdoc_movs')).orderBy('criadoEm', 'desc').limit(80).onSnapshot(snap => {
+          setGdocMovs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        }, () => {});
         const unsubArcanjo = db.collection(COL('arcanjo_social')).orderBy('createdAt', 'desc').onSnapshot(snap => {
           setArcanjoRecords(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
@@ -19166,7 +19266,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
           setGcspModules((doc.exists && doc.data().modules) || {});
         });
-        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubArcanjo(); unsubArcanjoPessoas(); unsubArcanjoEventos(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
+        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubGdocMovs(); unsubArcanjo(); unsubArcanjoPessoas(); unsubArcanjoEventos(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
       }, []);
 
       const uniqueContractCount = useMemo(() => {
@@ -19597,6 +19697,94 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           currentStep:    TOTAL_STEPS,
         });
         addToast('🗑️ Nota de liquidação removida. A parcela voltou para "Aguardando pagamento".');
+      }
+
+      /* NF e NL que a extensão trouxe do GDoc: lê o PDF e aplica na parcela.
+         A reserva em transação evita que duas abas abertas processem o mesmo item. */
+      const gdocEmProcesso = useRef(new Set());
+      async function aplicarMovGdoc(m) {
+        const movRef = db.collection(COL('gdoc_movs')).doc(m.id);
+        const reservou = await db.runTransaction(async tx => {
+          const s = await tx.get(movRef);
+          if (!s.exists || s.data().aplicado !== false) return false;
+          tx.update(movRef, { aplicado: 'processando' });
+          return true;
+        }).catch(() => false);
+        if (!reservou) return;
+        const fim = campos => movRef.update({ aplicado: true, ...campos });
+        try {
+          const c = contracts.find(x => String(x.id) === String(m.parcelaId));
+          if (!c) return fim({ resultado: 'Parcela não encontrada no sistema.' });
+          const pdfSnap = m.pdfDoc ? await db.collection(COL('pdfs')).doc(m.pdfDoc).get() : null;
+          const base64 = pdfSnap?.exists ? pdfSnap.data().data : null;
+          if (!base64) return fim({ resultado: 'PDF não recebido da extensão.' });
+          const parcelaRef = db.collection(COL('contracts')).doc(String(c.id));
+
+          if (m.tipo === 'nf') {
+            const nf = await nfLerPdf(b64ParaBuffer(base64));
+            const nfSlot = await db.collection(COL('pdfs')).doc(String(c.id)).get();
+            if (!nfSlot.exists) await db.collection(COL('pdfs')).doc(String(c.id)).set({ data: base64 });
+            const upd = {};
+            if (!c.nfNumber && nf.numero) upd.nfNumber = String(nf.numero);
+            if (!c.nfDate && nf.data_emissao) upd.nfDate = brParaIso(nf.data_emissao);
+            if (!parseBRL(c.billingValue) && nf.valor) upd.billingValue = fmtCurrencyRaw(nf.valor);
+            if ((c.currentStep || 1) < 2) {
+              upd.completedSteps = [...new Set([...(c.completedSteps || []), 1])];
+              upd.currentStep = 2;
+            }
+            if (Object.keys(upd).length) await parcelaRef.update(upd);
+            return fim({ resultado: nf.semTexto
+              ? 'PDF da NF anexado à parcela (digitalizado, sem leitura automática).'
+              : `PDF anexado à parcela${nf.numero ? ` · NF ${nf.numero}` : ''}${nf.valor ? ` · ${fmtCurrencyRaw(nf.valor)}` : ''}.` });
+          }
+
+          if (m.tipo === 'nl') {
+            if (c.liquidacao) return fim({ resultado: 'A parcela já tinha nota de liquidação registrada.' });
+            const liq = await liqLerPdf(b64ParaBuffer(base64));
+            const dados = liq.erro ? {} : liq;
+            dados.data = dados.data || brParaIso(m.dataAnexo) || new Date().toISOString().slice(0, 10);
+            dados.origem = 'gdoc';
+            const limpo = Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== undefined && v !== null));
+            await db.collection(COL('pdfs')).doc('liq_' + c.id).set({ data: base64 });
+            await parcelaRef.update({
+              liquidacao:     { ...limpo, registradoEm: new Date().toISOString() },
+              paymentDate:    dados.data,
+              completedSteps: [...new Set([...(c.completedSteps || []), ...STEPS.map(s => s.id)])],
+              currentStep:    TOTAL_STEPS + 1,
+            });
+            return fim({ resultado: `Parcela ${c.installment}/${c.totalInstallments} marcada como paga em ${new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR')}${dados.numero ? ` · NL ${dados.numero}` : ''}.` });
+          }
+          return fim({});
+        } catch (e) {
+          console.error('GDoc → parcela', e);
+          return movRef.update({ aplicado: false, resultado: 'Falha ao importar: ' + (e.message || 'erro') }).catch(() => {});
+        }
+      }
+      useEffect(() => {
+        if (!contracts.length) return;
+        gdocMovs.filter(m => m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id))
+          .forEach(m => { gdocEmProcesso.current.add(m.id); aplicarMovGdoc(m); });
+      }, [gdocMovs, contracts]);
+
+      async function marcarMovsLidas() {
+        const naoLidas = gdocMovs.filter(m => !m.lido);
+        if (!naoLidas.length) return;
+        const batch = db.batch();
+        naoLidas.forEach(m => batch.update(db.collection(COL('gdoc_movs')).doc(m.id), { lido: true }));
+        await batch.commit().catch(() => {});
+      }
+      function abrirMovGdoc(m) {
+        setShowAlertas(false);
+        if (!m.lido) db.collection(COL('gdoc_movs')).doc(m.id).update({ lido: true }).catch(() => {});
+        const c = contracts.find(x => String(x.id) === String(m.parcelaId));
+        const cn = c?.contractNumber || m.contractNumber;
+        if (!cn) return;
+        setShowArcanjoAcoes(false); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false);
+        setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false);
+        setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setShowForm(false); setShowAdmin(false);
+        setShowInstallmentsPage(false);
+        setContractFocus(c ? { cn, tab: 'parcelas', instId: c.id } : null);
+        setActiveContractNumber(cn);
       }
       async function handleSaveContractPdf(contractNumber, base64Data) {
         try {
@@ -20745,14 +20933,31 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   </button>
                 )}
                 {!showArcanjoPage && !showArcanjoGerencial && !showArcanjoAcoes && (<>
-                  {/* Indicador de alertas */}
-                  {hasAlert_sb && (
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg"
-                          style={{background:'#FCF3F3', color:'#dc2626', border:'1px solid #fecaca'}}>
-                      <Bell className="w-3 h-3" style={{animation:'swing 1.4s ease-in-out infinite'}} />
-                      {totalHomeAlerts_sb} alerta{totalHomeAlerts_sb!==1?'s':''}
-                    </span>
-                  )}
+                  {/* Indicador de alertas — abre o painel com vencimentos e movimentações do GDoc */}
+                  {(() => {
+                    const movsNaoLidas = gdocMovs.filter(m => !m.lido).length;
+                    const total = totalHomeAlerts_sb + movsNaoLidas;
+                    return (
+                      <div className="relative">
+                        <button onClick={() => setShowAlertas(v => !v)}
+                          className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-colors"
+                          style={total > 0
+                            ? {background:'#FCF3F3', color:'#dc2626', border:'1px solid #fecaca'}
+                            : {background:'#F4F7FB', color:'#64748b', border:'1px solid #e2e8f0'}}
+                          title="Ver alertas e movimentações">
+                          <Bell className="w-3 h-3" style={total > 0 ? {animation:'swing 1.4s ease-in-out infinite'} : {}} />
+                          {total > 0 ? `${total} alerta${total!==1?'s':''}` : 'Alertas'}
+                        </button>
+                        {showAlertas && (
+                          <AlertasPainel movs={gdocMovs} vencimentos={totalHomeAlerts_sb}
+                            onAbrirMov={abrirMovGdoc}
+                            onMarcarLidas={marcarMovsLidas}
+                            onFechar={() => setShowAlertas(false)}
+                            onVerContratos={() => { setShowAlertas(false); setShowArcanjoAcoes(false); setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="h-5 w-px bg-gray-200" />
                   <span className="text-[10px] font-bold tracking-widest uppercase"
                         style={{color: GREEN}}>Gestão de Contratos</span>
