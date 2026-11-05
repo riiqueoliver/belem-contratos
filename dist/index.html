@@ -1697,16 +1697,18 @@ function liqParse(texto) {
   }
   const emp = /Empenho\s*N?[º°o]?\s*(\d+)\s*\/\s*(\d{4})/i.exec(t);
   if (emp) r.empenho = `${emp[1]}/${emp[2]}`;
-  const nf = /Nota\s+Fiscal\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d+)/i.exec(t);
+  const nf = /Nota\s+Fiscal[^0-9]{0,25}(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d+)/i.exec(t);
   if (nf) {
     r.nfData = liqData(nf[1]);
     r.nfNumero = nf[2];
   }
-  const tot = /Totais\.*\s*([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/i.exec(t);
+  const tot = /Totais\.*\s*([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})(?:\s+([\d.]+,\d{2}))?/i.exec(t);
   if (tot) {
-    r.valorLiquidado = liqValor(tot[1]);
-    r.retencao = liqValor(tot[2]);
-    r.valorPago = liqValor(tot[3]);
+    const [liquidado, consignado, pago, saldoPagar] = tot.slice(1).map(liqValor);
+    r.valorLiquidado = liquidado;
+    r.retencao = consignado;
+    r.saldoPagar = saldoPagar;
+    r.valorPago = pago > 0 ? pago : saldoPagar ?? pago;
   }
   const org = /Org[ãa]o\s*:\s*([^:]{3,90}?)\s+Unidade\s*:/i.exec(t);
   if (org) r.orgao = org[1].trim();
@@ -10072,8 +10074,8 @@ function NotaLiquidacaoCard({
   }, "n\xE3o anexada")), React.createElement("div", {
     className: "px-4 py-3"
   }, liq && !rascunho && React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3"
-  }, [['Data da liquidação', liq.data ? new Date(liq.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'], ['Nº liquidação', liq.numero || '—'], ['Empenho', liq.empenho || '—'], ['Valor pago', liq.valorPago != null ? fmtCurrency(liq.valorPago) : '—']].map(([rot, val]) => React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3"
+  }, [['Data da liquidação', liq.data ? new Date(liq.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'], ['Nº liquidação', liq.numero || '—'], ['Empenho', liq.empenho || '—'], ['Valor liquidado', liq.valorLiquidado != null ? fmtCurrency(liq.valorLiquidado) : '—'], ['Imposto retido', liq.retencao != null ? fmtCurrency(liq.retencao) : '—'], ['Valor pago', liq.valorPago != null ? fmtCurrency(liq.valorPago) : '—']].map(([rot, val]) => React.createElement("div", {
     key: rot,
     className: "rounded-lg border border-gray-200 bg-white px-3 py-2"
   }, React.createElement("p", {
@@ -28169,30 +28171,47 @@ function App() {
         resultado: 'PDF não recebido da extensão.'
       });
       const parcelaRef = db.collection(COL('contracts')).doc(String(c.id));
+      const atual = {
+        ...c,
+        ...((await parcelaRef.get()).data() || {})
+      };
+      const dadosNF = ({
+        numero,
+        dataIso,
+        valor
+      }) => {
+        const upd = {};
+        if (!atual.nfNumber && numero) upd.nfNumber = String(numero);
+        if ((!atual.nfDate || atual.nfDateEstimada) && dataIso) {
+          upd.nfDate = dataIso;
+          upd.nfDateEstimada = false;
+        }
+        if (!parseBRL(atual.billingValue) && valor) upd.billingValue = fmtCurrencyRaw(valor);
+        return upd;
+      };
       if (m.tipo === 'nf') {
         const nf = await nfLerPdf(b64ParaBuffer(base64));
         const nfSlot = await db.collection(COL('pdfs')).doc(String(c.id)).get();
         if (!nfSlot.exists) await db.collection(COL('pdfs')).doc(String(c.id)).set({
           data: base64
         });
-        const upd = {};
-        if (!c.nfNumber && nf.numero) upd.nfNumber = String(nf.numero);
-        if ((!c.nfDate || c.nfDateEstimada) && nf.data_emissao) {
-          upd.nfDate = brParaIso(nf.data_emissao);
-          upd.nfDateEstimada = false;
-        }
-        if (!parseBRL(c.billingValue) && nf.valor) upd.billingValue = fmtCurrencyRaw(nf.valor);
-        if ((c.currentStep || 1) < 2) {
-          upd.completedSteps = [...new Set([...(c.completedSteps || []), 1])];
+        const numNome = (/NOTA\s+FISCAL\s*(?:N[º°.o]?\s*)?(\d{1,10})/i.exec(m.anexoNome || '') || [])[1];
+        const upd = dadosNF({
+          numero: nf.numero || numNome,
+          dataIso: nf.data_emissao ? brParaIso(nf.data_emissao) : null,
+          valor: nf.valor
+        });
+        if ((atual.currentStep || 1) < 2) {
+          upd.completedSteps = [...new Set([...(atual.completedSteps || []), 1])];
           upd.currentStep = 2;
         }
         if (Object.keys(upd).length) await parcelaRef.update(upd);
         return fim({
-          resultado: nf.semTexto ? 'PDF da NF anexado à parcela (digitalizado, sem leitura automática).' : `PDF anexado à parcela${nf.numero ? ` · NF ${nf.numero}` : ''}${nf.valor ? ` · ${fmtCurrencyRaw(nf.valor)}` : ''}.`
+          resultado: nf.semTexto ? `PDF da NF anexado à parcela (digitalizado${upd.nfNumber ? ` · NF ${upd.nfNumber} pelo nome do anexo` : ''}; data e valor virão da NL).` : `PDF anexado à parcela${nf.numero ? ` · NF ${nf.numero}` : ''}${nf.valor ? ` · ${fmtCurrencyRaw(nf.valor)}` : ''}.`
         });
       }
       if (m.tipo === 'nl') {
-        if (c.liquidacao) return fim({
+        if (atual.liquidacao) return fim({
           resultado: 'A parcela já tinha nota de liquidação registrada.'
         });
         const liq = await liqLerPdf(b64ParaBuffer(base64));
@@ -28203,17 +28222,23 @@ function App() {
         await db.collection(COL('pdfs')).doc('liq_' + c.id).set({
           data: base64
         });
+        const upd = dadosNF({
+          numero: dados.nfNumero,
+          dataIso: dados.nfData,
+          valor: dados.valorLiquidado
+        });
         await parcelaRef.update({
+          ...upd,
           liquidacao: {
             ...limpo,
             registradoEm: new Date().toISOString()
           },
           paymentDate: dados.data,
-          completedSteps: [...new Set([...(c.completedSteps || []), ...STEPS.map(s => s.id)])],
+          completedSteps: [...new Set([...(atual.completedSteps || []), ...STEPS.map(s => s.id)])],
           currentStep: TOTAL_STEPS + 1
         });
         return fim({
-          resultado: `Parcela ${c.installment}/${c.totalInstallments} marcada como paga em ${new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR')}${dados.numero ? ` · NL ${dados.numero}` : ''}.`
+          resultado: `Parcela ${c.installment}/${c.totalInstallments} marcada como paga em ${new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR')}${dados.numero ? ` · NL ${dados.numero}` : ''}${dados.valorPago ? ` · pago ${fmtCurrencyRaw(dados.valorPago)}` : ''}${dados.retencao ? ` · imposto ${fmtCurrencyRaw(dados.retencao)}` : ''}.`
         });
       }
       return fim({});
