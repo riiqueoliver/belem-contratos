@@ -3334,12 +3334,14 @@ Regras:
           setError(data.error || 'Não foi possível entrar com o Google.'); setLoading(false);
         } catch (err) {
           setLoading(false);
+          console.error('Login Google:', err);
           if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
           setError(err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found'
             ? 'O login com Google ainda não foi ativado no sistema.'
             : err.code === 'auth/unauthorized-domain' ? 'Este endereço não está autorizado para login com Google.'
             : err.code === 'auth/popup-blocked' ? 'O navegador bloqueou a janela do Google. Libere pop-ups para este site.'
-            : 'Falha ao entrar com o Google. Tente novamente.');
+            : err.code === 'auth/network-request-failed' ? 'Sem conexão com o Google. Verifique a internet e tente de novo.'
+            : `Falha ao entrar com o Google (${err.code || err.message || 'erro desconhecido'}). Tente novamente.`);
         }
       }
 
