@@ -1822,11 +1822,12 @@ function GdocVerificarBtn({
   return React.createElement(React.Fragment, null, React.createElement("button", {
     onClick: verificar,
     disabled: estado === 'rodando',
-    className: "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border border-purple-300 text-purple-700 bg-white hover:bg-purple-100 transition-colors disabled:opacity-60"
-  }, estado === 'rodando' ? '⏳ Verificando no GDoc…' : '🔄 Verificar no GDoc'), estado && estado !== 'rodando' && React.createElement("p", {
+    className: BTN_GDOC
+  }, estado === 'rodando' ? 'Verificando…' : 'Verificar no GDoc'), estado && estado !== 'rodando' && React.createElement("p", {
     className: `basis-full text-[10px] leading-snug ${estado.ok ? 'text-green-700' : 'text-amber-600'}`
   }, estado.msg));
 }
+const BTN_GDOC = 'text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60';
 function GdocAcoes({
   parcela
 }) {
@@ -1838,11 +1839,8 @@ function GdocAcoes({
       e.stopPropagation();
       setAberto(true);
     },
-    className: "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg text-white transition-colors",
-    style: {
-      background: '#7c3aed'
-    }
-  }, "\uD83E\uDDED Hist\xF3rico do GDoc"), React.createElement(GdocVerificarBtn, {
+    className: BTN_GDOC
+  }, "Hist\xF3rico do GDoc"), React.createElement(GdocVerificarBtn, {
     parcelaId: parcela.id
   }), aberto && React.createElement(GdocHistoricoModal, {
     parcela: parcela,

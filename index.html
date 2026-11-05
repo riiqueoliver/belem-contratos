@@ -770,9 +770,8 @@
       }
       return (
         <>
-          <button onClick={verificar} disabled={estado === 'rodando'}
-            className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border border-purple-300 text-purple-700 bg-white hover:bg-purple-100 transition-colors disabled:opacity-60">
-            {estado === 'rodando' ? '⏳ Verificando no GDoc…' : '🔄 Verificar no GDoc'}
+          <button onClick={verificar} disabled={estado === 'rodando'} className={BTN_GDOC}>
+            {estado === 'rodando' ? 'Verificando…' : 'Verificar no GDoc'}
           </button>
           {estado && estado !== 'rodando' && (
             <p className={`basis-full text-[10px] leading-snug ${estado.ok ? 'text-green-700' : 'text-amber-600'}`}>{estado.msg}</p>
@@ -781,15 +780,16 @@
       );
     }
 
+    // Botão neutro, no padrão dos botões secundários do sistema
+    const BTN_GDOC = 'text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60';
+
     /* Botões do GDoc na parcela: verificar agora e ver o histórico de tramitação */
     function GdocAcoes({ parcela }) {
       const [aberto, setAberto] = React.useState(false);
       return (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <button onClick={e => { e.stopPropagation(); setAberto(true); }}
-            className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg text-white transition-colors"
-            style={{background:'#7c3aed'}}>
-            🧭 Histórico do GDoc
+          <button onClick={e => { e.stopPropagation(); setAberto(true); }} className={BTN_GDOC}>
+            Histórico do GDoc
           </button>
           <GdocVerificarBtn parcelaId={parcela.id} />
           {aberto && <GdocHistoricoModal parcela={parcela} onFechar={() => setAberto(false)} />}
