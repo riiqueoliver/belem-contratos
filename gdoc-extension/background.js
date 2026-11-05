@@ -122,7 +122,10 @@ async function garantirSessao(tabId) {
 }
 
 /* ───────────── regras de escolha dos anexos ───────────── */
-const ehNF = a => /NOTA\s+FISCAL/i.test(a.tipo);
+// NF: pelo tipo do anexo ou pelo nome ("NOTA FISCAL 527", "NOTA FISCAL ATESTADA" com tipo DOCUMENTOS)
+const ehNF = a => /NOTA\s+FISCAL/i.test(a.tipo) || /NOTA\s+FISCAL|^\s*NFS?-?E?\s*(N[º°.o]?\s*)?\d/i.test(a.nome);
+// "27/10/2026 15:53" → número comparável (anexos sem data ficam no começo)
+const quandoAnexo = a => { const m = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/.exec(a.data || ''); return m ? +`${m[3]}${m[2]}${m[1]}${m[4] || '00'}${m[5] || '00'}` : 0; };
 const ehNL = a => /LIQUIDA[ÇC][ÃA]O/i.test(a.tipo) || /^\s*NL\b/i.test(a.nome);
 const MESES = { JAN:1, FEV:2, MAR:3, ABR:4, MAI:5, JUN:6, JUL:7, AGO:8, SET:9, OUT:10, NOV:11, DEZ:12 };
 // Competência escrita no nome do anexo: "ABRIL 2026", "DEZ 2025", "ABR/26", "03/2026"
@@ -138,7 +141,7 @@ function confere(p, comp) {
   const [a, m] = String(p.refMonth || '').split('-').map(Number);
   return !!comp && comp.mes === m && (!comp.ano || comp.ano === a);
 }
-// NF: a mais recente que não seja a "atestada" (a atestada só entra se for a única).
+// NF: a mais recente pela data do anexo, inclusive a "NOTA FISCAL ATESTADA".
 // NL: a mais recente que não seja minuta "p/ assinatura".
 // Processo compartilhado por várias parcelas: só vale o anexo cuja competência no nome
 // bate com a da parcela — sem isso, a NL de um mês marcaria as outras parcelas como pagas.
@@ -146,7 +149,8 @@ function escolher(tipo, anexos, p, compartilhado) {
   let lista = anexos.filter(a => (tipo === 'nf' ? ehNF(a) : ehNL(a)) && a.id);
   if (tipo === 'nl') lista = lista.filter(a => !/P\/?\s*ASSINATURA|MINUTA/i.test(a.nome));
   if (compartilhado) lista = lista.filter(a => confere(p, competenciaDoNome(a.nome)));
-  if (tipo === 'nf') return lista.filter(a => !/ATESTAD/i.test(a.nome)).pop() || lista.pop() || null;
+  // A mais recente vence (ex.: NOTA FISCAL ATESTADA anexada depois da NF original); empate fica com a última da lista
+  lista = lista.map((a, i) => ({ a, i })).sort((x, y) => quandoAnexo(x.a) - quandoAnexo(y.a) || x.i - y.i).map(x => x.a);
   return lista.pop() || null;
 }
 function numeroAno(p) {

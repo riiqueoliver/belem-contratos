@@ -987,7 +987,7 @@
     function nfParseTexto(texto) {
       const t = texto.replace(/\s+/g, ' ');
       const r = {};
-      const num = /N[úu]mero\s*(?:\/\s*S[ée]rie|da\s*NFS-?e|da\s*nota(?:\s*fiscal)?)?\s*[:\-]?\s*(\d{1,10})\b/i.exec(t)
+      const num = /N[úu]mero\s*(?:\/\s*S[ée]rie|da\s*NFS-?e|da\s*nota(?:\s*fiscal)?)?\s*[:\-]?\s*(\d{1,10})\b(?!\/\d)/i.exec(t)
                || /N[º°o]\.?\s*(?:da\s*)?NFS-?e\s*[:\-]?\s*(\d{1,10})\b/i.exec(t);
       if (num) r.numero = num[1].replace(/^0+(?=\d)/, '');
       const dt = /emiss[ãa]o[^0-9]{0,40}(\d{2}\/\d{2}\/\d{4})/i.exec(t);
@@ -1018,7 +1018,13 @@
       if (num) r.numero = num[1].replace(/^0+(?=\d)/, '');
       const dt = /(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}/.exec(lNum) || /(\d{2}\/\d{2}\/\d{4})/.exec(lNum);
       if (dt) r.data_emissao = dt[1];
-      const valor = brl(abaixo(/VALOR\s+TOTAL\s+DA\s+NFS/i)) ?? brl(abaixo(/Valor\s+Da\s+Opera/i)) ?? brl(abaixo(/^BC\s+ISSQN/i));
+      // Modelo antigo da NFS-e de Belém: "Data e hora de emissão | Competência | Número / Série"
+      // e, na linha de baixo, "08/09/2026 11:33:28 09/2026 527/E"
+      const lAnt = abaixo(/emiss[ãa]o.*N[úu]mero\s*\/\s*S[ée]rie/i);
+      const ant = /(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}(?::\d{2})?\s+\d{2}\/\d{4}\s+(\d{1,10})\s*\//.exec(lAnt);
+      if (ant) { r.data_emissao = ant[1]; r.numero = ant[2].replace(/^0+(?=\d)/, ''); }
+      const valor = brl(abaixo(/VALOR\s+TOTAL\s+DA\s+NFS/i)) ?? brl(abaixo(/Valor\s+Da\s+Opera/i)) ?? brl(abaixo(/^BC\s+ISSQN/i))
+                 ?? brl(abaixo(/Valor\s+total\s+da\s+NF/i));
       if (valor) r.valor = valor;
       const ret = brl(abaixo(/Total\s+Das\s+Reten/i));
       if (ret != null) r.retencoes = ret;
@@ -20479,11 +20485,14 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           if (m.tipo === 'nf') {
             // Anexa o PDF antes de ler: mesmo que a leitura falhe, a NF fica na parcela
             const nfSlot = await db.collection(COL('pdfs')).doc(String(c.id)).get();
-            if (!nfSlot.exists) await db.collection(COL('pdfs')).doc(String(c.id)).set({ data: base64 });
+            // Uma NF mais recente do GDoc (ex.: a atestada) substitui a que veio do GDoc antes;
+            // PDF anexado à mão na parcela não é trocado
+            if (!nfSlot.exists || atual.nfGdocAnexo) await db.collection(COL('pdfs')).doc(String(c.id)).set({ data: base64 });
             const nf = await nfLerPdf(b64ParaBuffer(base64));
             // NF digitalizada: o número sai do nome do anexo no GDoc ("NOTA FISCAL 532")
             const numNome = (/NOTA\s+FISCAL\s*(?:N[º°.o]?\s*)?(\d{1,10})/i.exec(m.anexoNome || '') || [])[1];
             const upd = dadosNF({ numero: nf.numero || numNome, dataIso: nf.data_emissao ? brParaIso(nf.data_emissao) : null, valor: nf.valor });
+            if (!nfSlot.exists || atual.nfGdocAnexo) upd.nfGdocAnexo = m.anexoNome || 'GDoc';
             if ((atual.currentStep || 1) < 2) {
               upd.completedSteps = [...new Set([...(atual.completedSteps || []), 1])];
               upd.currentStep = 2;
