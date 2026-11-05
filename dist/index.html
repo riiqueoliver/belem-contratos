@@ -1819,15 +1819,169 @@ function GdocVerificarBtn({
       } : s);
     }, 3000);
   }
-  return React.createElement("div", {
-    className: "mt-2"
-  }, React.createElement("button", {
+  return React.createElement(React.Fragment, null, React.createElement("button", {
     onClick: verificar,
     disabled: estado === 'rodando',
     className: "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border border-purple-300 text-purple-700 bg-white hover:bg-purple-100 transition-colors disabled:opacity-60"
   }, estado === 'rodando' ? '⏳ Verificando no GDoc…' : '🔄 Verificar no GDoc'), estado && estado !== 'rodando' && React.createElement("p", {
-    className: `text-[10px] mt-1 leading-snug ${estado.ok ? 'text-green-700' : 'text-amber-600'}`
+    className: `basis-full text-[10px] leading-snug ${estado.ok ? 'text-green-700' : 'text-amber-600'}`
   }, estado.msg));
+}
+function GdocAcoes({
+  parcela
+}) {
+  const [aberto, setAberto] = React.useState(false);
+  return React.createElement("div", {
+    className: "mt-2 flex flex-wrap items-center gap-1.5"
+  }, React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setAberto(true);
+    },
+    className: "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg text-white transition-colors",
+    style: {
+      background: '#7c3aed'
+    }
+  }, "\uD83E\uDDED Hist\xF3rico do GDoc"), React.createElement(GdocVerificarBtn, {
+    parcelaId: parcela.id
+  }), aberto && React.createElement(GdocHistoricoModal, {
+    parcela: parcela,
+    onFechar: () => setAberto(false)
+  }));
+}
+function GdocHistoricoModal({
+  parcela,
+  onFechar
+}) {
+  const st = parcela.gdocStatus || {};
+  const hist = st.historico || [];
+  const ultimo = hist[0] || st.ultimoEncaminhamento || null;
+  const [abertos, setAbertos] = React.useState({});
+  const [verAnexos, setVerAnexos] = React.useState(false);
+  React.useEffect(() => {
+    const esc = e => {
+      if (e.key === 'Escape') onFechar();
+    };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onFechar]);
+  const quando = e => [e.data, (e.hora || '').slice(0, 5)].filter(Boolean).join(' às ');
+  const ROXO = '#7c3aed';
+  return ReactDOM.createPortal(React.createElement("div", {
+    className: "fixed inset-0 z-[300] flex items-center justify-center p-4",
+    style: {
+      background: 'rgba(15,23,42,.55)'
+    },
+    onClick: onFechar
+  }, React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden slide-in",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3",
+    style: {
+      background: '#faf5ff'
+    }
+  }, React.createElement("div", {
+    className: "min-w-0"
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-purple-500"
+  }, "Hist\xF3rico do GDoc"), React.createElement("p", {
+    className: "text-base font-bold text-gray-800 truncate"
+  }, "Processo ", String(parcela.gdoc || '').replace(/\/B[ÉE]LEMDIGITAL$/i, '')), React.createElement("p", {
+    className: "text-[11px] text-gray-500 mt-0.5"
+  }, st.situacao && React.createElement("span", {
+    className: "font-semibold text-green-700"
+  }, st.situacao), st.situacao && st.verificadoEm && ' · ', st.verificadoEm ? `verificado ${quandoRelativo(st.verificadoEm)}` : 'ainda não verificado', st.totalAnexos ? ` · ${st.totalAnexos} anexos` : '')), React.createElement("button", {
+    onClick: onFechar,
+    className: "p-1.5 rounded-lg hover:bg-purple-100 text-gray-400",
+    title: "Fechar"
+  }, React.createElement(X, {
+    className: "w-4 h-4"
+  }))), React.createElement("div", {
+    className: "overflow-y-auto px-5 py-4 space-y-5"
+  }, !ultimo && React.createElement("div", {
+    className: "text-sm text-gray-500 bg-gray-50 rounded-xl p-4"
+  }, "Ainda n\xE3o h\xE1 hist\xF3rico deste processo. Clique em ", React.createElement("b", null, "Verificar no GDoc"), " para buscar a tramita\xE7\xE3o."), ultimo && React.createElement("div", {
+    className: "rounded-xl border-2 p-4",
+    style: {
+      borderColor: '#ddd6fe',
+      background: '#fdfcff'
+    }
+  }, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-purple-500 mb-1"
+  }, "Onde est\xE1 agora"), React.createElement("p", {
+    className: "text-sm font-bold text-gray-800"
+  }, "\uD83D\uDCCD ", ultimo.setor || st.setor), React.createElement("p", {
+    className: "text-[11px] text-gray-500"
+  }, "Encaminhado ", ultimo.por ? React.createElement(React.Fragment, null, "por ", React.createElement("b", {
+    className: "text-gray-700"
+  }, ultimo.por)) : '', " ", quando(ultimo) && `em ${quando(ultimo)}`), React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-purple-500 mt-3 mb-1"
+  }, "\xDAltimo despacho"), ultimo.despacho ? React.createElement("div", {
+    className: "text-[12.5px] text-gray-700 leading-relaxed whitespace-pre-wrap bg-white rounded-lg border border-purple-100 p-3 max-h-72 overflow-y-auto"
+  }, ultimo.despacho) : React.createElement("p", {
+    className: "text-xs text-gray-400 italic"
+  }, "Sem texto de despacho. Verifique de novo no GDoc para trazer o despacho.")), hist.length > 1 && React.createElement("div", null, React.createElement("p", {
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2"
+  }, "Por onde o processo passou (", hist.length, ")"), React.createElement("ol", {
+    className: "relative border-l-2 border-purple-100 ml-2 space-y-3"
+  }, hist.map((e, i) => React.createElement("li", {
+    key: e.ordem || i,
+    className: "ml-4"
+  }, React.createElement("span", {
+    className: "absolute -left-[7px] mt-1.5 w-3 h-3 rounded-full border-2 border-white",
+    style: {
+      background: i === 0 ? ROXO : '#c4b5fd'
+    }
+  }), React.createElement("div", {
+    className: "flex items-baseline justify-between gap-2"
+  }, React.createElement("p", {
+    className: `text-xs ${i === 0 ? 'font-bold text-gray-800' : 'font-semibold text-gray-700'}`
+  }, e.setor || '—'), React.createElement("p", {
+    className: "text-[10px] text-gray-400 whitespace-nowrap"
+  }, quando(e), e.ordem ? ` · ${e.ordem}` : '')), e.por && React.createElement("p", {
+    className: "text-[11px] text-gray-500"
+  }, "por ", e.por), e.despacho && (abertos[i] ? React.createElement("div", {
+    className: "mt-1 text-[11.5px] text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-2.5"
+  }, e.despacho, React.createElement("button", {
+    onClick: () => setAbertos(a => ({
+      ...a,
+      [i]: false
+    })),
+    className: "block mt-1 text-[10px] font-semibold text-purple-600 hover:underline"
+  }, "ocultar despacho")) : React.createElement("button", {
+    onClick: () => setAbertos(a => ({
+      ...a,
+      [i]: true
+    })),
+    className: "mt-0.5 text-left text-[11px] text-gray-500 hover:text-purple-700"
+  }, "\u201C", e.despacho.replace(/\s+/g, ' ').slice(0, 110), e.despacho.length > 110 ? '…' : '', "\u201D ", React.createElement("span", {
+    className: "font-semibold text-purple-600"
+  }, "ver"))))))), (st.anexos || []).length > 0 && React.createElement("div", null, React.createElement("button", {
+    onClick: () => setVerAnexos(v => !v),
+    className: "text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-purple-600"
+  }, verAnexos ? '▾' : '▸', " Anexos do processo (", st.totalAnexos || st.anexos.length, ")"), verAnexos && React.createElement("div", {
+    className: "mt-2 divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden"
+  }, st.anexos.slice().reverse().map((a, i) => React.createElement("div", {
+    key: i,
+    className: "flex items-center justify-between gap-3 px-3 py-1.5 text-[11px]"
+  }, React.createElement("span", {
+    className: "min-w-0 truncate text-gray-700",
+    title: a.nome
+  }, a.nome), React.createElement("span", {
+    className: "flex-shrink-0 text-gray-400"
+  }, a.tipo, " \xB7 ", (a.data || '').slice(0, 10))))))), React.createElement("div", {
+    className: "px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-2 bg-gray-50"
+  }, React.createElement("p", {
+    className: "text-[10px] text-gray-400"
+  }, "Atualizado pela extens\xE3o SGC \u2194 GDoc"), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement(GdocVerificarBtn, {
+    parcelaId: parcela.id
+  }), React.createElement("button", {
+    onClick: onFechar,
+    className: "text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-white"
+  }, "Fechar"))))), document.body);
 }
 function AlertasPainel({
   movs,
@@ -10610,6 +10764,7 @@ function ContractDetailView({
     const gdocFull = addForm.gdoc.trim() ? `${addForm.gdoc.trim()}/${gdocYear}/BÉLEMDIGITAL` : '';
     onAddInstallment(contractNumber, {
       nfDate,
+      nfDateEstimada: !addForm.nfDate,
       refMonth: addForm.refMonth,
       nfNumber: addForm.nfNumber,
       gdoc: gdocFull,
@@ -12039,6 +12194,7 @@ function ContractDetailView({
           billingValue: draft.billingValue || '',
           gdoc: (draft.gdoc || '').trim()
         };
+        payload.nfDateEstimada = !payload.nfDate || !!c.nfDateEstimada && payload.nfDate === c.nfDate;
         if (!payload.nfDate && payload.refMonth) payload.nfDate = payload.refMonth + '-01';
         await onUpdateNfData(c.id, payload);
         setNfCardEditing(null);
@@ -12179,8 +12335,8 @@ function ContractDetailView({
         className: "text-purple-400"
       }, " \xB7 verificado ", quandoRelativo(c.gdocStatus.verificadoEm))), c.gdocStatus?.erro && React.createElement("p", {
         className: "text-[10px] text-amber-600 mt-1 leading-snug"
-      }, c.gdocStatus.erro), React.createElement(GdocVerificarBtn, {
-        parcelaId: c.id
+      }, c.gdocStatus.erro), React.createElement(GdocAcoes, {
+        parcela: c
       })) : React.createElement("p", {
         className: "text-xs text-gray-300 italic"
       }, "\u2014"))));
@@ -28023,7 +28179,10 @@ function App() {
         });
         const upd = {};
         if (!c.nfNumber && nf.numero) upd.nfNumber = String(nf.numero);
-        if (!c.nfDate && nf.data_emissao) upd.nfDate = brParaIso(nf.data_emissao);
+        if ((!c.nfDate || c.nfDateEstimada) && nf.data_emissao) {
+          upd.nfDate = brParaIso(nf.data_emissao);
+          upd.nfDateEstimada = false;
+        }
         if (!parseBRL(c.billingValue) && nf.valor) upd.billingValue = fmtCurrencyRaw(nf.valor);
         if ((c.currentStep || 1) < 2) {
           upd.completedSteps = [...new Set([...(c.completedSteps || []), 1])];
@@ -28139,6 +28298,7 @@ function App() {
       contractNumber,
       processNumber: firstRec.processNumber || '',
       nfDate: data.nfDate,
+      nfDateEstimada: !!data.nfDateEstimada,
       refMonth: data.refMonth || data.nfDate.slice(0, 7),
       nfNumber: (data.nfNumber || '').trim(),
       gdoc: (data.gdoc || '').trim(),

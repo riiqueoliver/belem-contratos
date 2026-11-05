@@ -71,17 +71,43 @@ window.__gdocLerProcesso = async function (numero, ano, origem) {
     if (h && h.getAttribute('aria-expanded') !== 'true') { h.click(); await esperarAjax(d, w); }
     return h;
   };
+  // Cada encaminhamento é um cartão da grade: Setor, "n/total", Encaminhado por, data, hora e Despacho
   const hEnc = await abrir(/^Encaminhamentos/i);
   const encaminhamentos = [];
+  const lerCartao = c => {
+    const spans = [...c.querySelectorAll('span')];
+    const exato = re => (spans.find(s => re.test(s.textContent.trim())) || {}).textContent?.trim() || '';
+    const rotSetor = spans.find(s => s.textContent.trim() === 'Setor');
+    const tdPor = [...c.querySelectorAll('td')].find(t => t.textContent.trim() === 'Encaminhado por');
+    const fs = [...c.querySelectorAll('fieldset')].find(x => /Despacho/i.test(txt(x.querySelector('legend'))));
+    return {
+      ordem: exato(/^\d+\/\d+$/),
+      setor: rotSetor ? txt(rotSetor.closest('td')?.nextElementSibling?.querySelector('span')) : '',
+      por: tdPor ? txt(tdPor.nextElementSibling) : '',
+      data: exato(/^\d{2}\/\d{2}\/\d{4}$/),
+      hora: exato(/^\d{2}:\d{2}(:\d{2})?$/),
+      despacho: (fs?.querySelector('.ui-fieldset-content')?.innerText || '').trim(),
+    };
+  };
   if (hEnc) {
     const painel = hEnc.nextElementSibling;
-    const blocos = painel.innerText.split(/\n(?=Setor\s)/).filter(b => /^Setor\s/.test(b.trim()));
-    for (const b of blocos.slice(0, 5)) {
-      const setor = (/Setor\s+([^\n]+)/.exec(b) || [])[1] || '';
-      const por = (/Encaminhado por\s+([^\n]+)/.exec(b) || [])[1] || '';
-      const quando = (/(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2}(?::\d{2})?)/.exec(b) || []);
-      encaminhamentos.push({ setor: setor.replace(/\s+\d+\/\d+$/, '').trim(), por: por.trim(),
-        data: quando[1] || '', hora: quando[2] || '' });
+    const grade = () => painel.querySelector('.ui-datagrid-content > .ui-g');
+    const inicioEnc = painel.querySelector('.ui-paginator-first:not(.ui-state-disabled)');
+    if (inicioEnc) { inicioEnc.click(); await esperarAjax(d, w); }
+    const vistos = new Set();
+    for (let p = 0; p < 30 && grade(); p++) {
+      for (const c of grade().children) {
+        const e = lerCartao(c);
+        if (!e.setor && !e.ordem) continue;   // cartão vazio no fim da grade
+        const chave = e.ordem || `${e.setor}|${e.data}|${e.hora}`;
+        if (!vistos.has(chave)) { vistos.add(chave); encaminhamentos.push(e); }
+      }
+      const nx = painel.querySelector('.ui-paginator-next');
+      if (!nx || nx.classList.contains('ui-state-disabled')) break;
+      const antes = txt(grade());
+      nx.click();
+      await esperarAjax(d, w);
+      await esperar(() => grade() && txt(grade()) !== antes, 6000);
     }
   }
 

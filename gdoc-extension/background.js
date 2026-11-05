@@ -250,8 +250,11 @@ async function registrar(tabId, p, chave, r, resumo, compartilhado) {
     return;
   }
   delete novoStatus.erro;
+  // Histórico completo (mais recente primeiro); despachos limitados para caber no documento da parcela
+  const historico = r.encaminhamentos.slice(0, 100).map(e => ({ ...e, despacho: (e.despacho || '').slice(0, 4000) }));
   Object.assign(novoStatus, { setor: r.setor, situacao: r.situacao || '', tipoProcesso: r.tipoProcesso || '',
-    ultimoEncaminhamento: r.encaminhamentos[0] || null, totalAnexos: r.anexos.length });
+    ultimoEncaminhamento: historico[0] || null, historico, totalAnexos: r.anexos.length,
+    anexos: r.anexos.slice(-60).map(a => ({ nome: a.nome, tipo: a.tipo, data: a.data })) });
 
   // Tramitação
   if (r.setor && r.setor !== antes.setor) {
