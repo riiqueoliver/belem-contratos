@@ -120,7 +120,11 @@ if (fs.existsSync(arcanjoLoginSrc)) {
   fs.copyFileSync(arcanjoLoginSrc, path.join(arcanjoLoginDir, 'index.html'));
 }
 
-// ── 9. Grava ───────────────────────────────────────────────────────────────
+// ── 9. Carimbo da versão — o app compara com o publicado e pede para atualizar ──
+const BUILD = process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now());
+out = out.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" /><meta name="sgc-build" content="${BUILD}" />`);
+
+// ── 10. Grava ──────────────────────────────────────────────────────────────
 fs.writeFileSync(DIST, out, 'utf8');
 
 const srcKB  = (fs.statSync(SRC).size  / 1024).toFixed(0);

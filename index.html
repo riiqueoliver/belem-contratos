@@ -1006,6 +1006,46 @@
       r.competencia = (desc && competenciaEm(desc[1])) || competenciaEm(t);
       return r;
     }
+    /* NF digitalizada (DANFSe escaneado): OCR com Tesseract no navegador. No DANFSe o valor
+       fica na linha logo abaixo do rótulo, então cada campo é lido da linha seguinte. */
+    function nfParseOCR(texto) {
+      const linhas = String(texto || '').split('\n').map(s => s.trim()).filter(Boolean);
+      const abaixo = re => { const i = linhas.findIndex(l => re.test(l)); return i >= 0 ? (linhas[i + 1] || '') : ''; };
+      const brl = s => { const m = /R\$\s*([\d.]+,\d{2})/.exec(s); return m ? Number(m[1].replace(/\./g, '').replace(',', '.')) : null; };
+      const r = nfParseTexto(texto);
+      const lNum = abaixo(/N[ÚU]MERO\s+DA\s+NFS/i);
+      const num = /^(\d{1,10})\b/.exec(lNum);
+      if (num) r.numero = num[1].replace(/^0+(?=\d)/, '');
+      const dt = /(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}/.exec(lNum) || /(\d{2}\/\d{2}\/\d{4})/.exec(lNum);
+      if (dt) r.data_emissao = dt[1];
+      const valor = brl(abaixo(/VALOR\s+TOTAL\s+DA\s+NFS/i)) ?? brl(abaixo(/Valor\s+Da\s+Opera/i)) ?? brl(abaixo(/^BC\s+ISSQN/i));
+      if (valor) r.valor = valor;
+      const ret = brl(abaixo(/Total\s+Das\s+Reten/i));
+      if (ret != null) r.retencoes = ret;
+      return r;
+    }
+    let tesseractPronto = null;
+    function carregarTesseract() {
+      if (window.Tesseract) return Promise.resolve(window.Tesseract);
+      return tesseractPronto ??= new Promise((ok, falha) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+        s.onload = () => ok(window.Tesseract);
+        s.onerror = () => { tesseractPronto = null; falha(new Error('Não foi possível carregar o OCR.')); };
+        document.head.appendChild(s);
+      });
+    }
+    async function nfLerOCR(pdf) {
+      const Tesseract = await carregarTesseract();
+      const pagina = await pdf.getPage(1);
+      const vp = pagina.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      const { data } = await Tesseract.recognize(canvas, 'por');
+      return nfParseOCR(data.text);
+    }
+
     async function nfLerPdf(arrayBuffer) {
       if (!window.pdfjsLib) return { semTexto: true };
       try {
@@ -1039,7 +1079,14 @@
           }
           texto += linhas.map(l => l.itens.sort((a, b) => a.x - b.x).map(it => it.s).join(' ')).join('\n') + '\n';
         }
-        if (texto.replace(/\s/g, '').length < 40) return { semTexto: true };
+        if (texto.replace(/\s/g, '').length < 40) {
+          // Digitalizada: tenta o OCR antes de desistir (cerca de 10 s)
+          try {
+            const o = await nfLerOCR(pdf);
+            if (o.numero || o.valor) return { ...o, viaOCR: true };
+          } catch (e) { console.warn('OCR da NF', e); }
+          return { semTexto: true };
+        }
         // Rótulo e valor na mesma linha (outros layouts) entram pelo texto corrido;
         // a competência da descrição do serviço tem prioridade sobre a do cabeçalho.
         const r = nfParseTexto(texto);
@@ -19287,6 +19334,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [gdocs,                setGdocs]                = useState([]);
       const [gdocMovs,             setGdocMovs]             = useState([]);
       const [showAlertas,          setShowAlertas]          = useState(false);
+      const [novaVersao,           setNovaVersao]           = useState(false);
       const [showRelatoriosPage,   setShowRelatoriosPage]   = useState(false);
       const [showAssistentePage,   setShowAssistentePage]   = useState(false);
       const [activeHomeCard,       setActiveHomeCard]       = useState(null);
@@ -19970,10 +20018,30 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         }
       }
       useEffect(() => {
-        if (!contracts.length) return;
+        // Aba com versão desatualizada não processa: as regras de leitura mudam entre versões
+        if (!contracts.length || novaVersao) return;
         gdocMovs.filter(m => m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && !gdocEmProcesso.current.has(m.id))
           .forEach(m => { gdocEmProcesso.current.add(m.id); aplicarMovGdoc(m); });
-      }, [gdocMovs, contracts]);
+      }, [gdocMovs, contracts, novaVersao]);
+
+      /* Versão publicada: compara o carimbo desta aba com o do site a cada 5 min e ao voltar
+         para a aba. Só existe no build (dist); abrindo o index.html direto, não verifica. */
+      useEffect(() => {
+        const minha = document.querySelector('meta[name="sgc-build"]')?.content;
+        if (!minha) return;
+        const checar = async () => {
+          try {
+            const html = await (await fetch(location.pathname, { cache: 'no-store' })).text();
+            const publicada = (/<meta name="sgc-build" content="([^"]+)"/.exec(html) || [])[1];
+            if (publicada && publicada !== minha) setNovaVersao(true);
+          } catch {}
+        };
+        const id = setInterval(checar, 5 * 60000);
+        const aoVoltar = () => { if (document.visibilityState === 'visible') checar(); };
+        document.addEventListener('visibilitychange', aoVoltar);
+        checar();
+        return () => { clearInterval(id); document.removeEventListener('visibilitychange', aoVoltar); };
+      }, []);
 
       async function marcarMovsLidas() {
         const naoLidas = gdocMovs.filter(m => !m.lido);
@@ -21180,6 +21248,16 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             </header>
 
           <main className={(showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+
+            {novaVersao && (
+              <div className="fixed bottom-4 right-4 z-[250] bg-white border border-gray-200 shadow-xl rounded-xl px-4 py-3 flex items-center gap-3 slide-in">
+                <p className="text-xs text-gray-700">Há uma versão nova do sistema.</p>
+                <button onClick={() => location.reload()}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{background: BLUE}}>
+                  Atualizar
+                </button>
+              </div>
+            )}
 
             {/* Form */}
             {showForm && (
