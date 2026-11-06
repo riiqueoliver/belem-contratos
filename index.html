@@ -206,7 +206,7 @@
     .ia-md li { margin: .15em 0; } .ia-md hr { margin: .7em 0; border-color: #e2e8f0; }
     .ia-md table { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .8rem; }
     .ia-md th, .ia-md td { border: 1px solid #cbd5e1; padding: .3em .5em; text-align: left; vertical-align: top; } .ia-md th { background: #f1f5f9; font-weight: 700; }
-    .ia-md blockquote { border-left: 3px solid #14B8A6; padding-left: .7em; color: #475569; margin: .4em 0; }
+    .ia-md blockquote { border-left: 3px solid #0B2B5E; padding-left: .7em; color: #475569; margin: .4em 0; }
     .ia-md code { background: #f1f5f9; border-radius: 4px; padding: 0 .3em; font-size: .85em; }
     .ia-centro { display: block; text-align: center; } .ia-direita { display: block; text-align: right; }
     /* Preview em PDF dos documentos do assistente (mesma cara do Word oficial: Arial 12, justificado) */
@@ -221,7 +221,7 @@
     .ia-pdf th, .ia-pdf td { border: 1px solid #555; padding: 3pt 5pt; text-align: left; vertical-align: top; } .ia-pdf th { background: #e5e7eb; font-weight: 700; }
     .ia-pdf blockquote { margin: 4pt 0 8pt 18pt; font-style: italic; }
     .ia-doc { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.55; } .ia-doc p { text-align: justify; } .ia-doc h1 { text-align: center; }
-    .ia-pontos { display: inline-flex; gap: 3px; } .ia-pontos i { width: 5px; height: 5px; border-radius: 50%; background: #14B8A6; animation: iaPonto 1s infinite ease-in-out; }
+    .ia-pontos { display: inline-flex; gap: 3px; } .ia-pontos i { width: 5px; height: 5px; border-radius: 50%; background: #5B7BB4; animation: iaPonto 1s infinite ease-in-out; }
     .ia-pontos i:nth-child(2) { animation-delay: .15s; } .ia-pontos i:nth-child(3) { animation-delay: .3s; }
     @keyframes iaPonto { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
     .ia-pin { animation: iaFlutua 3.5s ease-in-out infinite; }
@@ -18786,7 +18786,7 @@ FORMATO DA RESPOSTA: SOMENTE um JSON válido, exatamente com esta estrutura:
        Arcanjo's fica de fora: são dados pessoais sensíveis (LGPD).
     ═══════════════════════════════════════════════════════ */
     const IA_NOME    = SYS.id === 'gcsp' ? 'Assistente GCSP' : 'Assistente BD';
-    const IA_AVATAR  = '/assistente-ia.jpg';
+    const IA_AVATAR  = 'gc-simbolo-branco.png';   // símbolo do sistema (minimalista)
     const IA_MODELOS = ['claude-sonnet-5-5', 'claude-sonnet-5'];
     const IA_COL = {
       conversas:    COL('ia_conversas'),
@@ -19433,9 +19433,9 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
     function IaAvatar({ size = 36, className = '' }) {
       return (
-        <span className={`inline-flex rounded-full overflow-hidden flex-shrink-0 ${className}`}
-              style={{ width: size, height: size, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(37,99,235,.25)' }}>
-          <img src={IA_AVATAR} alt={IA_NOME} className="w-full h-full object-cover" style={{ objectPosition: '38% 30%', transform: 'scale(1.75)', transformOrigin: '38% 34%' }} />
+        <span className={`inline-flex items-center justify-center rounded-full flex-shrink-0 ${className}`}
+              style={{ width: size, height: size, background: '#0B2B5E' }}>
+          <img src={IA_AVATAR} alt={IA_NOME} style={{ width: size * 0.56, height: size * 0.56, objectFit: 'contain' }} />
         </span>
       );
     }
@@ -19503,17 +19503,17 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         setConteudo(c); return c;
       }
       return (
-        <div className="mt-2 rounded-xl border border-teal-200 bg-white overflow-hidden">
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white overflow-hidden">
           {/* Portal: o cartão pode estar dentro do painel flutuante, que recortaria a tela cheia */}
           {pdf && ReactDOM.createPortal(<PdfViewer open pdfSrc={pdf} title={doc.titulo} onClose={() => setPdf(null)} />, document.body)}
-          <div className="flex items-center gap-2 px-3 py-2" style={{ background: '#F0FDFA' }}>
-            <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded text-white" style={{ background: '#0D9488' }}>
+          <div className="flex items-center gap-2 px-3 py-2" style={{ background: '#F4F7FB' }}>
+            <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded text-white" style={{ background: '#0B2B5E' }}>
               {IA_TIPOS_DOC[doc.tipo] || 'Documento'}
             </span>
             <span className="text-xs font-bold text-gray-800 flex-1 truncate" title={doc.titulo}>{doc.numero ? `nº ${doc.numero} – ` : ''}{doc.titulo}</span>
-            <button onClick={() => setAberto(v => !v)} className="text-[11px] font-semibold text-teal-700 hover:underline">{aberto ? 'Ocultar' : 'Ver'}</button>
+            <button onClick={() => setAberto(v => !v)} className="text-[11px] font-semibold text-[#0B2B5E] hover:underline">{aberto ? 'Ocultar' : 'Ver'}</button>
             <button onClick={async () => { const ok = await iaCopiar(await obter()); addToast?.(ok ? '📋 Documento copiado — cole no GDoc, e-mail ou Word.' : '❌ Não foi possível copiar.'); }}
-                    className="text-[11px] font-semibold text-teal-700 hover:underline">Copiar</button>
+                    className="text-[11px] font-semibold text-[#0B2B5E] hover:underline">Copiar</button>
             <button disabled={gerandoPdf}
                     onClick={async () => {
                       setGerandoPdf(true);
@@ -19521,18 +19521,18 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                       catch (e) { addToast?.('❌ Não foi possível gerar o PDF: ' + e.message); }
                       setGerandoPdf(false);
                     }}
-                    className="text-[11px] font-semibold text-teal-700 hover:underline disabled:opacity-50">{gerandoPdf ? 'Gerando PDF…' : 'Ver PDF'}</button>
+                    className="text-[11px] font-semibold text-[#0B2B5E] hover:underline disabled:opacity-50">{gerandoPdf ? 'Gerando PDF…' : 'Ver PDF'}</button>
             <button onClick={async () => { try { await iaBaixarWord(doc.titulo, await obter()); } catch (e) { addToast?.('❌ ' + e.message); } }}
-                    className="text-[11px] font-semibold text-teal-700 hover:underline">Baixar Word</button>
+                    className="text-[11px] font-semibold text-[#0B2B5E] hover:underline">Baixar Word</button>
             {currentUser && (
-              <button onClick={() => setEnviando(v => !v)} className="text-[11px] font-semibold text-teal-700 hover:underline">Enviar</button>
+              <button onClick={() => setEnviando(v => !v)} className="text-[11px] font-semibold text-[#0B2B5E] hover:underline">Enviar</button>
             )}
             {podeExcluir && (
               <button onClick={excluir} title="Excluir documento" className="text-[11px] font-semibold text-red-600 hover:underline">Excluir</button>
             )}
           </div>
           {enviando && (
-            <div className="px-3 py-2.5 border-t border-teal-100 bg-white flex flex-col gap-2">
+            <div className="px-3 py-2.5 border-t border-slate-200 bg-white flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-slate-600">Enviar para</span>
                 <select value={destino} onChange={e => setDestino(e.target.value)}
@@ -19542,18 +19542,18 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 </select>
               </div>
               <textarea value={mensagem} onChange={e => setMensagem(e.target.value)} rows={2} placeholder="Mensagem (opcional)"
-                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs resize-none outline-none focus:border-teal-400" />
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs resize-none outline-none focus:border-slate-400" />
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEnviando(false)} className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200">Cancelar</button>
                 <button onClick={enviar} disabled={!destino || ocupado}
-                        className="px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: '#0D9488' }}>
+                        className="px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: '#0B2B5E' }}>
                   {ocupado ? 'Enviando…' : 'Enviar documento'}
                 </button>
               </div>
             </div>
           )}
           {aberto && (
-            <div className="px-4 py-3 max-h-[480px] overflow-y-auto border-t border-teal-100">
+            <div className="px-4 py-3 max-h-[480px] overflow-y-auto border-t border-slate-200">
               {conteudo === null ? <p className="text-xs text-gray-400">Carregando…</p> : <IaMarkdown md={conteudo} className="ia-doc" />}
             </div>
           )}
@@ -19578,7 +19578,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           {acao.status === 'pendente' ? (
             <div className="flex gap-2">
               <button disabled={ocupado} onClick={async () => { setOcupado(true); await onDecidir(acao, true); setOcupado(false); }}
-                      className="px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: GREEN }}>
+                      className="px-3 py-1 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: BLUE }}>
                 {ocupado ? 'Gravando…' : 'Confirmar'}
               </button>
               <button disabled={ocupado} onClick={() => onDecidir(acao, false)}
@@ -19661,7 +19661,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               <h3 className="text-base font-black text-gray-900">Anexar arquivo modelo</h3>
               <p className="text-xs text-gray-500 mt-1">O assistente usa o modelo como base de estrutura e linguagem. Ele também passa a fazer parte da base de conhecimento do NGCC.</p>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-3 py-3 hover:border-teal-400 hover:bg-teal-50 transition-colors">
+            <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-3 py-3 hover:border-slate-400 hover:bg-slate-50 transition-colors">
               <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <span className={`text-sm truncate ${arquivo ? 'text-gray-800 font-semibold' : 'text-gray-500'}`}>{arquivo ? arquivo.name : 'Escolher arquivo (PDF, Word ou texto)'}</span>
               <input type="file" accept={IA_MODELO_TIPOS} className="hidden" onChange={e => { setArquivo(e.target.files?.[0] || null); setErro(''); }} />
@@ -19669,11 +19669,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Para que serve este modelo? <span className="font-normal text-gray-400">(opcional)</span></label>
               <textarea rows={2} value={descricao} onChange={e => setDescr(e.target.value)} placeholder="Ex.: modelo de ETP para contratação de software como serviço"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-400 resize-none" />
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-slate-400 resize-none" />
             </div>
             {!usarAgoraFixo && (
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={usarAgora} onChange={e => setUsar(e.target.checked)} className="w-4 h-4" style={{ accentColor: '#0D9488' }} />
+                <input type="checkbox" checked={usarAgora} onChange={e => setUsar(e.target.checked)} className="w-4 h-4" style={{ accentColor: '#0B2B5E' }} />
                 Usar agora na conversa
               </label>
             )}
@@ -19681,7 +19681,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <div className="flex justify-end gap-2">
               <button onClick={onClose} disabled={enviando} className="text-sm font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>
               <button onClick={confirmar} disabled={!arquivo || enviando}
-                      className="text-sm font-bold px-4 py-2 rounded-xl text-white disabled:opacity-40" style={{ background: '#0D9488' }}>
+                      className="text-sm font-bold px-4 py-2 rounded-xl text-white disabled:opacity-40" style={{ background: '#0B2B5E' }}>
                 {enviando ? 'Lendo e guardando…' : 'Anexar'}
               </button>
             </div>
@@ -19855,7 +19855,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           <div className={`flex-1 overflow-y-auto ${compacto ? 'px-3 py-3' : 'px-6 py-5'} space-y-4`}>
             {mensagens.length === 0 && (
               <div className={`flex flex-col items-center text-center ${compacto ? 'pt-2' : 'pt-8'}`}>
-                <img src={IA_AVATAR} alt={IA_NOME} className={compacto ? 'w-24 mb-2' : 'w-36 mb-3'} />
+                <IaAvatar size={compacto ? 48 : 64} className={compacto ? 'mb-3' : 'mb-4'} />
                 <p className="text-sm font-bold text-gray-800">Olá, {primeiroNome}! Sou o {IA_NOME}.</p>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm">
                   Redijo GDocs, e-mails, ofícios, DFD, ETP e TR, consulto os dados do sistema e aviso vencimentos. Escreva ou fale o que precisa.
@@ -19874,7 +19874,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 <div className={`mt-4 grid gap-2 w-full ${compacto ? 'grid-cols-1' : 'grid-cols-2 max-w-2xl'}`}>
                   {IA_SUGESTOES.map(s => (
                     <button key={s} onClick={() => enviar(s)}
-                            className="text-left text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-teal-300 hover:bg-teal-50 text-gray-700 transition-colors">
+                            className="text-left text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-slate-400 hover:bg-slate-50 text-gray-700 transition-colors">
                       {s}
                     </button>
                   ))}
@@ -19904,7 +19904,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                                       addToast={addToast} currentUser={currentUser} usuarios={dados.users || []} />)}
                   {(m.acoes || []).map(a => <IaAcaoCard key={a.id} acao={a} onDecidir={(ac, ok) => decidirAcao(idx, ac, ok)} />)}
                   {m.aprendizados?.length > 0 && (
-                    <p className="mt-1 text-[10px] text-teal-700">Aprendi: {m.aprendizados.join(' · ')}</p>
+                    <p className="mt-1 text-[10px] text-[#0B2B5E]">Aprendi: {m.aprendizados.join(' · ')}</p>
                   )}
                 </div>
               </div>
@@ -19923,16 +19923,16 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
           <div className={`border-t border-gray-100 bg-white ${compacto ? 'p-2' : 'px-6 py-3'}`}>
             {modelo && (
-              <div className="flex items-center gap-2 mb-2 w-fit max-w-full rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs text-teal-800">
+              <div className="flex items-center gap-2 mb-2 w-fit max-w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-[#0B2B5E]">
                 <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate">Modelo para esta demanda: <b>{modelo.nome}</b></span>
-                <button onClick={() => setModelo(null)} title="Remover modelo" className="text-teal-600 hover:text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setModelo(null)} title="Remover modelo" className="text-[#0B2B5E] hover:text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
               </div>
             )}
             {anexando && <IaAnexarModelo usarAgoraFixo addToast={addToast} onPronto={setModelo} onClose={() => setAnexando(false)} />}
-            <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-2 py-1.5 focus-within:border-teal-400 focus-within:bg-white transition-colors">
+            <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-2 py-1.5 focus-within:border-slate-400 focus-within:bg-white transition-colors">
               <button onClick={() => setAnexando(true)} title="Anexar arquivo modelo"
-                      className={`h-9 rounded-xl flex items-center justify-center gap-1.5 flex-shrink-0 transition-colors ${compacto ? 'w-9 text-gray-500 hover:bg-gray-200' : 'px-3 text-xs font-bold border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100'}`}>
+                      className={`h-9 rounded-xl flex items-center justify-center gap-1.5 flex-shrink-0 transition-colors ${compacto ? 'w-9 text-gray-500 hover:bg-gray-200' : 'px-3 text-xs font-bold border border-slate-200 text-[#0B2B5E] bg-slate-100 hover:bg-slate-200'}`}>
                 <Paperclip className="w-4 h-4" />{!compacto && 'Anexar modelo'}
               </button>
               <textarea ref={textoRef} value={entrada} onChange={ev => setEntrada(ev.target.value)}
@@ -19946,7 +19946,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 </svg>
               </button>
               <button onClick={() => enviar()} disabled={ocupado || !entrada.trim()} title="Enviar"
-                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white disabled:opacity-40" style={{ background: '#0D9488' }}>
+                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white disabled:opacity-40" style={{ background: '#0B2B5E' }}>
                 <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
@@ -20022,7 +20022,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                         className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${aba === k ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}>
                   {r}
                   {k === 'documentos' && naoLidosRecebidos > 0 && (
-                    <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: '#0D9488' }}>{naoLidosRecebidos}</span>
+                    <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: '#0B2B5E' }}>{naoLidosRecebidos}</span>
                   )}
                 </button>
               ))}
@@ -20034,7 +20034,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               <aside className="w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0">
                 <div className="p-3">
                   <button onClick={() => setConversaId(null)}
-                          className="w-full px-3 py-2 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5" style={{ background: '#0D9488' }}>
+                          className="w-full px-3 py-2 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5" style={{ background: '#0B2B5E' }}>
                     <Plus className="w-4 h-4" /> Nova conversa
                   </button>
                 </div>
@@ -20042,9 +20042,9 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
                   {conversas.length === 0 && <p className="px-2 text-xs text-gray-400">Nenhuma conversa ainda.</p>}
                   {conversas.map(c => (
-                    <div key={c.id} className={`group flex items-center rounded-lg ${c.id === conversaId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                    <div key={c.id} className={`group flex items-center rounded-lg ${c.id === conversaId ? 'bg-slate-100' : 'hover:bg-gray-50'}`}>
                       <button onClick={() => setConversaId(c.id)} className="flex-1 text-left px-2 py-1.5 min-w-0">
-                        <p className={`text-xs truncate ${c.id === conversaId ? 'font-bold text-teal-800' : 'text-gray-700'}`}>{c.titulo || 'Conversa'}</p>
+                        <p className={`text-xs truncate ${c.id === conversaId ? 'font-bold text-[#0B2B5E]' : 'text-gray-700'}`}>{c.titulo || 'Conversa'}</p>
                         <p className="text-[10px] text-gray-400">{iaDataCurta(c.atualizadoEm)}</p>
                       </button>
                       <button title="Apagar conversa" onClick={async () => {
@@ -20084,7 +20084,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   ))}
                 </div>
                 <button onClick={() => setAnexandoModelo(true)}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white hover:opacity-90" style={{ background: '#0D9488' }}>
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white hover:opacity-90" style={{ background: '#0B2B5E' }}>
                   <Paperclip className="w-3.5 h-3.5" /> Anexar arquivo modelo
                 </button>
                 </div>
@@ -20094,7 +20094,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                     {recebidos.map(r => (
                       <div key={r.id}>
                         <p className="text-[11px] text-slate-500 px-1">
-                          <b className="text-slate-700">{r.deNome || r.de}</b> enviou em {iaDataCurta(r.criadoEm)}{!r.lido && <span className="ml-1.5 font-bold" style={{ color: '#0D9488' }}>· novo</span>}
+                          <b className="text-slate-700">{r.deNome || r.de}</b> enviou em {iaDataCurta(r.criadoEm)}{!r.lido && <span className="ml-1.5 font-bold" style={{ color: '#0B2B5E' }}>· novo</span>}
                         </p>
                         {r.mensagem && <p className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 mt-1">{r.mensagem}</p>}
                         <IaDocCard doc={{ id: r.docId, titulo: r.titulo, tipo: r.tipo, numero: r.numero, criadoPor: r.de }} addToast={addToast}
@@ -20105,7 +20105,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 ) : (<>
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   <input value={buscaDoc} onChange={e => setBuscaDoc(e.target.value)} placeholder="Buscar por título, número, contrato ou autor"
-                         className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:border-teal-400" />
+                         className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:border-slate-400" />
                   <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
                     <option value="">Todos os tipos</option>
                     {Object.entries(IA_TIPOS_DOC).map(([k, r]) => <option key={k} value={k}>{r}</option>)}
@@ -20145,7 +20145,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   <div className="divide-y divide-gray-100">
                     {memorias.map(m => (
                       <div key={m.id} className="flex items-start gap-3 py-2">
-                        <span className="text-[10px] font-bold uppercase text-teal-700 bg-teal-50 rounded px-1.5 py-0.5 mt-0.5">{m.categoria || 'outro'}</span>
+                        <span className="text-[10px] font-bold uppercase text-[#0B2B5E] bg-slate-100 rounded px-1.5 py-0.5 mt-0.5">{m.categoria || 'outro'}</span>
                         <div className="flex-1">
                           <p className="text-sm text-gray-800">{m.fato}</p>
                           <p className="text-[10px] text-gray-400">{iaDataCurta(m.criadoEm)} · {m.criadoPorNome || m.criadoPor}</p>
@@ -20177,7 +20177,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           {aberto && (
             <div className="fixed z-[65] bottom-24 right-5 flex flex-col bg-slate-50 rounded-2xl border border-gray-200 overflow-hidden slide-in"
                  style={{ width: 'min(420px, calc(100vw - 2.5rem))', height: 'min(640px, calc(100vh - 8rem))', boxShadow: '0 20px 60px rgba(15,23,42,.28)' }}>
-              <div className="flex items-center gap-2 px-3 py-2.5 text-white" style={{ background: 'linear-gradient(135deg,#2563EB,#0B2B5E)' }}>
+              <div className="flex items-center gap-2 px-3 py-2.5 text-white" style={{ background: '#0B2B5E' }}>
                 <IaAvatar size={34} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-black leading-tight">{IA_NOME}</p>
@@ -20195,12 +20195,12 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           )}
           <button onClick={() => setAberto(v => !v)} title={aberto ? 'Fechar assistente' : `${IA_NOME} — posso ajudar?`}
                   className="ia-pin fixed z-[65] bottom-5 right-5 w-16 h-16 rounded-full bg-white flex items-center justify-center transition-transform hover:scale-105"
-                  style={{ boxShadow: '0 8px 28px rgba(37,99,235,.45)', border: '3px solid #2563EB' }}>
-            {aberto ? <X className="w-6 h-6 text-teal-700" /> : <IaAvatar size={56} />}
+                  style={{ boxShadow: '0 8px 28px rgba(11,43,94,.35)', border: '3px solid #0B2B5E' }}>
+            {aberto ? <X className="w-6 h-6 text-[#0B2B5E]" /> : <IaAvatar size={56} />}
             {!aberto && recebidos > 0 && (
               <span title={`${recebidos} documento(s) recebido(s)`}
                     className="absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
-                    style={{ background: '#0D9488' }}>{recebidos > 9 ? '9+' : recebidos}</span>
+                    style={{ background: '#0B2B5E' }}>{recebidos > 9 ? '9+' : recebidos}</span>
             )}
             {!aberto && qtdAlertas > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
