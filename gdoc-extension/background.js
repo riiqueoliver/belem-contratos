@@ -251,6 +251,10 @@ async function varrer(motivo, soParcela) {
   } finally {
     if (janela) chrome.windows.remove(janela.id).catch(() => {});
     resumo.fim = new Date().toISOString();
+    // E-mail com as novidades (o sistema monta a partir do que foi registrado; sem novidade, não envia)
+    if (!soParcela && (resumo.movimentos.length || resumo.caixa?.novos)) {
+      fetch(SGC_URL + 'api/avisos-gdoc', { method: 'POST' }).catch(() => {});
+    }
     await chrome.storage.local.set({ varrendo: 0, ultimaVarredura: resumo });
     if (resumo.movimentos.length) {
       notificar(`GDoc: ${resumo.movimentos.length} movimentaç${resumo.movimentos.length > 1 ? 'ões' : 'ão'}`,
@@ -328,7 +332,7 @@ async function varrerCaixa(tabId, resumo) {
       velho.ultimoEncaminhamento !== i.ultimoEncaminhamento || !velho.detalheEm || !velho.detalheV3;
     if (chegou) Object.assign(doGdoc, await lerDetalheCaixa(tabId, i.processo));
     if (velho) {
-      if (!velho.presente) Object.assign(doGdoc, { entrouEm: agora, saiuEm: null });
+      if (!velho.presente) Object.assign(doGdoc, { entrouEm: agora, saiuEm: null, emailAvisado: false });
       await SGC.atualizar('gdoc_caixa', id, doGdoc);
       if (!velho.presente) novos.push(i.processo);
     } else {
