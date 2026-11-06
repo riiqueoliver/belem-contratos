@@ -20633,7 +20633,15 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       // Visto: marcado pelo usuário; movimentação do GDoc já lida conta como vista (até ele desfazer)
       const alertaVisto = a => a.id in alertasVistos ? !!alertasVistos[a.id] : (a.tipo === 'gdoc' && !!a.mov.lido);
       const alertasNovos  = alertasSino.filter(a => !alertaVisto(a));
-      const alertasJaVistos = alertasSino.filter(alertaVisto)
+      // A aba "Marcados como vistos" guarda só as últimas 24 h; depois disso o alerta some de vez
+      // (continua visto: não volta para os novos, a menos que a situação piore)
+      const umDia = Date.now() - 24 * 3600 * 1000;
+      const vistoRecente = a => {
+        const quando = alertasVistos[a.id];
+        if (typeof quando === 'string') return new Date(quando).getTime() >= umDia;
+        return a.tipo === 'gdoc' && new Date(a.mov.criadoEm || 0).getTime() >= umDia;   // lida sem marcação: conta pela data da movimentação
+      };
+      const alertasJaVistos = alertasSino.filter(a => alertaVisto(a) && vistoRecente(a))
         .sort((a, b) => String(alertasVistos[b.id] || '').localeCompare(String(alertasVistos[a.id] || '')));
       function marcarAlertasVistos(ids) {
         if (!ids.length || !currentUser?.username) return;
