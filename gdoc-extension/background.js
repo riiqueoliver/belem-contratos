@@ -182,15 +182,16 @@ async function varrer(motivo, soParcela) {
     }
     // Só parcelas cadastradas a partir da implantação do acompanhamento (o id é o
     // instante do cadastro) e ainda não pagas (etapa 5 = fluxo concluído).
-    // As parcelas antigas ficam como estão, salvo se marcadas com gdocAcompanhar.
-    // Pedido pelo botão da parcela: verifica só ela, mesmo que seja antiga
+    // As parcelas antigas ficam como estão, sem exceção (nem pelo botão da parcela).
+    const nova = p => Number(p.__id) >= INICIO_ACOMPANHAMENTO;
     const parcelas = soParcela
-      ? todas.filter(p => p.__id === soParcela && p.gdoc && !/^https?:/i.test(p.gdoc) && numeroAno(p))
+      ? todas.filter(p => p.__id === soParcela && nova(p) && p.gdoc && !/^https?:/i.test(p.gdoc) && numeroAno(p))
       : todas.filter(p => p.gdoc && !/^https?:/i.test(p.gdoc) && !p.liquidacao
-          && (p.currentStep || 1) <= 4 && numeroAno(p)
-          && (p.gdocAcompanhar === true || Number(p.__id) >= INICIO_ACOMPANHAMENTO));
+          && (p.currentStep || 1) <= 4 && numeroAno(p) && nova(p));
     if (!parcelas.length) {
-      if (soParcela) resumo.erro = 'Parcela sem número de GDoc válido (ex.: 983/2026).';
+      if (soParcela) resumo.erro = todas.some(p => p.__id === soParcela && !nova(p))
+        ? 'O acompanhamento pelo GDoc vale só para parcelas cadastradas a partir de 05/11/2026.'
+        : 'Parcela sem número de GDoc válido (ex.: 983/2026).';
       else resumo.avisos.push('Nenhuma parcela com GDoc em aberto.');
       return resumo;
     }

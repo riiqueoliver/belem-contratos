@@ -788,6 +788,11 @@
     // Botão neutro, no padrão dos botões secundários do sistema
     const BTN_GDOC = 'text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60';
 
+    // Acompanhamento pelo GDoc só para parcelas cadastradas a partir de 05/11/2026
+    // (o id da parcela é o instante do cadastro); as antigas ficam como estão.
+    const GDOC_INICIO = new Date('2026-11-05T00:00:00-03:00').getTime();
+    const gdocAcompanha = p => Number(p?.id) >= GDOC_INICIO;
+
     /* Botões do GDoc na parcela: verificar agora e ver o histórico de tramitação */
     function GdocAcoes({ parcela }) {
       const [aberto, setAberto] = React.useState(false);
@@ -5367,7 +5372,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                        className="text-xs font-semibold hover:underline" style={{color: BLUE}}>Abrir processo</a>
                                   : <p className="text-[11px] font-mono text-gray-600 truncate" title={c.gdoc}>{c.gdoc.replace(/\/B[ÉE]LEMDIGITAL$/i, '')}</p>
                               ) : <p className="text-[11px] text-gray-300">sem processo</p>}
-                              {c.gdocStatus?.setor && (
+                              {gdocAcompanha(c) && c.gdocStatus?.setor && (
                                 <p className="text-[10px] text-gray-500 truncate" title={`Verificado ${quandoRelativo(c.gdocStatus.verificadoEm)}${c.gdocStatus.situacao ? ' · ' + c.gdocStatus.situacao : ''}`}>
                                   📍 {c.gdocStatus.setor}
                                 </p>
@@ -8863,14 +8868,14 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                                     ) : c.gdoc ? (
                                       <>
                                         <p className="text-xs font-semibold text-gray-800 leading-tight break-all">{c.gdoc}</p>
-                                        {c.gdocStatus?.setor && (
+                                        {gdocAcompanha(c) && c.gdocStatus?.setor && (
                                           <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                                             📍 {c.gdocStatus.setor}
                                             <span className="text-gray-500"> · verificado {quandoRelativo(c.gdocStatus.verificadoEm)}</span>
                                           </p>
                                         )}
-                                        {c.gdocStatus?.erro && <p className="text-[10px] text-amber-600 mt-1 leading-snug">{c.gdocStatus.erro}</p>}
-                                        <GdocAcoes parcela={c} />
+                                        {gdocAcompanha(c) && c.gdocStatus?.erro && <p className="text-[10px] text-amber-600 mt-1 leading-snug">{c.gdocStatus.erro}</p>}
+                                        {gdocAcompanha(c) && <GdocAcoes parcela={c} />}
                                       </>
                                     ) : (
                                       <p className="text-xs text-gray-300 italic">—</p>
@@ -20464,6 +20469,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         try {
           const c = contracts.find(x => String(x.id) === String(m.parcelaId));
           if (!c) return fim({ resultado: 'Parcela não encontrada no sistema.' });
+          if (!gdocAcompanha(c)) return fim({ resultado: 'Parcela anterior a 05/11/2026: fica como está, sem atualização pelo GDoc.' });
           const pdfSnap = m.pdfDoc ? await db.collection(COL('pdfs')).doc(m.pdfDoc).get() : null;
           const base64 = pdfSnap?.exists ? pdfSnap.data().data : null;
           if (!base64) return fim({ resultado: 'PDF não recebido da extensão.' });

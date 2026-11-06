@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SGC ↔ GDoc · Emissão e acompanhamento de processos",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Preenche o processo de cobrança no GDoc a partir da NF do SGC e acompanha os processos das parcelas: tramitação, NF e nota de liquidação.",
   "permissions": ["storage", "scripting", "alarms", "notifications", "tabs"],
   "host_permissions": [
