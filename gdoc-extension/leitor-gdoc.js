@@ -155,3 +155,73 @@ window.__gdocBaixarAnexo = async function (id) {
   for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
   return { base64: btoa(bin), bytes: buf.length };
 };
+
+/* Caixa do setor: "Processo > Meus Processos > Neste Setor" (/gdocprocessos/processos/meusprocessos).
+   Lê todos os processos parados no setor (de todas as páginas) e devolve uma linha por processo.
+   Só lê: não recebe, não encaminha, não altera nada. */
+window.__gdocLerCaixa = async function () {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const txt = el => (el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim();
+  async function esperar(fn, timeout = 20000) {
+    const fim = Date.now() + timeout;
+    while (Date.now() < fim) { const r = fn(); if (r) return r; await sleep(250); }
+    return null;
+  }
+  async function esperarAjax() {
+    await sleep(300);
+    await esperar(() => !(window.jQuery && window.jQuery.active > 0) &&
+      !document.querySelector('.ui-blockui:not(.ui-helper-hidden)'), 20000);
+    await sleep(300);
+  }
+  if (/\/login/.test(location.pathname) || document.querySelector('input[type=password]')) return { erro: 'sessao' };
+  const corpo = () => document.getElementById('dataList_data');
+  if (!(await esperar(corpo))) return { erro: 'tela', detalhe: 'Lista de processos não encontrada.' };
+
+  // Aba "Neste Setor" (é a padrão; garante caso o GDoc abra em outra)
+  const aba = [...document.querySelectorAll('.ui-tabmenuitem')].find(li => /Neste Setor/i.test(txt(li)));
+  if (aba && !aba.classList.contains('ui-state-active')) { aba.querySelector('a')?.click(); await esperarAjax(); }
+  const setor = (document.body.innerText.match(/Neste Setor \(([^)]+)\)/) || [])[1] || '';
+
+  // 30 por página e volta para a primeira
+  const rpp = document.querySelector('#dataList_paginator_top select.ui-paginator-rpp-options');
+  if (rpp && rpp.value !== '30') {
+    rpp.value = '30'; rpp.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperarAjax();
+  }
+  const primeira = document.querySelector('#dataList_paginator_top .ui-paginator-first:not(.ui-state-disabled)');
+  if (primeira) { primeira.click(); await esperarAjax(); }
+
+  const iso = s => { const m = /(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2}(?::\d{2})?)?/.exec(s || ''); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}` : ''; };
+  const itens = [];
+  const vistos = new Set();
+  for (let p = 0; p < 40 && corpo(); p++) {
+    for (const tr of corpo().rows) {
+      const c = [...tr.cells].map(x => txt(x));
+      if (c.length < 10 || !/\d+\/\d{4}/.test(c[0])) continue;
+      const m = /(\d+)\/(\d{4})\s*-\s*(.+)/.exec(c[0]);
+      // o GDoc acrescenta a etiqueta "DIGITAL" (processo digital) ao fim do órgão
+      const orgao = m ? m[3].replace(/\s+DIGITAL$/i, '').trim() : '';
+      const processo = m ? `${m[1]}/${m[2]} - ${orgao}` : c[0];
+      if (vistos.has(processo)) continue;
+      vistos.add(processo);
+      const cls = tr.className;
+      itens.push({
+        processo, numero: m ? +m[1] : null, ano: m ? +m[2] : null, orgao,
+        setorOrigem: c[1], ultimoEncaminhamento: iso(c[2]), recebimento: iso(c[3]),
+        tipo: c[4], interessado: c[5], status: c[6], encaminhadoPara: c[7],
+        diasNoSetor: +((/(\d+)\s*DIA/i.exec(c[9]) || [])[1] || 0),
+        prioridadeGdoc: /prioridade/i.test(cls), confidencial: /confidencial/i.test(cls),
+        minhaResponsabilidade: /responsabilidade/i.test(cls),
+        juntado: !!tr.cells[0].querySelector('img[src*="junt" i], .fa-link, [class*="link" i], svg'),
+      });
+    }
+    const nx = document.querySelector('#dataList_paginator_top .ui-paginator-next');
+    if (!nx || nx.classList.contains('ui-state-disabled')) break;
+    const antes = txt(corpo());
+    nx.click();
+    await esperarAjax();
+    await esperar(() => txt(corpo()) !== antes, 8000);
+  }
+  const total = +((document.querySelector('#dataList_paginator_top .ui-paginator-current')?.textContent || '').match(/registros\s*(\d+)/i) || [])[1] || itens.length;
+  return { ok: true, setor, total, itens };
+};

@@ -23,6 +23,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     varrer('manual').then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
     return true;
   }
+  // Botão "Atualizar agora" do módulo Gestão do GDoc, no SGC: só a caixa do setor
+  if (msg?.type === 'VARREDURA_CAIXA') {
+    varrer('caixa').then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
+    return true;
+  }
   // Botão "Verificar no GDoc" da parcela, no SGC
   if (msg?.type === 'VARREDURA_PARCELA') {
     varrer('parcela', String(msg.parcelaId || '')).then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
@@ -192,7 +197,7 @@ async function varrer(motivo, soParcela) {
     // instante do cadastro) e ainda não pagas (etapa 5 = fluxo concluído).
     // As parcelas antigas ficam como estão, sem exceção (nem pelo botão da parcela).
     const nova = p => Number(p.__id) >= INICIO_ACOMPANHAMENTO;
-    const parcelas = soParcela
+    const parcelas = motivo === 'caixa' ? [] : soParcela
       ? todas.filter(p => p.__id === soParcela && nova(p) && p.gdoc && !/^https?:/i.test(p.gdoc) && numeroAno(p))
       : todas.filter(p => p.gdoc && !/^https?:/i.test(p.gdoc) && !p.liquidacao
           && (p.currentStep || 1) <= 4 && numeroAno(p) && nova(p));
@@ -200,8 +205,8 @@ async function varrer(motivo, soParcela) {
       if (soParcela) resumo.erro = todas.some(p => p.__id === soParcela && !nova(p))
         ? 'O acompanhamento pelo GDoc vale só para parcelas cadastradas a partir de 05/11/2026.'
         : 'Parcela sem número de GDoc válido (ex.: 983/2026).';
-      else resumo.avisos.push('Nenhuma parcela com GDoc em aberto.');
-      return resumo;
+      if (soParcela) return resumo;
+      if (motivo !== 'caixa') resumo.avisos.push('Nenhuma parcela com GDoc em aberto.');
     }
 
     janela = await chrome.windows.create({ url: 'about:blank', state: 'minimized', focused: false });
@@ -211,6 +216,13 @@ async function varrer(motivo, soParcela) {
       resumo.erro = 'sessao';
       notificar('Entre no GDoc', 'A sessão do GDoc expirou e o login automático não está configurado ou falhou. Entre no GDoc e clique em "Verificar agora".', 'login');
       return resumo;
+    }
+
+    // Caixa do setor (Meus Processos > Neste Setor) — módulo Gestão do GDoc no SGC
+    if (!soParcela) {
+      try { await varrerCaixa(tabId, resumo); }
+      catch (e) { resumo.avisos.push('Caixa do setor: ' + (e.message || e)); }
+      await abrirEm(tabId, GDOC + '/processos/pesquisa');
     }
 
     // Processos repetidos (mais de uma parcela no mesmo GDoc) são lidos uma vez só
@@ -242,6 +254,68 @@ async function varrer(motivo, soParcela) {
     }
   }
   return resumo;
+}
+
+/* ───────────── caixa do setor ─────────────
+   Lê todos os processos parados no setor e grava em gdoc_caixa (um documento por processo).
+   Os campos do GDoc são atualizados a cada varredura; os do SGC (prioridade, responsável,
+   anotações) nunca são tocados aqui. Processo que sai do setor fica com presente = false. */
+const chaveCaixa = i => `${i.numero}-${i.ano}-${String(i.orgao || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '').toUpperCase()}`;
+async function varrerCaixa(tabId, resumo) {
+  await abrirEm(tabId, GDOC + '/processos/meusprocessos');
+  let r = await rodar(tabId, () => window.__gdocLerCaixa());
+  if (r?.erro === 'sessao' && await garantirSessao(tabId)) {
+    await abrirEm(tabId, GDOC + '/processos/meusprocessos');
+    r = await rodar(tabId, () => window.__gdocLerCaixa());
+  }
+  if (!r?.ok) throw new Error(r?.detalhe || r?.erro || 'leitura falhou');
+
+  const agora = new Date().toISOString();
+  const antes = new Map((await SGC.listar('gdoc_caixa')).map(d => [d.__id, d]));
+  const presentes = new Set();
+  const novos = [];
+  for (const i of r.itens) {
+    if (!i.numero) continue;
+    const id = chaveCaixa(i);
+    presentes.add(id);
+    const velho = antes.get(id);
+    const doGdoc = { processo: i.processo, numero: i.numero, ano: i.ano, orgao: i.orgao, setor: r.setor,
+      setorOrigem: i.setorOrigem, ultimoEncaminhamento: i.ultimoEncaminhamento, recebimento: i.recebimento,
+      tipo: i.tipo, interessado: i.interessado, status: i.status, encaminhadoPara: i.encaminhadoPara,
+      diasNoSetor: i.diasNoSetor, prioridadeGdoc: i.prioridadeGdoc, confidencial: i.confidencial,
+      juntado: i.juntado, presente: true, vistoEm: agora };
+    // Despacho e histórico: lidos quando o processo chega (ou volta) ao setor
+    const chegou = !velho || !velho.presente || velho.recebimento !== i.recebimento || !velho.detalheEm;
+    if (chegou) {
+      await abrirEm(tabId, GDOC + '/processos/pesquisa');
+      const det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [i.numero, i.ano, i.orgao]);
+      if (det?.ok) {
+        const enc = det.encaminhamentos || [];
+        Object.assign(doGdoc, {
+          situacao: det.situacao || '', detalheEm: agora,
+          ultimoDespacho: enc[0] ? { ...enc[0], despacho: String(enc[0].despacho || '').slice(0, 4000) } : null,
+          historico: enc.slice(0, 25).map(e => ({ ...e, despacho: String(e.despacho || '').slice(0, 1500) })),
+          anexos: (det.anexos || []).slice(-40).map(a => ({ nome: a.nome, tipo: a.tipo, data: a.data })),
+        });
+      }
+    }
+    if (velho) {
+      if (!velho.presente) Object.assign(doGdoc, { entrouEm: agora, saiuEm: null });
+      await SGC.atualizar('gdoc_caixa', id, doGdoc);
+      if (!velho.presente) novos.push(i.processo);
+    } else {
+      await SGC.gravar('gdoc_caixa', id, { ...doGdoc, entrouEm: agora, prioridade: '', atribuidoA: '', anotacoes: [] });
+      novos.push(i.processo);
+    }
+  }
+  for (const [id, d] of antes) {
+    if (d.presente && !presentes.has(id)) await SGC.atualizar('gdoc_caixa', id, { presente: false, saiuEm: agora });
+  }
+  await SGC.gravar('gdoc_caixa_meta', 'status', { setor: r.setor, total: r.itens.length, verificadoEm: agora });
+  resumo.caixa = { total: r.itens.length, novos: novos.length };
+  if (novos.length && antes.size) {
+    notificar(`GDoc: ${novos.length} processo${novos.length > 1 ? 's' : ''} novo${novos.length > 1 ? 's' : ''} no setor`, novos.slice(0, 5).join('\n'), 'sgc');
+  }
 }
 
 /* Compara com o último estado salvo na parcela e grava o que mudou. */

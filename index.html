@@ -9768,7 +9768,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
 
     /* Lembrete diário: ao entrar no sistema (1º acesso do dia) e de novo à tarde, a partir das 14h.
        Mostra tarefas pendentes (atrasadas, de hoje e dos próximos dias) e os eventos de hoje. */
-    function LembreteTarefas({ tarefas, eventos, eu, nome, onAbrirAgenda, onFechar }) {
+    function LembreteTarefas({ tarefas, eventos, eu, nome, onAbrirAgenda, onFechar, processos = [], users = [], onAbrirGdoc }) {
       const hoje = agHoje();
       const abertas = tarefas.filter(t => t.dono === eu && !t.feita)
         .sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999'));
@@ -9813,11 +9813,394 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 })}
                 {abertas.length > 12 && <p className="text-[11px] text-gray-400">e mais {abertas.length - 12} na agenda.</p>}
               </div>
+              {processos.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Processos prioritários no GDoc · {processos.length}</p>
+                  {processos.slice(0, 8).map(p => {
+                    const pr = GG_PRIOR[p.prioridade];
+                    const instr = (p.anotacoes || []).filter(a => a.tipo === 'encaminhamento' && a.para === eu && a.de !== eu).slice(-1)[0];
+                    return (
+                      <button key={p.id} onClick={() => onAbrirGdoc && onAbrirGdoc(p.id)} className="w-full text-left py-1.5 flex items-start gap-2.5 hover:bg-gray-50 rounded-lg">
+                        <span className="text-[10px] font-bold mt-1 w-10 flex-shrink-0" style={{color: pr.cor}}>{pr.rotulo}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm text-gray-800 leading-snug">{p.processo} <span className="text-gray-400 text-xs">· {p.tipo}</span></span>
+                          {instr && <span className="block text-[11px] text-gray-500 truncate">{ggPrimeiro(ggNome(users, instr.de))}: {instr.texto}</span>}
+                        </span>
+                        <span className="text-[10px] font-semibold whitespace-nowrap mt-1" style={{color: ggCorDias(ggDias(p))}}>{ggDias(p)} dias</span>
+                      </button>
+                    );
+                  })}
+                  {processos.length > 8 && <p className="text-[11px] text-gray-400">e mais {processos.length - 8} na Gestão do GDoc.</p>}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 px-5 py-3.5 border-t border-gray-100 bg-gray-50">
               <button onClick={onAbrirAgenda} className="text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">Abrir agenda</button>
               <div className="flex-1" />
               <button onClick={onFechar} className="text-xs font-bold px-6 py-2 rounded-lg text-white" style={{background: BLUE}}>Ok</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GESTÃO DO GDOC — caixa do setor (Meus Processos > Neste Setor)
+       A extensão SGC ↔ GDoc grava os processos parados no setor em gdoc_caixa.
+       Aqui o NGCC define prioridade, responsável e instruções (campos só do SGC).
+    ═══════════════════════════════════════════════════════ */
+    const GG_PRIOR = {
+      alta:  { rotulo: 'Alta',  cor: '#b91c1c', ordem: 0 },
+      media: { rotulo: 'Média', cor: '#b45309', ordem: 1 },
+      baixa: { rotulo: 'Baixa', cor: '#64748b', ordem: 2 },
+    };
+    // Dias de calendário desde o recebimento no setor (mesma conta do "Status Prazo No Setor" do GDoc)
+    const ggDias = p => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.recebimento || '');
+      if (!m) return p.diasNoSetor || 0;
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      return Math.max(0, Math.round((hoje - new Date(+m[1], +m[2] - 1, +m[3])) / 86400000));
+    };
+    const ggCorDias = d => d >= 60 ? '#b91c1c' : d >= 30 ? '#b45309' : d >= 10 ? '#475569' : '#94a3b8';
+    const ggData = iso => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+    const ggPrimeiro = n => String(n || '').split(' ')[0];
+    const ggNome = (users, u) => (users.find(x => x.username === u) || {}).name || u || '';
+    // Processos prioritários de um usuário: atribuídos a ele, ou sem responsável
+    const ggPrioritarios = (itens, eu) => itens
+      .filter(p => p.presente && GG_PRIOR[p.prioridade] && (!p.atribuidoA || p.atribuidoA === eu))
+      .sort((a, b) => GG_PRIOR[a.prioridade].ordem - GG_PRIOR[b.prioridade].ordem || ggDias(b) - ggDias(a));
+
+    function ggRegistrar(p, mudancas, nota) {
+      const upd = { ...mudancas, atualizadoEm: new Date().toISOString() };
+      if (nota) upd.anotacoes = firebase.firestore.FieldValue.arrayUnion({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), em: new Date().toISOString(), ...nota });
+      return db.collection(COL('gdoc_caixa')).doc(p.id).update(upd);
+    }
+
+    function GdocGestaoPage({ currentUser, users, itens, meta, addToast, abrirId, onAberto }) {
+      const eu = currentUser.username;
+      const [busca, setBusca] = React.useState('');
+      const [fTipo, setFTipo] = React.useState('');
+      const [fResp, setFResp] = React.useState('');
+      const [fPrior, setFPrior] = React.useState('');
+      const [visao, setVisao] = React.useState('todos');
+      const [recentes, setRecentes] = React.useState(false);
+      const [abertoId, setAbertoId] = React.useState(null);
+      const [atualizando, setAtualizando] = React.useState(false);
+
+      const ativos = itens.filter(p => p.presente);
+      const tipos = [...new Set(ativos.map(p => p.tipo).filter(Boolean))].sort();
+      const equipe = users.filter(u => u.username && !ARCANJO_ONLY.has(u.username) && u.approved !== false);
+
+      const visoes = [
+        { id: 'todos',  rotulo: 'Todos',            f: () => true },
+        { id: 'alta',   rotulo: 'Prioridade alta',  f: p => p.prioridade === 'alta' },
+        { id: 'meus',   rotulo: 'Comigo',           f: p => p.atribuidoA === eu },
+        { id: 'sem',    rotulo: 'Sem responsável',  f: p => !p.atribuidoA },
+        { id: 'velhos', rotulo: 'Parados há 30+ dias', f: p => ggDias(p) >= 30 },
+      ];
+      const fVisao = (visoes.find(v => v.id === visao) || visoes[0]).f;
+      const q = busca.trim().toLowerCase();
+      const lista = ativos
+        .filter(fVisao)
+        .filter(p => !fTipo || p.tipo === fTipo)
+        .filter(p => !fResp || (fResp === '-' ? !p.atribuidoA : p.atribuidoA === fResp))
+        .filter(p => !fPrior || (fPrior === '-' ? !GG_PRIOR[p.prioridade] : p.prioridade === fPrior))
+        .filter(p => !q || [p.processo, p.tipo, p.interessado, p.setorOrigem, p.ultimoDespacho?.despacho,
+                            ...(p.anotacoes || []).map(a => a.texto)].join(' ').toLowerCase().includes(q))
+        .sort((a, b) => recentes ? ggDias(a) - ggDias(b) : ggDias(b) - ggDias(a));
+      const aberto = itens.find(p => p.id === abertoId) || null;
+      React.useEffect(() => { if (abrirId) { setAbertoId(abrirId); onAberto && onAberto(); } }, [abrirId]);
+
+      // Ao abrir um processo encaminhado a mim, a novidade é marcada como vista
+      React.useEffect(() => {
+        if (aberto && aberto.novidadePara === eu) db.collection(COL('gdoc_caixa')).doc(aberto.id).update({ novidadePara: '' }).catch(() => {});
+      }, [abertoId, aberto?.novidadePara]);
+
+      function atualizarAgora() {
+        setAtualizando(true);
+        document.documentElement.removeAttribute('data-sgc-gdoc-ack');
+        const fim = r => { setAtualizando(false); window.removeEventListener('message', ouvir); clearTimeout(semExt); if (r) addToast(r); };
+        const ouvir = e => {
+          if (e.source !== window || e.data?.type !== 'SGC_GDOC_CAIXA_RESULTADO') return;
+          const r = e.data.resumo || {};
+          fim(r.erro === 'sessao' ? 'Entre no GDoc: a sessão expirou.' : r.erro ? 'GDoc: ' + r.erro
+            : `Caixa atualizada: ${r.caixa?.total ?? 0} processo(s)${r.caixa?.novos ? `, ${r.caixa.novos} novo(s)` : ''}.`);
+        };
+        window.addEventListener('message', ouvir);
+        const semExt = setTimeout(() => {
+          if (!document.documentElement.getAttribute('data-sgc-gdoc-ack')) fim('Extensão SGC ↔ GDoc não encontrada neste navegador (versão 3.0 ou superior).');
+        }, 3000);
+        window.postMessage({ type: 'SGC_GDOC_CAIXA' }, location.origin);
+      }
+
+      const sel = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-gray-400';
+      return (
+        <div className="flex-1 w-full max-w-6xl mx-auto px-6 py-6 space-y-4">
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold" style={{ color: BLUE }}>Gestão do GDoc</h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {meta?.setor || 'Caixa do setor'} · {ativos.length} processo{ativos.length !== 1 ? 's' : ''} parado{ativos.length !== 1 ? 's' : ''}
+                {meta?.verificadoEm && <> · atualizado {quandoRelativo(meta.verificadoEm)}</>}
+              </p>
+            </div>
+            <button onClick={atualizarAgora} disabled={atualizando} className={BTN_GDOC + ' !text-xs !px-3.5 !py-2'}>
+              {atualizando ? 'Lendo o GDoc…' : 'Atualizar agora'}
+            </button>
+          </div>
+
+          <div className="flex gap-1.5 flex-wrap">
+            {visoes.map(v => {
+              const n = ativos.filter(v.f).length;
+              const on = visao === v.id;
+              return (
+                <button key={v.id} onClick={() => setVisao(v.id)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors"
+                  style={on ? { background: BLUE, borderColor: BLUE, color: '#fff' } : { borderColor: '#e5e7eb', color: '#4b5563', background: '#fff' }}>
+                  {v.rotulo} <span className={on ? 'opacity-80' : 'text-gray-400'}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar processo, interessado, despacho, anotação…"
+              className={sel + ' flex-1 min-w-[220px]'} />
+            <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={sel}>
+              <option value="">Todos os tipos</option>
+              {tipos.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={fResp} onChange={e => setFResp(e.target.value)} className={sel}>
+              <option value="">Qualquer responsável</option>
+              <option value="-">Sem responsável</option>
+              {equipe.map(u => <option key={u.username} value={u.username}>{u.name || u.username}</option>)}
+            </select>
+            <select value={fPrior} onChange={e => setFPrior(e.target.value)} className={sel}>
+              <option value="">Qualquer prioridade</option>
+              {Object.entries(GG_PRIOR).map(([k, v]) => <option key={k} value={k}>{v.rotulo}</option>)}
+              <option value="-">Sem prioridade</option>
+            </select>
+            <button onClick={() => setRecentes(r => !r)} className={sel + ' hover:bg-gray-50'}>
+              {recentes ? 'Mais recentes primeiro' : 'Parados há mais tempo primeiro'}
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {lista.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-12">
+                {ativos.length ? 'Nenhum processo com esses filtros.' : 'Nenhum processo lido ainda. Clique em "Atualizar agora" com a extensão instalada.'}
+              </p>
+            )}
+            {lista.map(p => {
+              const d = ggDias(p);
+              const pr = GG_PRIOR[p.prioridade];
+              const ult = (p.anotacoes || []).slice(-1)[0];
+              return (
+                <button key={p.id} onClick={() => setAbertoId(p.id)}
+                  className="w-full text-left flex items-center gap-4 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
+                  <div className="w-14 text-center flex-shrink-0">
+                    <p className="text-lg font-black leading-none" style={{ color: ggCorDias(d) }}>{d}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 mt-0.5">dia{d !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-800">{p.processo}</p>
+                      <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{p.tipo}</span>
+                      {p.prioridadeGdoc && <span className="text-[10px] text-gray-400">prioridade no GDoc</span>}
+                      {p.confidencial && <span className="text-[10px] text-gray-400">confidencial</span>}
+                      {p.novidadePara === eu && <span className="w-1.5 h-1.5 rounded-full" style={{ background: BLUE }} title="Novo para você" />}
+                    </div>
+                    <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                      {p.setorOrigem}{p.interessado ? ` · ${p.interessado}` : ''}
+                    </p>
+                    {ult && <p className="text-[11px] text-gray-600 truncate mt-0.5"><span className="text-gray-400">{ggPrimeiro(ggNome(users, ult.de))}:</span> {ult.texto}</p>}
+                  </div>
+                  <div className="w-28 flex-shrink-0 text-right">
+                    {p.atribuidoA
+                      ? <p className="text-xs font-semibold text-gray-700 truncate">{ggPrimeiro(ggNome(users, p.atribuidoA))}</p>
+                      : <p className="text-xs text-gray-300">sem responsável</p>}
+                    {pr && <p className="text-[10px] font-bold mt-0.5" style={{ color: pr.cor }}>● {pr.rotulo}</p>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {aberto && <GdocProcessoPainel p={aberto} eu={eu} users={users} equipe={equipe} addToast={addToast} onFechar={() => setAbertoId(null)} />}
+        </div>
+      );
+    }
+
+    function GdocProcessoPainel({ p, eu, users, equipe, addToast, onFechar }) {
+      const [para, setPara] = React.useState(p.atribuidoA && p.atribuidoA !== eu ? p.atribuidoA : (equipe.find(u => u.username !== eu)?.username || ''));
+      const [texto, setTexto] = React.useState('');
+      const [salvando, setSalvando] = React.useState(false);
+      const [verHist, setVerHist] = React.useState(false);
+      const [verAnexos, setVerAnexos] = React.useState(false);
+      const [despachoTodo, setDespachoTodo] = React.useState(false);
+      React.useEffect(() => {
+        const esc = e => { if (e.key === 'Escape') onFechar(); };
+        document.addEventListener('keydown', esc);
+        return () => document.removeEventListener('keydown', esc);
+      }, []);
+      const d = ggDias(p);
+      const nome = u => ggNome(users, u);
+
+      async function prioridade(k) {
+        if (k === (p.prioridade || '')) return;
+        await ggRegistrar(p, { prioridade: k }, { de: eu, tipo: 'prioridade', texto: k ? `Prioridade ${GG_PRIOR[k].rotulo.toLowerCase()}` : 'Prioridade retirada' });
+      }
+      async function enviar(tipo) {
+        const t = texto.trim();
+        if (tipo === 'encaminhamento' && !para) return;
+        if (tipo === 'nota' && !t) return;
+        setSalvando(true);
+        try {
+          if (tipo === 'encaminhamento') {
+            await ggRegistrar(p, { atribuidoA: para, novidadePara: para === eu ? '' : para },
+              { de: eu, para, tipo, texto: t || 'Encaminhado sem instrução.' });
+            addToast(`Encaminhado a ${ggPrimeiro(nome(para))}.`);
+          } else {
+            await ggRegistrar(p, {}, { de: eu, tipo, texto: t });
+          }
+          setTexto('');
+        } catch (e) { addToast('Não foi possível salvar: ' + e.message); }
+        setSalvando(false);
+      }
+      async function assumir() {
+        await ggRegistrar(p, { atribuidoA: eu, novidadePara: '' }, { de: eu, tipo: 'encaminhamento', para: eu, texto: 'Assumiu o processo.' });
+      }
+
+      const info = [
+        ['Origem', p.setorOrigem], ['Interessado', p.interessado], ['Recebido no setor', ggData(p.recebimento)],
+        ['Último encaminhamento', ggData(p.ultimoEncaminhamento)], ['Situação no GDoc', [p.status, p.situacao].filter(Boolean).join(' · ')],
+        ['Encaminhado para (GDoc)', p.encaminhadoPara],
+      ];
+      const notas = (p.anotacoes || []).slice().reverse();
+      const ult = p.ultimoDespacho;
+      const despacho = String(ult?.despacho || '');
+      return ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[300] flex justify-end" style={{ background: 'rgba(15,23,42,.35)' }} onClick={onFechar}>
+          <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col slide-in" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-lg font-bold text-gray-800">{p.processo}</p>
+                  <p className="text-xs text-gray-500">{p.tipo} · <span style={{ color: ggCorDias(d) }} className="font-semibold">{d} dia{d !== 1 ? 's' : ''} no setor</span></p>
+                </div>
+                <button onClick={onFechar} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <div className="flex items-center gap-1.5 mt-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mr-1">Prioridade</span>
+                {[...Object.entries(GG_PRIOR), ['', { rotulo: 'Nenhuma', cor: '#94a3b8' }]].map(([k, v]) => {
+                  const on = (p.prioridade || '') === k;
+                  return (
+                    <button key={k || 'nenhuma'} onClick={() => prioridade(k)}
+                      className="text-xs font-semibold px-3 py-1 rounded-full border transition-colors"
+                      style={on ? { background: v.cor, borderColor: v.cor, color: '#fff' } : { borderColor: '#e5e7eb', color: v.cor, background: '#fff' }}>
+                      {v.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+                {info.map(([r, v]) => (
+                  <div key={r} className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{r}</p>
+                    <p className="text-xs text-gray-700 mt-0.5 break-words">{v || '—'}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Responsável no NGCC</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-sm font-semibold text-gray-800 flex-1">{p.atribuidoA ? nome(p.atribuidoA) : <span className="text-gray-400 font-normal">Ninguém ainda</span>}</p>
+                  {p.atribuidoA !== eu && <button onClick={assumir} className={BTN_GDOC}>Assumir</button>}
+                </div>
+                <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3}
+                  placeholder="Instrução ou anotação (ex.: elaborar minuta de resposta até sexta)"
+                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-gray-400 resize-none" />
+                <div className="flex items-center gap-2 mt-2">
+                  <select value={para} onChange={e => setPara(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
+                    {equipe.map(u => <option key={u.username} value={u.username}>{u.name || u.username}</option>)}
+                  </select>
+                  <button onClick={() => enviar('encaminhamento')} disabled={salvando || !para}
+                    className="text-xs font-bold px-4 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: BLUE }}>
+                    Encaminhar
+                  </button>
+                  <div className="flex-1" />
+                  <button onClick={() => enviar('nota')} disabled={salvando || !texto.trim()} className={BTN_GDOC + ' !text-xs !py-1.5'}>
+                    Só anotar
+                  </button>
+                </div>
+              </div>
+
+              {notas.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Histórico no NGCC</p>
+                  <div className="space-y-2.5">
+                    {notas.map(n => (
+                      <div key={n.id} className="border-l-2 pl-3" style={{ borderColor: n.tipo === 'encaminhamento' ? BLUE : n.tipo === 'prioridade' ? '#e5e7eb' : '#cbd5e1' }}>
+                        <p className="text-[11px] text-gray-400">
+                          <span className="font-semibold text-gray-600">{ggPrimeiro(nome(n.de))}</span>
+                          {n.tipo === 'encaminhamento' && n.para && n.para !== n.de && <> → <span className="font-semibold text-gray-600">{ggPrimeiro(nome(n.para))}</span></>}
+                          {' · '}{quandoRelativo(n.em)}
+                        </p>
+                        <p className={`text-sm mt-0.5 whitespace-pre-wrap ${n.tipo === 'prioridade' ? 'text-gray-400 text-xs' : 'text-gray-700'}`}>{n.texto}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Último despacho no GDoc</p>
+                {ult ? (
+                  <div className="bg-gray-50 rounded-xl p-3.5">
+                    <p className="text-[11px] text-gray-500 mb-1.5">{ult.por || ult.setor} · {ult.data} {String(ult.hora || '').slice(0, 5)}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{despachoTodo || despacho.length <= 600 ? despacho : despacho.slice(0, 600) + '…'}</p>
+                    {despacho.length > 600 && <button onClick={() => setDespachoTodo(v => !v)} className="text-[11px] font-semibold mt-1.5" style={{ color: BLUE }}>{despachoTodo ? 'Mostrar menos' : 'Ler tudo'}</button>}
+                  </div>
+                ) : <p className="text-xs text-gray-400">Ainda não lido. Aparece na próxima atualização.</p>}
+              </div>
+
+              {(p.historico || []).length > 1 && (
+                <div>
+                  <button onClick={() => setVerHist(v => !v)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">
+                    {verHist ? '▾' : '▸'} Tramitação ({p.historico.length})
+                  </button>
+                  {verHist && (
+                    <div className="mt-2 space-y-2">
+                      {p.historico.map((e, i) => (
+                        <div key={i} className="text-xs border-b border-gray-50 pb-2">
+                          <p className="text-gray-700"><span className="font-semibold">{e.setor}</span> <span className="text-gray-400">· {e.data} {String(e.hora || '').slice(0, 5)}{e.por ? ` · ${e.por}` : ''}</span></p>
+                          {e.despacho && <p className="text-gray-500 mt-0.5 line-clamp-3 whitespace-pre-wrap">{e.despacho}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(p.anexos || []).length > 0 && (
+                <div>
+                  <button onClick={() => setVerAnexos(v => !v)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">
+                    {verAnexos ? '▾' : '▸'} Anexos ({p.anexos.length})
+                  </button>
+                  {verAnexos && (
+                    <div className="mt-2 space-y-1">
+                      {p.anexos.slice().reverse().map((a, i) => (
+                        <p key={i} className="text-xs text-gray-600 flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">{String(a.data || '').slice(0, 10)}</span><span className="flex-1">{a.nome}</span><span className="text-gray-400">{a.tipo}</span></p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>,
@@ -19821,6 +20204,9 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [arcanjoEventos,       setArcanjoEventos]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
       const [gdocMovs,             setGdocMovs]             = useState([]);
+      const [gdocCaixa,            setGdocCaixa]            = useState([]);   // Gestão do GDoc: caixa do setor
+      const [gdocCaixaMeta,        setGdocCaixaMeta]        = useState(null);
+      const [gdocAbrirId,          setGdocAbrirId]          = useState(null);
       const [showAlertas,          setShowAlertas]          = useState(false);
       const [novaVersao,           setNovaVersao]           = useState(false);
       const [showAgendaPage,       setShowAgendaPage]       = useState(false);
@@ -19961,6 +20347,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const unsubAgenda = db.collection(COL('agenda')).onSnapshot(snap => {
           setAgendaEventos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         }, () => {});
+        // Gestão do GDoc: processos parados no setor, gravados pela extensão
+        const unsubCaixa = SYS.id === 'main' ? db.collection(COL('gdoc_caixa')).onSnapshot(snap => {
+          setGdocCaixa(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        }, () => {}) : () => {};
+        const unsubCaixaMeta = SYS.id === 'main' ? db.collection(COL('gdoc_caixa_meta')).doc('status').onSnapshot(d => setGdocCaixaMeta(d.exists ? d.data() : null), () => {}) : () => {};
         const unsubTarefas = db.collection(COL('tarefas')).onSnapshot(snap => {
           setTarefas(snap.docs.map(d => ({ ...d.data(), id: d.id })));
           setTarefasProntas(true);
@@ -20012,7 +20403,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const unsubCfg = db.collection('system_config').doc('gcsp').onSnapshot(doc => {
           setGcspModules((doc.exists && doc.data().modules) || {});
         });
-        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubGdocMovs(); unsubAgenda(); unsubTarefas(); unsubArcanjo(); unsubArcanjoPessoas(); unsubArcanjoEventos(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
+        return () => { unsubs.forEach(u => u()); unsubGdocs(); unsubGdocMovs(); unsubCaixa(); unsubCaixaMeta(); unsubAgenda(); unsubTarefas(); unsubArcanjo(); unsubArcanjoPessoas(); unsubArcanjoEventos(); unsubCron(); unsubCert(); unsubOrg(); unsubPropEm(); unsubLeads(); unsubLeadSync(); unsubCfg(); };
       }, []);
 
       const uniqueContractCount = useMemo(() => {
@@ -20695,7 +21086,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         const verificar = () => {
           const eu = currentUser.username, hoje = agHoje();
           const temAlgo = tarefas.some(t => t.dono === eu && !t.feita) ||
-                          agendaEventos.some(e => e.data === hoje && agVisivel(e, eu));
+                          agendaEventos.some(e => e.data === hoje && agVisivel(e, eu)) ||
+                          ggPrioritarios(gdocCaixa, eu).length > 0;
           if (!temAlgo) return;
           const chave = `${SYS.prefix}lembrete-${eu}-${hoje}`;
           let vistos = [];
@@ -20711,7 +21103,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         verificar();
         const id = setInterval(verificar, 5 * 60000);
         return () => clearInterval(id);
-      }, [currentUser, tarefasProntas, tarefas.length, agendaEventos.length, showAgendaPage]);
+      }, [currentUser, tarefasProntas, tarefas.length, agendaEventos.length, gdocCaixa.length, showAgendaPage]);
 
       // Aguarda Firebase carregar
       if (!dbReady) return (
@@ -21408,7 +21800,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const paginaAtual = showForm ? 'Cadastro de contrato'
         : activeContractNumber ? `Contrato ${activeContractNumber}`
         : showAgendaPage ? 'Agenda' : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas'
-        : showGdocPage ? 'GDoc' : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas'
+        : showGdocPage ? (SYS.id === 'main' ? 'Gestão do GDoc' : 'GDoc') : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas'
         : showLeadsPage ? 'Oportunidades' : showPropEmissao ? 'Emitir Proposta' : showCertidoesPage ? 'Certidões'
         : showCronogramaPage ? 'Cronograma Financeiro' : showInstallmentsPage ? 'Parcelas' : showContractsPage ? 'Contratos'
         : showAdmin ? 'Painel Admin' : 'Início';
@@ -21663,9 +22055,9 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && (
-                <SidebarBtn icon={Layers} label="GDoc"
+                <SidebarBtn icon={Layers} label={SYS.id === 'main' ? 'Gestão GDoc' : 'GDoc'}
                   active={showGdocPage}
-                  badge={gdocs.length > 0 ? 0 : 0}
+                  badge={SYS.id === 'main' ? gdocCaixa.filter(p => p.presente && p.novidadePara === currentUser.username).length : 0}
                   onClick={() => { setShowArcanjoAcoes(false); setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
@@ -21801,6 +22193,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
             {showLembrete && (
               <LembreteTarefas tarefas={tarefas} eventos={agendaEventos} eu={currentUser.username} nome={currentUser.name}
+                processos={ggPrioritarios(gdocCaixa, currentUser.username)} users={users}
+                onAbrirGdoc={id => { setShowLembrete(false); handleGoHome(); setShowContractsList(false); setShowNfListView(false); setGdocAbrirId(id); setShowGdocPage(true); }}
                 onFechar={() => setShowLembrete(false)}
                 onAbrirAgenda={() => { setShowLembrete(false); handleGoHome(); setShowContractsList(false); setShowNfListView(false); setShowAgendaPage(true); }} />
             )}
@@ -22285,6 +22679,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 onBack={handleCloseNfList}
                 onOpenContract={cn => { handleCloseNfList(); handleOpenContractDetail(cn); }}
               />
+            ) : showGdocPage && SYS.id === 'main' ? (
+              /* ── GESTÃO DO GDOC (caixa do setor) ── */
+              <GdocGestaoPage currentUser={currentUser} users={users} itens={gdocCaixa} meta={gdocCaixaMeta} addToast={addToast}
+                abrirId={gdocAbrirId} onAberto={() => setGdocAbrirId(null)} />
             ) : showGdocPage ? (
               /* ── CONTROLE DE GDOC ── */
               <GDocPage

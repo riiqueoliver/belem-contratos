@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SGC ↔ GDoc · Emissão e acompanhamento de processos",
-  "version": "2.3.0",
-  "description": "Preenche o processo de cobrança no GDoc a partir da NF do SGC e acompanha os processos das parcelas: tramitação, NF e nota de liquidação.",
+  "version": "3.0.0",
+  "description": "Acompanha no GDoc os processos das parcelas (tramitação, NF e NL) e a caixa do setor para a Gestão do GDoc do SGC.",
   "permissions": ["storage", "scripting", "alarms", "notifications", "tabs"],
   "host_permissions": [
     "https://gdoc.belem.pa.gov.br/*",

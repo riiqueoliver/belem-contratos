@@ -31,3 +31,13 @@ window.addEventListener('message', e => {
     window.postMessage({ type: 'SGC_GDOC_RESULTADO', parcelaId, resumo }, location.origin);
   });
 });
+
+// Módulo Gestão do GDoc: "Atualizar agora" lê a caixa do setor
+window.addEventListener('message', e => {
+  if (e.source !== window || e.data?.type !== 'SGC_GDOC_CAIXA') return;
+  document.documentElement.setAttribute('data-sgc-gdoc-ack', '1');
+  chrome.runtime.sendMessage({ type: 'VARREDURA_CAIXA' }, resumo => {
+    if (chrome.runtime.lastError) resumo = { erro: 'A extensão foi recarregada. Atualize a página e tente de novo.' };
+    window.postMessage({ type: 'SGC_GDOC_CAIXA_RESULTADO', resumo }, location.origin);
+  });
+});
