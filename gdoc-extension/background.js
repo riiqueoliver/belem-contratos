@@ -265,16 +265,21 @@ async function varrer(motivo, soParcela) {
    Os campos do GDoc são atualizados a cada varredura; os do SGC (prioridade, responsável,
    anotações) nunca são tocados aqui. Processo que sai do setor fica com presente = false. */
 const chaveCaixa = i => `${i.numero}-${i.ano}-${String(i.orgao || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '').toUpperCase()}`;
-// Despachos (todos os encaminhamentos) e anexos (com o id para abrir no GDoc) de um processo
-async function lerDetalheCaixa(tabId, numero, ano, orgao) {
-  await abrirEm(tabId, GDOC + '/processos/pesquisa');
-  let det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [numero, ano, orgao]);
-  if (det?.erro === 'sessao' && await garantirSessao(tabId))
-    det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [numero, ano, orgao]);
-  if (!det?.ok) return { detalheErro: det?.erro === 'nao_encontrado' ? 'Processo não encontrado na pesquisa do GDoc.' : (det?.detalhe || det?.erro || 'leitura falhou') };
+// Despachos (todos os encaminhamentos) e anexos (com o id para abrir no GDoc) de um processo da
+// caixa. Lidos pelo "Detalhar" da própria linha em Meus Processos — nunca pela pesquisa geral,
+// que só acha processos da Belém Digital e confundiria números iguais de outros órgãos.
+async function lerDetalheCaixa(tabId, processo) {
+  await abrirEm(tabId, GDOC + '/processos/meusprocessos');
+  let det = await rodar(tabId, p => window.__gdocLerDetalheCaixa(p), [processo]);
+  if (det?.erro === 'sessao' && await garantirSessao(tabId)) {
+    await abrirEm(tabId, GDOC + '/processos/meusprocessos');
+    det = await rodar(tabId, p => window.__gdocLerDetalheCaixa(p), [processo]);
+  }
+  if (!det?.ok) return { detalheErro: det?.erro === 'nao_encontrado' ? 'Processo não está mais na caixa do setor.' : (det?.detalhe || det?.erro || 'leitura falhou') };
   const enc = det.encaminhamentos || [];
   return {
-    situacao: det.situacao || '', detalheEm: new Date().toISOString(), detalheV2: true, detalheErro: '',
+    situacao: det.situacao || '', detalheEm: new Date().toISOString(), detalheV3: true, detalheErro: '',
+    assunto: String(det.instrucao || '').slice(0, 2000), criadoPor: det.criadoPor || '', setorCriacao: det.setorCriacao || '', criadoEm: det.criadoEm || '',
     ultimoDespacho: enc[0] ? { ...enc[0], despacho: String(enc[0].despacho || '').slice(0, 8000) } : null,
     historico: enc.slice(0, 60).map(e => ({ ...e, despacho: String(e.despacho || '').slice(0, 6000) })),
     anexos: (det.anexos || []).slice(-120).map(a => ({ nome: a.nome, tipo: a.tipo, data: a.data, id: a.id || '' })),
@@ -289,7 +294,7 @@ async function detalharUm(docId) {
   try {
     const tabId = janela.tabs[0].id;
     if (!(await garantirSessao(tabId))) return { erro: 'sessao' };
-    const det = await lerDetalheCaixa(tabId, d.numero, d.ano, d.orgao);
+    const det = await lerDetalheCaixa(tabId, d.processo);
     await SGC.atualizar('gdoc_caixa', docId, det);
     return det.detalheErro ? { erro: det.detalheErro } : { ok: true, despachos: det.historico.length, anexos: det.anexos.length };
   } finally { chrome.windows.remove(janela.id).catch(() => {}); }
@@ -318,9 +323,10 @@ async function varrerCaixa(tabId, resumo) {
       tipo: i.tipo, interessado: i.interessado, status: i.status, encaminhadoPara: i.encaminhadoPara,
       diasNoSetor: i.diasNoSetor, prioridadeGdoc: i.prioridadeGdoc, confidencial: i.confidencial,
       juntado: i.juntado, presente: true, vistoEm: agora };
-    // Despachos e anexos: lidos quando o processo chega (ou volta) ao setor
-    const chegou = !velho || !velho.presente || velho.recebimento !== i.recebimento || !velho.detalheEm || !velho.detalheV2;
-    if (chegou) Object.assign(doGdoc, await lerDetalheCaixa(tabId, i.numero, i.ano, i.orgao));
+    // Despachos e anexos: lidos quando o processo chega (ou volta) ao setor ou é movimentado
+    const chegou = !velho || !velho.presente || velho.recebimento !== i.recebimento ||
+      velho.ultimoEncaminhamento !== i.ultimoEncaminhamento || !velho.detalheEm || !velho.detalheV3;
+    if (chegou) Object.assign(doGdoc, await lerDetalheCaixa(tabId, i.processo));
     if (velho) {
       if (!velho.presente) Object.assign(doGdoc, { entrouEm: agora, saiuEm: null });
       await SGC.atualizar('gdoc_caixa', id, doGdoc);

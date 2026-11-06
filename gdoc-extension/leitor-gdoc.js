@@ -43,6 +43,28 @@ window.__gdocLerProcesso = async function (numero, ano, origem) {
   if (!detalhar) return { erro: 'tela', detalhe: 'Botão Detalhar não encontrado.' };
   const resumo = { tipo: txt(linha.cells[1]), instrucao: txt(linha.cells[5]) };
 
+  return window.__gdocLerDetalhe(detalhar, resumo.tipo);
+};
+
+/* Abre o Detalhe de um processo (link "Detalhar" de uma linha de lista do GDoc) e lê
+   situação, encaminhamentos com despacho e anexos. Usado pela pesquisa e pela caixa do setor. */
+window.__gdocLerDetalhe = async function (detalhar, tipoFallback) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const txt = el => (el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim();
+  const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  async function esperar(fn, timeout = 20000) {
+    const fim = Date.now() + timeout;
+    while (Date.now() < fim) { const r = fn(); if (r) return r; await sleep(250); }
+    return null;
+  }
+  async function esperarAjax(doc = document, win = window) {
+    await sleep(300);
+    await esperar(() => !(win.jQuery && win.jQuery.active > 0) &&
+      !doc.querySelector('.ui-blockui:not(.ui-helper-hidden)'), 20000);
+    await sleep(300);
+  }
+
+  const resumo = { tipo: tipoFallback || '' };
   // 2) Detalhe abre num diálogo com iframe (mesma origem)
   detalhar.click();
   const frame = await esperar(() => {
@@ -63,6 +85,13 @@ window.__gdocLerProcesso = async function (numero, ano, origem) {
   };
   dados.situacao = valorDe('Situação');
   dados.tipoProcesso = valorDe('Tipo de Processo') || resumo.tipo;
+  // Dados do processo: assunto (Instrução Inicial), quem criou e onde
+  const corpoTxt = txt(d.body);
+  const campo = (rot, prox) => ((new RegExp(rot + ':\\s*(.*?)\\s*(?:' + prox + '|$)', 'i').exec(corpoTxt) || [])[1] || '').trim();
+  dados.instrucao = campo('Instrução Inicial', 'Criado por:|Setor de Criação:|Data de Criação:') || valorDe('Instrução Inicial');
+  dados.criadoPor = campo('Criado por', 'Setor de Criação:|Data de Criação:');
+  dados.setorCriacao = campo('Setor de Criação', 'Data de Criação:|Nº do documento');
+  dados.criadoEm = campo('Data de Criação', 'Nº do documento|Setor Origem|Endereço|Encaminhamentos');
 
   // 3) Encaminhamentos (o mais recente vem primeiro)
   const cabecalhos = [...d.querySelectorAll('.ui-accordion-header')];
@@ -136,8 +165,53 @@ window.__gdocLerProcesso = async function (numero, ano, origem) {
   document.querySelector('.ui-dialog .ui-dialog-titlebar-close')?.click();
 
   const atual = encaminhamentos[0] || {};
-  return { ok: true, situacao: dados.situacao, tipoProcesso: dados.tipoProcesso,
+  return { ok: true, situacao: dados.situacao, tipoProcesso: dados.tipoProcesso, instrucao: dados.instrucao,
+           criadoPor: dados.criadoPor, setorCriacao: dados.setorCriacao, criadoEm: dados.criadoEm,
            setor: atual.setor || '', encaminhamentos, anexos };
+};
+
+/* Caixa do setor: abre o Detalhe a partir da própria linha em Meus Processos > Neste Setor.
+   Assim o processo é sempre o que está na caixa, inclusive os de outros órgãos (SEGOV, SEMIAC…),
+   que a pesquisa geral do GDoc não encontra. */
+window.__gdocLerDetalheCaixa = async function (processo) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const txt = el => (el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim();
+  const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  async function esperar(fn, timeout = 20000) {
+    const fim = Date.now() + timeout;
+    while (Date.now() < fim) { const r = fn(); if (r) return r; await sleep(250); }
+    return null;
+  }
+  async function esperarAjax(doc = document, win = window) {
+    await sleep(300);
+    await esperar(() => !(win.jQuery && win.jQuery.active > 0) &&
+      !doc.querySelector('.ui-blockui:not(.ui-helper-hidden)'), 20000);
+    await sleep(300);
+  }
+
+  if (/\/login/.test(location.pathname) || document.querySelector('input[type=password]')) return { erro: 'sessao' };
+  document.querySelector('.ui-dialog .ui-dialog-titlebar-close')?.click();
+  const corpoLista = () => document.getElementById('dataList_data');
+  if (!(await esperar(corpoLista))) return { erro: 'tela', detalhe: 'Lista de processos não encontrada.' };
+  const limpa = s => norm(s).replace(/\s+DIGITAL\b/g, '').replace(/\s+/g, ' ').trim();
+  const alvo = limpa(processo);
+  const primeira = document.querySelector('#dataList_paginator_top .ui-paginator-first:not(.ui-state-disabled)');
+  if (primeira) { primeira.click(); await esperarAjax(); }
+  for (let p = 0; p < 40 && corpoLista(); p++) {
+    const linha = [...corpoLista().rows].find(tr => tr.cells[0] && limpa(txt(tr.cells[0])) === alvo);
+    if (linha) {
+      const detalhar = [...linha.querySelectorAll('a')].find(a => /Detalhar/i.test(a.textContent));
+      if (!detalhar) return { erro: 'tela', detalhe: 'Botão Detalhar não encontrado.' };
+      return window.__gdocLerDetalhe(detalhar, txt(linha.cells[4]));
+    }
+    const nx = document.querySelector('#dataList_paginator_top .ui-paginator-next');
+    if (!nx || nx.classList.contains('ui-state-disabled')) break;
+    const antes = txt(corpoLista());
+    nx.click();
+    await esperarAjax();
+    await esperar(() => txt(corpoLista()) !== antes, 8000);
+  }
+  return { erro: 'nao_encontrado' };
 };
 
 /* Baixa o PDF de um anexo: a página "visualizar" traz um <object> com o arquivo. */

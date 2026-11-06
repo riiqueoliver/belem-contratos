@@ -9908,7 +9908,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         .filter(p => !fTipo || ggTipo(p.tipo) === fTipo)
         .filter(p => !fResp || (fResp === '-' ? !p.atribuidoA : p.atribuidoA === fResp))
         .filter(p => !fPrior || (fPrior === '-' ? !GG_PRIOR[p.prioridade] : p.prioridade === fPrior))
-        .filter(p => !q || [p.processo, p.tipo, p.interessado, p.setorOrigem, p.ultimoDespacho?.despacho,
+        .filter(p => !q || [p.processo, p.tipo, p.assunto, p.interessado, p.setorOrigem, p.ultimoDespacho?.despacho,
                             ...(p.anotacoes || []).map(a => a.texto)].join(' ').toLowerCase().includes(q))
         .sort((a, b) => recentes ? ggDias(a) - ggDias(b) : ggDias(b) - ggDias(a));
       const aberto = itens.find(p => p.id === abertoId) || null;
@@ -9937,6 +9937,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       }
 
       const sel = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-gray-400';
+      // Processo aberto: a página dele no lugar da lista (com "Voltar à caixa")
+      if (aberto) return <GdocProcessoPainel p={aberto} eu={eu} users={users} equipe={equipe} addToast={addToast} onFechar={() => setAbertoId(null)} />;
       return (
         <div className="flex-1 w-full max-w-6xl mx-auto px-6 py-6 space-y-4">
           <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -10013,6 +10015,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                       {p.confidencial && <span className="text-[10px] text-gray-400">confidencial</span>}
                       {p.novidadePara === eu && <span className="w-1.5 h-1.5 rounded-full" style={{ background: BLUE }} title="Novo para você" />}
                     </div>
+                    {p.assunto && <p className="text-xs text-gray-700 truncate mt-0.5" title={p.assunto}>{p.assunto}</p>}
                     <p className="text-[11px] text-gray-500 truncate mt-0.5">
                       {p.setorOrigem}{p.interessado ? ` · ${p.interessado}` : ''}
                     </p>
@@ -10029,7 +10032,6 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             })}
           </div>
 
-          {aberto && <GdocProcessoPainel p={aberto} eu={eu} users={users} equipe={equipe} addToast={addToast} onFechar={() => setAbertoId(null)} />}
         </div>
       );
     }
@@ -10042,8 +10044,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [abertos, setAbertos] = React.useState({});
       const [buscando, setBuscando] = React.useState(false);
       React.useEffect(() => {
-        const esc = e => { if (e.key === 'Escape') onFechar(); };
+        const esc = e => { if (e.key === 'Escape' && !/TEXTAREA|INPUT|SELECT/.test(document.activeElement?.tagName || '')) onFechar(); };
         document.addEventListener('keydown', esc);
+        window.scrollTo(0, 0);
         return () => document.removeEventListener('keydown', esc);
       }, []);
       const d = ggDias(p);
@@ -10078,6 +10081,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         ['Origem', p.setorOrigem], ['Interessado', p.interessado], ['Recebido no setor', ggData(p.recebimento)],
         ['Último encaminhamento', ggData(p.ultimoEncaminhamento)], ['Situação no GDoc', [p.status, p.situacao].filter(Boolean).join(' · ')],
         ['Encaminhado para (GDoc)', p.encaminhadoPara],
+        ...(p.criadoPor ? [['Aberto por', [p.criadoPor, p.setorCriacao].filter(Boolean).join(' · ')], ['Aberto em', p.criadoEm]] : []),
       ];
       const notas = (p.anotacoes || []).slice().reverse();
       const hist = p.historico || [];
@@ -10098,34 +10102,38 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         }, 3000);
         window.postMessage({ type: 'SGC_GDOC_DETALHE', docId: p.id }, location.origin);
       }
-      return ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[300] flex justify-end" style={{ background: 'rgba(15,23,42,.35)' }} onClick={onFechar}>
-          <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col slide-in" onClick={e => e.stopPropagation()}>
-            <div className="px-6 pt-5 pb-4 border-b border-gray-100">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-lg font-bold text-gray-800">{p.processo}</p>
-                  <p className="text-xs text-gray-500">{p.tipo} · <span style={{ color: ggCorDias(d) }} className="font-semibold">{d} dia{d !== 1 ? 's' : ''} no setor</span></p>
-                </div>
-                <button onClick={onFechar} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-              </div>
-              <div className="flex items-center gap-1.5 mt-4">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mr-1">Prioridade</span>
-                {[...Object.entries(GG_PRIOR), ['', { rotulo: 'Nenhuma', cor: '#94a3b8' }]].map(([k, v]) => {
-                  const on = (p.prioridade || '') === k;
-                  return (
-                    <button key={k || 'nenhuma'} onClick={() => prioridade(k)}
-                      className="text-xs font-semibold px-3 py-1 rounded-full border transition-colors"
-                      style={on ? { background: v.cor, borderColor: v.cor, color: '#fff' } : { borderColor: '#e5e7eb', color: v.cor, background: '#fff' }}>
-                      {v.rotulo}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+      const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
+      return (
+        <div className="flex-1 w-full max-w-6xl mx-auto px-6 py-6 space-y-4">
+          <button onClick={onFechar} className="text-xs font-semibold text-gray-500 hover:text-gray-800 flex items-center gap-1.5">
+            <span className="text-base leading-none">←</span> Voltar à caixa
+          </button>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-              <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold" style={{ color: BLUE }}>{p.processo}</h1>
+              <p className="text-xs text-gray-500 mt-0.5">{p.tipo} · <span style={{ color: ggCorDias(d) }} className="font-semibold">{d} dia{d !== 1 ? 's' : ''} no setor</span>
+                {p.prioridadeGdoc && ' · prioridade no GDoc'}{p.confidencial && ' · confidencial'}</p>
+              {p.assunto && <p className="text-sm text-gray-700 mt-2 max-w-3xl leading-snug">{p.assunto}</p>}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mr-1">Prioridade</span>
+              {[...Object.entries(GG_PRIOR), ['', { rotulo: 'Nenhuma', cor: '#94a3b8' }]].map(([k, v]) => {
+                const on = (p.prioridade || '') === k;
+                return (
+                  <button key={k || 'nenhuma'} onClick={() => prioridade(k)}
+                    className="text-xs font-semibold px-3 py-1 rounded-full border transition-colors"
+                    style={on ? { background: v.cor, borderColor: v.cor, color: '#fff' } : { borderColor: '#e5e7eb', color: v.cor, background: '#fff' }}>
+                    {v.rotulo}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            <div className="lg:col-span-2 space-y-4">
+              <div className={card + ' grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-3'}>
                 {info.map(([r, v]) => (
                   <div key={r} className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{r}</p>
@@ -10134,33 +10142,99 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                 ))}
               </div>
 
-              <div>
+              <div className={card}>
+        <div>
+          <div className="flex items-center gap-1 border-b border-gray-100 mb-3">
+            {[['despachos', `Despachos (${hist.length})`], ['anexos', `Anexos (${anexos.length})`]].map(([k, r]) => (
+              <button key={k} onClick={() => setAba(k)}
+                className="text-xs font-semibold px-3 py-2 -mb-px border-b-2 transition-colors"
+                style={aba === k ? { borderColor: BLUE, color: BLUE } : { borderColor: 'transparent', color: '#9ca3af' }}>{r}</button>
+            ))}
+            <div className="flex-1" />
+            <span className="text-[10px] text-gray-400 mr-2">{p.detalheEm ? `lido ${quandoRelativo(p.detalheEm)}` : 'ainda não lido'}</span>
+            <button onClick={buscarNoGdoc} disabled={buscando} className={BTN_GDOC}>{buscando ? 'Lendo…' : 'Buscar no GDoc'}</button>
+          </div>
+          {p.detalheErro && <p className="text-[11px] text-amber-600 mb-2">{p.detalheErro}</p>}
+
+          {aba === 'despachos' && (
+            hist.length === 0
+              ? <p className="text-xs text-gray-400 py-4">Despachos ainda não lidos. Clique em "Buscar no GDoc" (leva uns 15 segundos).</p>
+              : <div className="space-y-2.5">
+                  {hist.map((e, i) => {
+                    const t = String(e.despacho || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+                    const todo = abertos[i] ?? i === 0;
+                    return (
+                      <div key={i} className={`rounded-xl p-3.5 ${i === 0 ? 'bg-gray-50' : 'border border-gray-100'}`}>
+                        <p className="text-[11px] text-gray-500">
+                          <span className="font-semibold text-gray-700">{e.setor || '—'}</span>
+                          {' · '}{e.data} {String(e.hora || '').slice(0, 5)}{e.por ? ` · ${e.por}` : ''}
+                          {i === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: BLUE }}>último</span>}
+                        </p>
+                        {t
+                          ? <p className={`text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1.5 ${todo ? '' : 'line-clamp-3'}`}>{t}</p>
+                          : <p className="text-xs text-gray-400 mt-1">Sem despacho escrito.</p>}
+                        {t.length > 220 && (
+                          <button onClick={() => setAbertos(a => ({ ...a, [i]: !todo }))} className="text-[11px] font-semibold mt-1" style={{ color: BLUE }}>
+                            {todo ? 'Mostrar menos' : 'Ler tudo'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+          )}
+
+          {aba === 'anexos' && (
+            anexos.length === 0
+              ? <p className="text-xs text-gray-400 py-4">Anexos ainda não lidos. Clique em "Buscar no GDoc".</p>
+              : <div className="divide-y divide-gray-50">
+                  {anexos.map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 py-2">
+                      <span className="text-[11px] text-gray-400 w-20 flex-shrink-0">{String(a.data || '').slice(0, 10)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-800 truncate" title={a.nome}>{a.nome}</p>
+                        <p className="text-[10px] text-gray-400 truncate">{a.tipo}</p>
+                      </div>
+                      {a.id
+                        ? <a href={`https://gdoc.belem.pa.gov.br/gdocprocessos/processo/anexo/visualizar/${a.id}/false`} target="_blank" rel="noopener noreferrer"
+                             className={BTN_GDOC} onClick={e => e.stopPropagation()}>Abrir</a>
+                        : <span className="text-[10px] text-gray-300" title="Clique em Buscar no GDoc para habilitar">—</span>}
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-gray-400 pt-2">O anexo abre no GDoc: é preciso estar logado nele neste navegador.</p>
+                </div>
+          )}
+        </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className={card}>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Responsável no NGCC</p>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <p className="text-sm font-semibold text-gray-800 flex-1">{p.atribuidoA ? nome(p.atribuidoA) : <span className="text-gray-400 font-normal">Ninguém ainda</span>}</p>
                   {p.atribuidoA !== eu && <button onClick={assumir} className={BTN_GDOC}>Assumir</button>}
                 </div>
-                <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3}
+                <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4}
                   placeholder="Instrução ou anotação (ex.: elaborar minuta de resposta até sexta)"
                   className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-gray-400 resize-none" />
+                <select value={para} onChange={e => setPara(e.target.value)} className="w-full mt-2 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
+                  {equipe.map(u => <option key={u.username} value={u.username}>{u.name || u.username}</option>)}
+                </select>
                 <div className="flex items-center gap-2 mt-2">
-                  <select value={para} onChange={e => setPara(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-                    {equipe.map(u => <option key={u.username} value={u.username}>{u.name || u.username}</option>)}
-                  </select>
                   <button onClick={() => enviar('encaminhamento')} disabled={salvando || !para}
-                    className="text-xs font-bold px-4 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: BLUE }}>
+                    className="flex-1 text-xs font-bold px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: BLUE }}>
                     Encaminhar
                   </button>
-                  <div className="flex-1" />
-                  <button onClick={() => enviar('nota')} disabled={salvando || !texto.trim()} className={BTN_GDOC + ' !text-xs !py-1.5'}>
+                  <button onClick={() => enviar('nota')} disabled={salvando || !texto.trim()} className={BTN_GDOC + ' !text-xs !py-2'}>
                     Só anotar
                   </button>
                 </div>
               </div>
 
               {notas.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Histórico no NGCC</p>
+                <div className={card}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Histórico no NGCC</p>
                   <div className="space-y-2.5">
                     {notas.map(n => (
                       <div key={n.id} className="border-l-2 pl-3" style={{ borderColor: n.tipo === 'encaminhamento' ? BLUE : n.tipo === 'prioridade' ? '#e5e7eb' : '#cbd5e1' }}>
@@ -10169,79 +10243,15 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                           {n.tipo === 'encaminhamento' && n.para && n.para !== n.de && <> → <span className="font-semibold text-gray-600">{ggPrimeiro(nome(n.para))}</span></>}
                           {' · '}{quandoRelativo(n.em)}
                         </p>
-                        <p className={`text-sm mt-0.5 whitespace-pre-wrap ${n.tipo === 'prioridade' ? 'text-gray-400 text-xs' : 'text-gray-700'}`}>{n.texto}</p>
+                        <p className={'text-sm mt-0.5 whitespace-pre-wrap ' + (n.tipo === 'prioridade' ? 'text-gray-400 text-xs' : 'text-gray-700')}>{n.texto}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              <div>
-                <div className="flex items-center gap-1 border-b border-gray-100 mb-3">
-                  {[['despachos', `Despachos (${hist.length})`], ['anexos', `Anexos (${anexos.length})`]].map(([k, r]) => (
-                    <button key={k} onClick={() => setAba(k)}
-                      className="text-xs font-semibold px-3 py-2 -mb-px border-b-2 transition-colors"
-                      style={aba === k ? { borderColor: BLUE, color: BLUE } : { borderColor: 'transparent', color: '#9ca3af' }}>{r}</button>
-                  ))}
-                  <div className="flex-1" />
-                  <span className="text-[10px] text-gray-400 mr-2">{p.detalheEm ? `lido ${quandoRelativo(p.detalheEm)}` : 'ainda não lido'}</span>
-                  <button onClick={buscarNoGdoc} disabled={buscando} className={BTN_GDOC}>{buscando ? 'Lendo…' : 'Buscar no GDoc'}</button>
-                </div>
-                {p.detalheErro && <p className="text-[11px] text-amber-600 mb-2">{p.detalheErro}</p>}
-
-                {aba === 'despachos' && (
-                  hist.length === 0
-                    ? <p className="text-xs text-gray-400 py-4">Despachos ainda não lidos. Clique em "Buscar no GDoc" (leva uns 15 segundos).</p>
-                    : <div className="space-y-2.5">
-                        {hist.map((e, i) => {
-                          const t = String(e.despacho || '');
-                          const todo = abertos[i] ?? i === 0;
-                          return (
-                            <div key={i} className={`rounded-xl p-3.5 ${i === 0 ? 'bg-gray-50' : 'border border-gray-100'}`}>
-                              <p className="text-[11px] text-gray-500">
-                                <span className="font-semibold text-gray-700">{e.setor || '—'}</span>
-                                {' · '}{e.data} {String(e.hora || '').slice(0, 5)}{e.por ? ` · ${e.por}` : ''}
-                                {i === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: BLUE }}>último</span>}
-                              </p>
-                              {t
-                                ? <p className={`text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1.5 ${todo ? '' : 'line-clamp-3'}`}>{t}</p>
-                                : <p className="text-xs text-gray-400 mt-1">Sem despacho escrito.</p>}
-                              {t.length > 220 && (
-                                <button onClick={() => setAbertos(a => ({ ...a, [i]: !todo }))} className="text-[11px] font-semibold mt-1" style={{ color: BLUE }}>
-                                  {todo ? 'Mostrar menos' : 'Ler tudo'}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                )}
-
-                {aba === 'anexos' && (
-                  anexos.length === 0
-                    ? <p className="text-xs text-gray-400 py-4">Anexos ainda não lidos. Clique em "Buscar no GDoc".</p>
-                    : <div className="divide-y divide-gray-50">
-                        {anexos.map((a, i) => (
-                          <div key={i} className="flex items-center gap-3 py-2">
-                            <span className="text-[11px] text-gray-400 w-20 flex-shrink-0">{String(a.data || '').slice(0, 10)}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-gray-800 truncate" title={a.nome}>{a.nome}</p>
-                              <p className="text-[10px] text-gray-400 truncate">{a.tipo}</p>
-                            </div>
-                            {a.id
-                              ? <a href={`https://gdoc.belem.pa.gov.br/gdocprocessos/processo/anexo/visualizar/${a.id}/false`} target="_blank" rel="noopener noreferrer"
-                                   className={BTN_GDOC} onClick={e => e.stopPropagation()}>Abrir</a>
-                              : <span className="text-[10px] text-gray-300" title="Clique em Buscar no GDoc para habilitar">—</span>}
-                          </div>
-                        ))}
-                        <p className="text-[10px] text-gray-400 pt-2">O anexo abre no GDoc: é preciso estar logado nele neste navegador.</p>
-                      </div>
-                )}
-              </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       );
     }
 
