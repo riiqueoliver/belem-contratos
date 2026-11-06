@@ -9889,7 +9889,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [atualizando, setAtualizando] = React.useState(false);
 
       const ativos = itens.filter(p => p.presente);
-      const tipos = [...new Set(ativos.map(p => p.tipo).filter(Boolean))].sort();
+      // "OFICIO" e "OFÍCIO" são o mesmo tipo para o filtro
+      const ggTipo = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+      const tipos = [...new Map(ativos.filter(p => p.tipo).map(p => [ggTipo(p.tipo), p.tipo])).entries()].sort((a, b) => a[0].localeCompare(b[0]));
       const equipe = users.filter(u => u.username && !ARCANJO_ONLY.has(u.username) && u.approved !== false);
 
       const visoes = [
@@ -9903,7 +9905,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const q = busca.trim().toLowerCase();
       const lista = ativos
         .filter(fVisao)
-        .filter(p => !fTipo || p.tipo === fTipo)
+        .filter(p => !fTipo || ggTipo(p.tipo) === fTipo)
         .filter(p => !fResp || (fResp === '-' ? !p.atribuidoA : p.atribuidoA === fResp))
         .filter(p => !fPrior || (fPrior === '-' ? !GG_PRIOR[p.prioridade] : p.prioridade === fPrior))
         .filter(p => !q || [p.processo, p.tipo, p.interessado, p.setorOrigem, p.ultimoDespacho?.despacho,
@@ -9969,7 +9971,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               className={sel + ' flex-1 min-w-[220px]'} />
             <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={sel}>
               <option value="">Todos os tipos</option>
-              {tipos.map(t => <option key={t} value={t}>{t}</option>)}
+              {tipos.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
             </select>
             <select value={fResp} onChange={e => setFResp(e.target.value)} className={sel}>
               <option value="">Qualquer responsável</option>
@@ -10036,9 +10038,9 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [para, setPara] = React.useState(p.atribuidoA && p.atribuidoA !== eu ? p.atribuidoA : (equipe.find(u => u.username !== eu)?.username || ''));
       const [texto, setTexto] = React.useState('');
       const [salvando, setSalvando] = React.useState(false);
-      const [verHist, setVerHist] = React.useState(false);
-      const [verAnexos, setVerAnexos] = React.useState(false);
-      const [despachoTodo, setDespachoTodo] = React.useState(false);
+      const [aba, setAba] = React.useState('despachos');
+      const [abertos, setAbertos] = React.useState({});
+      const [buscando, setBuscando] = React.useState(false);
       React.useEffect(() => {
         const esc = e => { if (e.key === 'Escape') onFechar(); };
         document.addEventListener('keydown', esc);
@@ -10078,8 +10080,24 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
         ['Encaminhado para (GDoc)', p.encaminhadoPara],
       ];
       const notas = (p.anotacoes || []).slice().reverse();
-      const ult = p.ultimoDespacho;
-      const despacho = String(ult?.despacho || '');
+      const hist = p.historico || [];
+      const anexos = (p.anexos || []).slice().reverse();
+      // Lê despachos e anexos só deste processo, pela extensão
+      function buscarNoGdoc() {
+        setBuscando(true);
+        document.documentElement.removeAttribute('data-sgc-gdoc-ack');
+        const fim = msg => { setBuscando(false); window.removeEventListener('message', ouvir); clearTimeout(semExt); if (msg) addToast(msg); };
+        const ouvir = e => {
+          if (e.source !== window || e.data?.type !== 'SGC_GDOC_DETALHE_RESULTADO' || e.data.docId !== p.id) return;
+          const r = e.data.resumo || {};
+          fim(r.erro === 'sessao' ? 'Entre no GDoc: a sessão expirou.' : r.erro ? 'GDoc: ' + r.erro : `Lido: ${r.despachos} despacho(s) e ${r.anexos} anexo(s).`);
+        };
+        window.addEventListener('message', ouvir);
+        const semExt = setTimeout(() => {
+          if (!document.documentElement.getAttribute('data-sgc-gdoc-ack')) fim('Extensão SGC ↔ GDoc não encontrada neste navegador (versão 3.1 ou superior).');
+        }, 3000);
+        window.postMessage({ type: 'SGC_GDOC_DETALHE', docId: p.id }, location.origin);
+      }
       return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[300] flex justify-end" style={{ background: 'rgba(15,23,42,.35)' }} onClick={onFechar}>
           <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col slide-in" onClick={e => e.stopPropagation()}>
@@ -10159,48 +10177,67 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
               )}
 
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Último despacho no GDoc</p>
-                {ult ? (
-                  <div className="bg-gray-50 rounded-xl p-3.5">
-                    <p className="text-[11px] text-gray-500 mb-1.5">{ult.por || ult.setor} · {ult.data} {String(ult.hora || '').slice(0, 5)}</p>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{despachoTodo || despacho.length <= 600 ? despacho : despacho.slice(0, 600) + '…'}</p>
-                    {despacho.length > 600 && <button onClick={() => setDespachoTodo(v => !v)} className="text-[11px] font-semibold mt-1.5" style={{ color: BLUE }}>{despachoTodo ? 'Mostrar menos' : 'Ler tudo'}</button>}
-                  </div>
-                ) : <p className="text-xs text-gray-400">Ainda não lido. Aparece na próxima atualização.</p>}
+                <div className="flex items-center gap-1 border-b border-gray-100 mb-3">
+                  {[['despachos', `Despachos (${hist.length})`], ['anexos', `Anexos (${anexos.length})`]].map(([k, r]) => (
+                    <button key={k} onClick={() => setAba(k)}
+                      className="text-xs font-semibold px-3 py-2 -mb-px border-b-2 transition-colors"
+                      style={aba === k ? { borderColor: BLUE, color: BLUE } : { borderColor: 'transparent', color: '#9ca3af' }}>{r}</button>
+                  ))}
+                  <div className="flex-1" />
+                  <span className="text-[10px] text-gray-400 mr-2">{p.detalheEm ? `lido ${quandoRelativo(p.detalheEm)}` : 'ainda não lido'}</span>
+                  <button onClick={buscarNoGdoc} disabled={buscando} className={BTN_GDOC}>{buscando ? 'Lendo…' : 'Buscar no GDoc'}</button>
+                </div>
+                {p.detalheErro && <p className="text-[11px] text-amber-600 mb-2">{p.detalheErro}</p>}
+
+                {aba === 'despachos' && (
+                  hist.length === 0
+                    ? <p className="text-xs text-gray-400 py-4">Despachos ainda não lidos. Clique em "Buscar no GDoc" (leva uns 15 segundos).</p>
+                    : <div className="space-y-2.5">
+                        {hist.map((e, i) => {
+                          const t = String(e.despacho || '');
+                          const todo = abertos[i] ?? i === 0;
+                          return (
+                            <div key={i} className={`rounded-xl p-3.5 ${i === 0 ? 'bg-gray-50' : 'border border-gray-100'}`}>
+                              <p className="text-[11px] text-gray-500">
+                                <span className="font-semibold text-gray-700">{e.setor || '—'}</span>
+                                {' · '}{e.data} {String(e.hora || '').slice(0, 5)}{e.por ? ` · ${e.por}` : ''}
+                                {i === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: BLUE }}>último</span>}
+                              </p>
+                              {t
+                                ? <p className={`text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1.5 ${todo ? '' : 'line-clamp-3'}`}>{t}</p>
+                                : <p className="text-xs text-gray-400 mt-1">Sem despacho escrito.</p>}
+                              {t.length > 220 && (
+                                <button onClick={() => setAbertos(a => ({ ...a, [i]: !todo }))} className="text-[11px] font-semibold mt-1" style={{ color: BLUE }}>
+                                  {todo ? 'Mostrar menos' : 'Ler tudo'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                )}
+
+                {aba === 'anexos' && (
+                  anexos.length === 0
+                    ? <p className="text-xs text-gray-400 py-4">Anexos ainda não lidos. Clique em "Buscar no GDoc".</p>
+                    : <div className="divide-y divide-gray-50">
+                        {anexos.map((a, i) => (
+                          <div key={i} className="flex items-center gap-3 py-2">
+                            <span className="text-[11px] text-gray-400 w-20 flex-shrink-0">{String(a.data || '').slice(0, 10)}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-gray-800 truncate" title={a.nome}>{a.nome}</p>
+                              <p className="text-[10px] text-gray-400 truncate">{a.tipo}</p>
+                            </div>
+                            {a.id
+                              ? <a href={`https://gdoc.belem.pa.gov.br/gdocprocessos/processo/anexo/visualizar/${a.id}/false`} target="_blank" rel="noopener noreferrer"
+                                   className={BTN_GDOC} onClick={e => e.stopPropagation()}>Abrir</a>
+                              : <span className="text-[10px] text-gray-300" title="Clique em Buscar no GDoc para habilitar">—</span>}
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-gray-400 pt-2">O anexo abre no GDoc: é preciso estar logado nele neste navegador.</p>
+                      </div>
+                )}
               </div>
-
-              {(p.historico || []).length > 1 && (
-                <div>
-                  <button onClick={() => setVerHist(v => !v)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">
-                    {verHist ? '▾' : '▸'} Tramitação ({p.historico.length})
-                  </button>
-                  {verHist && (
-                    <div className="mt-2 space-y-2">
-                      {p.historico.map((e, i) => (
-                        <div key={i} className="text-xs border-b border-gray-50 pb-2">
-                          <p className="text-gray-700"><span className="font-semibold">{e.setor}</span> <span className="text-gray-400">· {e.data} {String(e.hora || '').slice(0, 5)}{e.por ? ` · ${e.por}` : ''}</span></p>
-                          {e.despacho && <p className="text-gray-500 mt-0.5 line-clamp-3 whitespace-pre-wrap">{e.despacho}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {(p.anexos || []).length > 0 && (
-                <div>
-                  <button onClick={() => setVerAnexos(v => !v)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">
-                    {verAnexos ? '▾' : '▸'} Anexos ({p.anexos.length})
-                  </button>
-                  {verAnexos && (
-                    <div className="mt-2 space-y-1">
-                      {p.anexos.slice().reverse().map((a, i) => (
-                        <p key={i} className="text-xs text-gray-600 flex gap-2"><span className="text-gray-400 w-24 flex-shrink-0">{String(a.data || '').slice(0, 10)}</span><span className="flex-1">{a.nome}</span><span className="text-gray-400">{a.tipo}</span></p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>,

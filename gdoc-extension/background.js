@@ -23,6 +23,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     varrer('manual').then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
     return true;
   }
+  if (msg?.type === 'DETALHE_CAIXA') {
+    detalharUm(String(msg.docId || '')).then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
+    return true;
+  }
   // Botão "Atualizar agora" do módulo Gestão do GDoc, no SGC: só a caixa do setor
   if (msg?.type === 'VARREDURA_CAIXA') {
     varrer('caixa').then(r => sendResponse(r)).catch(e => sendResponse({ erro: e.message }));
@@ -261,6 +265,36 @@ async function varrer(motivo, soParcela) {
    Os campos do GDoc são atualizados a cada varredura; os do SGC (prioridade, responsável,
    anotações) nunca são tocados aqui. Processo que sai do setor fica com presente = false. */
 const chaveCaixa = i => `${i.numero}-${i.ano}-${String(i.orgao || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '').toUpperCase()}`;
+// Despachos (todos os encaminhamentos) e anexos (com o id para abrir no GDoc) de um processo
+async function lerDetalheCaixa(tabId, numero, ano, orgao) {
+  await abrirEm(tabId, GDOC + '/processos/pesquisa');
+  let det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [numero, ano, orgao]);
+  if (det?.erro === 'sessao' && await garantirSessao(tabId))
+    det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [numero, ano, orgao]);
+  if (!det?.ok) return { detalheErro: det?.erro === 'nao_encontrado' ? 'Processo não encontrado na pesquisa do GDoc.' : (det?.detalhe || det?.erro || 'leitura falhou') };
+  const enc = det.encaminhamentos || [];
+  return {
+    situacao: det.situacao || '', detalheEm: new Date().toISOString(), detalheV2: true, detalheErro: '',
+    ultimoDespacho: enc[0] ? { ...enc[0], despacho: String(enc[0].despacho || '').slice(0, 8000) } : null,
+    historico: enc.slice(0, 60).map(e => ({ ...e, despacho: String(e.despacho || '').slice(0, 6000) })),
+    anexos: (det.anexos || []).slice(-120).map(a => ({ nome: a.nome, tipo: a.tipo, data: a.data, id: a.id || '' })),
+  };
+}
+
+// Botão "Buscar no GDoc" da ficha do processo, no SGC
+async function detalharUm(docId) {
+  const d = (await SGC.listar('gdoc_caixa')).find(x => x.__id === docId);
+  if (!d) return { erro: 'Processo não encontrado na caixa.' };
+  const janela = await chrome.windows.create({ url: 'about:blank', state: 'minimized', focused: false });
+  try {
+    const tabId = janela.tabs[0].id;
+    if (!(await garantirSessao(tabId))) return { erro: 'sessao' };
+    const det = await lerDetalheCaixa(tabId, d.numero, d.ano, d.orgao);
+    await SGC.atualizar('gdoc_caixa', docId, det);
+    return det.detalheErro ? { erro: det.detalheErro } : { ok: true, despachos: det.historico.length, anexos: det.anexos.length };
+  } finally { chrome.windows.remove(janela.id).catch(() => {}); }
+}
+
 async function varrerCaixa(tabId, resumo) {
   await abrirEm(tabId, GDOC + '/processos/meusprocessos');
   let r = await rodar(tabId, () => window.__gdocLerCaixa());
@@ -284,21 +318,9 @@ async function varrerCaixa(tabId, resumo) {
       tipo: i.tipo, interessado: i.interessado, status: i.status, encaminhadoPara: i.encaminhadoPara,
       diasNoSetor: i.diasNoSetor, prioridadeGdoc: i.prioridadeGdoc, confidencial: i.confidencial,
       juntado: i.juntado, presente: true, vistoEm: agora };
-    // Despacho e histórico: lidos quando o processo chega (ou volta) ao setor
-    const chegou = !velho || !velho.presente || velho.recebimento !== i.recebimento || !velho.detalheEm;
-    if (chegou) {
-      await abrirEm(tabId, GDOC + '/processos/pesquisa');
-      const det = await rodar(tabId, (n, a, o) => window.__gdocLerProcesso(n, a, o), [i.numero, i.ano, i.orgao]);
-      if (det?.ok) {
-        const enc = det.encaminhamentos || [];
-        Object.assign(doGdoc, {
-          situacao: det.situacao || '', detalheEm: agora,
-          ultimoDespacho: enc[0] ? { ...enc[0], despacho: String(enc[0].despacho || '').slice(0, 4000) } : null,
-          historico: enc.slice(0, 25).map(e => ({ ...e, despacho: String(e.despacho || '').slice(0, 1500) })),
-          anexos: (det.anexos || []).slice(-40).map(a => ({ nome: a.nome, tipo: a.tipo, data: a.data })),
-        });
-      }
-    }
+    // Despachos e anexos: lidos quando o processo chega (ou volta) ao setor
+    const chegou = !velho || !velho.presente || velho.recebimento !== i.recebimento || !velho.detalheEm || !velho.detalheV2;
+    if (chegou) Object.assign(doGdoc, await lerDetalheCaixa(tabId, i.numero, i.ano, i.orgao));
     if (velho) {
       if (!velho.presente) Object.assign(doGdoc, { entrouEm: agora, saiuEm: null });
       await SGC.atualizar('gdoc_caixa', id, doGdoc);

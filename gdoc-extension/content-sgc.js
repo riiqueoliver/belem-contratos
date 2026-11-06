@@ -41,3 +41,14 @@ window.addEventListener('message', e => {
     window.postMessage({ type: 'SGC_GDOC_CAIXA_RESULTADO', resumo }, location.origin);
   });
 });
+
+// Ficha do processo: "Buscar no GDoc" lê despachos e anexos daquele processo
+window.addEventListener('message', e => {
+  if (e.source !== window || e.data?.type !== 'SGC_GDOC_DETALHE') return;
+  const docId = String(e.data.docId || '');
+  document.documentElement.setAttribute('data-sgc-gdoc-ack', '1');
+  chrome.runtime.sendMessage({ type: 'DETALHE_CAIXA', docId }, resumo => {
+    if (chrome.runtime.lastError) resumo = { erro: 'A extensão foi recarregada. Atualize a página e tente de novo.' };
+    window.postMessage({ type: 'SGC_GDOC_DETALHE_RESULTADO', docId, resumo }, location.origin);
+  });
+});
