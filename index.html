@@ -13078,23 +13078,97 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
     // Linhas do cronograma mensal — repasses entram só quando solicitado
     function cronLinhas(mostrarRepasses, nomeBD, nomeParc) {
       const base = [
-        { k:'bruto',     l:'Faturamento bruto',        sub:'NF emitida',        c:'#1e3a8a', bg:'#F4F7FB', bar:'#3b82f6' },
-        { k:'imposto',   l:'(−) Impostos',             sub:'retidos na fonte',  c:'#9a3412', bg:'#FCE4D6', bar:'#ea580c', neg:true },
-        { k:'liquido',   l:'(=) Líquido',              sub:'após impostos',     c:'#334155', bg:'#f1f5f9', bar:'#64748b' },
+        { k:'bruto',     l:'Faturamento bruto',        sub:'NF emitida',        c:'#0B2B5E', bg:'#F4F7FB', bar:'#0B2B5E' },
+        { k:'imposto',   l:'(−) Tributos',             sub:'recolhidos',        c:'#9A4A1E', bg:'#FBF1EA', bar:'#C2703F', neg:true },
+        { k:'liquido',   l:'(=) Líquido',              sub:'após tributos',     c:'#334155', bg:'#F8FAFC', bar:'#64748B' },
       ];
       if (mostrarRepasses) {
         base.push(
-          { k:'repasse', l:`Repasse — ${nomeParc}`, sub:'valor transferido',  c:'#92400e', bg:'#FFE699', bar:'#d97706' },
-          { k:'bd',      l:`Retido — ${nomeBD}`,    sub:'resultado no mês',   c:'#166534', bg:'#E2EFDA', bar:'#16a34a' },
-          { k:'acum',    l:`Acumulado — ${nomeBD}`, sub:'retido acumulado',   c:'#14532d', bg:'#d9ecc7', bar:'#15803d', acumulado:true },
+          { k:'repasse', l:`Repasse — ${nomeParc}`, sub:'valor transferido',  c:'#7A5E06', bg:'#FBF6E6', bar:'#C9A227' },
+          { k:'bd',      l:`Fica — ${nomeBD}`,      sub:'resultado no mês',   c:'#1E5B22', bg:'#F2F8F4', bar:'#2E7D32' },
+          { k:'acum',    l:`Acumulado — ${nomeBD}`, sub:'resultado acumulado', c:'#1E5B22', bg:'#EAF4EC', bar:'#2E7D32', acumulado:true },
         );
       }
-      base.push({ k:'acumBruto', l:'Acumulado', sub:'total faturado no contrato', c:'#14532d', bg:'#C6E0B4', bar:'#15803d', acumulado:true });
+      base.push({ k:'acumBruto', l:'Acumulado', sub:'total faturado no contrato', c:'#0B2B5E', bg:'#EEF3FA', bar:'#0B2B5E', acumulado:true });
       return base;
     }
 
+    /* Cores fixas da divisão do valor (iguais em barras, gráfico e indicadores) */
+    const CRON_COR = { bruto: '#0B2B5E', imposto: '#C2703F', repasse: '#C9A227', bd: '#2E7D32', liquido: '#64748B' };
+    const CRON_MESES_ABREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    // Mês do contrato → "nov/26" (com data de início) ou "M01"
+    function cronRotuloMes(m, dataInicio) {
+      const k = /^(\d{4})-(\d{2})/.exec(dataInicio || '');
+      if (!k) return `M${String(m).padStart(2, '0')}`;
+      const idx = (+k[2] - 1) + (m - 1);
+      const ano = +k[1] + Math.floor(idx / 12);
+      return `${CRON_MESES_ABREV[idx % 12]}/${String(ano).slice(2)}`;
+    }
+
+    function cronNomeCurto(nome, padrao) {
+      const n = String(nome || '').trim();
+      if (!n) return padrao;
+      if (/BEL[ÉE]M DIGITAL/i.test(n)) return 'Belém Digital';
+      return n.length > 32 ? n.slice(0, 31).trim() + '…' : n;
+    }
+
+    /* Barra única com o destino de cada real faturado no contrato inteiro */
+    function CronDivisao({ calc, nomeBD, nomeParc }) {
+      const tot = calc.tot.bruto;
+      if (!(tot > 0)) return null;
+      const partes = [
+        ['Tributos', calc.tot.imposto, CRON_COR.imposto],
+        [`Repasse · ${nomeParc}`, calc.tot.repasse, CRON_COR.repasse],
+        [`Fica com ${nomeBD}`, calc.tot.bd, CRON_COR.bd],
+      ];
+      return (
+        <div className="mt-4">
+          <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
+            {partes.map(([r, v, c]) => <span key={r} title={`${r}: ${cronBRL(v)}`} style={{ width: `${Math.max(v, 0) / tot * 100}%`, background: c }} />)}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-[11px] text-slate-500">
+            {partes.map(([r, v, c]) => (
+              <span key={r} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm" style={{ background: c }} />{r}
+                <b className="text-slate-700 tabular-nums">{(Math.max(v, 0) / tot * 100).toFixed(1).replace('.', ',')}%</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* Colunas mensais empilhadas: tributos, repasse e o que fica com a contratada */
+    function CronGraficoMensal({ calc, dataInicio, prazo }) {
+      const meses = calc.meses || [];
+      const max = Math.max(...meses.map(m => m.bruto), 1);
+      const H = 170;
+      if (!meses.some(m => m.bruto > 0)) return <p className="text-xs text-slate-400 py-6 text-center">Sem faturamento — adicione itens com valor.</p>;
+      return (
+        <div className="overflow-x-auto">
+          <div className="flex items-end gap-1 min-w-full" style={{ height: H + 34, minWidth: meses.length * 22 }}>
+            {meses.map(m => {
+              const h = m.bruto / max * H;
+              const parte = v => m.bruto > 0 ? Math.max(v, 0) / m.bruto * h : 0;
+              return (
+                <div key={m.m} className="flex-1 flex flex-col items-center justify-end h-full group relative" style={{ minWidth: 18 }}
+                     title={`${cronRotuloMes(m.m, dataInicio)} · NF ${cronBRL(m.bruto)}\nTributos ${cronBRL(m.imposto)}\nRepasse ${cronBRL(m.repasse)}\nFica ${cronBRL(m.bd)}`}>
+                  <div className="w-full flex flex-col-reverse rounded-t overflow-hidden" style={{ maxWidth: 34, opacity: m.m > prazo ? 0.45 : 1 }}>
+                    <span style={{ height: parte(m.imposto), background: CRON_COR.imposto }} />
+                    <span style={{ height: parte(m.repasse), background: CRON_COR.repasse }} />
+                    <span style={{ height: parte(m.bd), background: CRON_COR.bd }} />
+                  </div>
+                  <span className="text-[9px] mt-1.5 whitespace-nowrap" style={{ color: m.m > prazo ? '#B91C1C' : '#94A3B8' }}>{cronRotuloMes(m.m, dataInicio)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     /* Tabela mensal do cronograma (read-only, reaproveitada em 2 telas) */
-    function CronogramaTabelaMensal({ calc, prazo, itens = [], nomeBD = 'Contratada', nomeParc = 'Parceira' }) {
+    function CronogramaTabelaMensal({ calc, prazo, itens = [], nomeBD = 'Contratada', nomeParc = 'Parceira', dataInicio = '' }) {
       const [mostrarRepasses, setMostrarRepasses] = React.useState(false);
       const [abrirItens,      setAbrirItens]      = React.useState(false);
       // Renderiza todos os meses calculados — inclusive os que passam do prazo,
@@ -13110,18 +13184,18 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
             const cols = calc.meses.slice(ini-1, fim);
             const brutoBloco = cols.reduce((s,c) => s + c.bruto, 0);
             return (
-              <div key={b} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div key={b} className="bg-white rounded-xl border overflow-hidden" style={{borderColor:'#E3E8EF'}}>
                 <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-baseline gap-2.5">
-                    <h2 className="font-bold text-sm text-gray-700">Cronograma físico-financeiro</h2>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{background:'#F4F7FB', color:'#4338ca'}}>
+                    <h2 className="font-semibold text-sm text-slate-800">Cronograma físico-financeiro</h2>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{background:'#F4F7FB', color:'#0B2B5E'}}>
                       Ano {b+1} · meses {ini}–{fim}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Faturamento no período</span>
-                      <span className="text-sm font-black" style={{color:'#1e3a8a'}}>{cronBRL(brutoBloco)}</span>
+                      <span className="text-sm font-semibold" style={{color:'#0B2B5E'}}>{cronBRL(brutoBloco)}</span>
                     </div>
                     <button onClick={() => setMostrarRepasses(v => !v)}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all"
@@ -13150,11 +13224,11 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                               style={{ borderBottom:'2px solid #e2e8f0',
                                        background: c.bruto ? '#f8fafc' : '#fff',
                                        color: c.bruto ? '#475569' : '#cbd5e1' }}>
-                            M{String(c.m).padStart(2,'0')}
+                            {cronRotuloMes(c.m, dataInicio)}
                           </th>
                         ))}
                         <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-widest whitespace-nowrap"
-                            style={{borderBottom:'2px solid #c7d2fe', background:'#F4F7FB', color:'#3730a3'}}>Total</th>
+                            style={{borderBottom:'2px solid #E3E8EF', background:'#F4F7FB', color:'#0B2B5E'}}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -13248,40 +13322,43 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    /* Resumo da divisão (read-only, reaproveitado em 2 telas) */
+
+    /* Demonstrativo do contrato (read-only, aparece no Cronograma e na página do contrato) */
     function CronogramaResumo({ calc, pctBD, nomeBD, nomeParc, aliquotaTotal }) {
       const linhas = [
-        { l:`Valor bruto do contrato — NF emitida por ${nomeBD}`, v:calc.tot.bruto,   c:'#1e3a8a', bg:'#F4F7FB', bar:'#3b82f6' },
-        { l:`(−) Impostos recolhidos (${cronPctTxt(aliquotaTotal)})`, v:-calc.tot.imposto, c:'#9a3412', bg:'#FCE4D6', bar:'#ea580c' },
-        { l:'(=) Valor líquido após impostos',                    v:calc.tot.liquido, c:'#334155', bg:'#f1f5f9', bar:'#64748b' },
-        { l:`Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)} do líquido)`, v:calc.tot.repasse, c:'#92400e', bg:'#FFE699', bar:'#d97706' },
-        { l:`Fica com ${nomeBD} (${cronPctTxt(pctBD)} do líquido)`,           v:calc.tot.bd,      c:'#166534', bg:'#E2EFDA', bar:'#16a34a', destaque:true },
+        { l:`Valor bruto — NF de ${nomeBD}`,                       v:calc.tot.bruto,    cor:'#0B2B5E' },
+        { l:`(−) Tributos (${cronPctTxt(aliquotaTotal)})`,          v:-calc.tot.imposto, cor:'#C2703F' },
+        { l:'(=) Líquido após tributos',                             v:calc.tot.liquido,  cor:'#64748B' },
+        { l:`Repasse à ${nomeParc} (${cronPctTxt(calc.pctParc)})`,   v:calc.tot.repasse,  cor:'#C9A227' },
+        { l:`Fica com ${nomeBD} (${cronPctTxt(pctBD)})`,             v:calc.tot.bd,       cor:'#2E7D32', destaque:true },
       ];
       const maxAbs = Math.max(...linhas.map(r => Math.abs(r.v)), 1);
       return (
-        <div className="space-y-2">
-          {linhas.map((r,i) => (
-            <div key={i} className="rounded-xl overflow-hidden" style={{background:r.bg, borderLeft:`4px solid ${r.bar}`}}>
-              <div className="px-4 py-2.5 flex items-center justify-between gap-4">
-                <span className={`${r.destaque?'font-black':'font-semibold'} text-[13px]`} style={{color:r.c}}>{r.l}</span>
-                <span className={`${r.destaque?'font-black text-lg':'font-bold text-sm'} whitespace-nowrap`}
-                      style={{color:r.c, fontVariantNumeric:'tabular-nums'}}>{cronBRL(r.v)}</span>
+        <div>
+          <div className="space-y-2.5">
+            {linhas.map((r,i) => (
+              <div key={i}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className={`text-xs ${r.destaque ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{r.l}</span>
+                  <span className={`whitespace-nowrap tabular-nums ${r.destaque ? 'text-base font-semibold' : 'text-sm font-medium'}`}
+                        style={{color: r.destaque ? r.cor : '#0F172A'}}>{cronBRL(r.v)}</span>
+                </div>
+                <div className="h-1 rounded-full mt-1 bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full" style={{width:`${(Math.abs(r.v)/maxAbs)*100}%`, background:r.cor}} />
+                </div>
               </div>
-              <div style={{height:3, background:'rgba(0,0,0,.06)'}}>
-                <div style={{height:'100%', width:`${(Math.abs(r.v)/maxAbs)*100}%`, background:r.bar, opacity:.55}} />
-              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 mt-4">
+            <div className="rounded-lg p-3" style={{background:'#F8FAFC'}}>
+              <p className="text-[11px] text-slate-500">Margem nominal</p>
+              <p className="text-xl font-semibold text-slate-800 tabular-nums">{cronPctTxt(pctBD)}</p>
+              <p className="text-[10px] text-slate-400">o percentual acordado</p>
             </div>
-          ))}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="rounded-xl border p-3" style={{background:'#f8fafc', borderColor:'#e2e8f0'}}>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margem nominal</p>
-              <p className="text-2xl font-black text-gray-700">{cronPctTxt(pctBD)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">acordado · fica com a contratada</p>
-            </div>
-            <div className="rounded-xl border p-3" style={{background:'#E2EFDA', borderColor:'#a7d08c'}}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#3f6212'}}>Margem efetiva</p>
-              <p className="text-2xl font-black" style={{color:'#166534'}}>{cronPctTxt(calc.margemEfetiva)}</p>
-              <p className="text-[10px] mt-0.5" style={{color:'#4d7c0f'}}>do bruto, após impostos · −{cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)}</p>
+            <div className="rounded-lg p-3" style={{background:'#F2F8F4'}}>
+              <p className="text-[11px]" style={{color:'#1E5B22'}}>Margem efetiva</p>
+              <p className="text-xl font-semibold tabular-nums" style={{color:'#2E7D32'}}>{cronPctTxt(calc.margemEfetiva)}</p>
+              <p className="text-[10px]" style={{color:'#1E5B22'}}>do bruto · −{cronPctTxt(cronNum(pctBD) - calc.margemEfetiva)} de tributo</p>
             </div>
           </div>
         </div>
@@ -13550,15 +13627,19 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const [saving,    setSaving]    = React.useState(false);
       const [exporting, setExporting] = React.useState(false);
       const [showAlertas, setShowAlertas] = React.useState(false);
+      const [buscaLista,  setBuscaLista]  = React.useState('');
+      const [baseJson,    setBaseJson]    = React.useState(null);   // rascunho como foi aberto/salvo (detecta alteração pendente)
+      const [metaMargem,  setMetaMargem]  = React.useState('');
       const fileRef = React.useRef(null);
 
       // Carrega o rascunho editável ao selecionar um cronograma
       React.useEffect(() => {
         setShowAlertas(false);
-        if (!selId) { setDraft(null); return; }
+        if (!selId) { setDraft(null); setBaseJson(null); return; }
         const c = cronogramas.find(x => x.id === selId);
-        if (!c) { setDraft(null); return; }
-        setDraft({
+        if (!c) { setDraft(null); setBaseJson(null); return; }
+        setMetaMargem('');
+        const aberto = ({
           contrato: { ...(c.contrato || {}) },
           itens: (c.itens || []).map(i => ({ ...i })),
           params: {
@@ -13571,7 +13652,27 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
           naoLocaliz: c.naoLocaliz || [],
           confianca:  c.confianca,
         });
+        setDraft(aberto);
+        setBaseJson(JSON.stringify(aberto));
       }, [selId]);
+
+      React.useEffect(() => {
+        try { window.scrollTo(0, 0); document.querySelectorAll('main, main *').forEach(el => { if (el.scrollTop) el.scrollTop = 0; }); } catch (e) {}
+      }, [selId]);
+
+      // Copia um cronograma para simular outro cenário sem mexer no original
+      async function duplicar(c) {
+        try {
+          const { id, createdAt, ...resto } = c;
+          const copia = JSON.parse(JSON.stringify(resto));
+          copia.contrato = { ...(copia.contrato || {}), objeto: ((copia.contrato || {}).objeto || copia.nome || 'Cronograma') + ' (cópia)' };
+          copia.nome = copia.contrato.objeto;
+          copia.contratoVinculado = '';
+          const novoId = await onAdd(copia);
+          addToast('Cópia criada — ajuste os valores para simular o novo cenário.');
+          if (novoId) setSelId(novoId);
+        } catch (e) { addToast('Erro ao duplicar: ' + (e.message || 'falha')); }
+      }
 
       const setC = (k, v) => setDraft(d => ({ ...d, contrato: { ...d.contrato, [k]: v } }));
       const setP = (k, v) => setDraft(d => ({ ...d, params:   { ...d.params,   [k]: v } }));
@@ -13786,115 +13887,118 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             contratoVinculado: draft.contratoVinculado || '',
             nome: draft.contrato.objeto || '',
           });
+          setBaseJson(JSON.stringify(draft));
           addToast('Cronograma salvo com sucesso!');
         } catch(e) {
           addToast('Erro ao salvar: ' + (e.message || 'falha'));
         } finally { setSaving(false); }
       }
 
-      const ic  = "w-full border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all";
-      const icY = ic + " font-bold";
-      const yStyle = { background:'#FFF2CC', borderColor:'#e5c96a' };
-      const lc  = "block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1";
-      const fc  = v => Math.round(v).toLocaleString('pt-BR');
+      /* ── Estilos do design system ── */
+      const ic  = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-800 focus:outline-none focus:border-slate-400 transition-colors";
+      const icY = ic;
+      const lc  = "block text-xs font-medium text-slate-500 mb-1";
+      const card = "bg-white rounded-xl border p-5";
+      const cardSt = { borderColor:'#E3E8EF' };
 
       /* ── LISTA ── */
       if (!draft) {
+        const q = buscaLista.trim().toLowerCase();
+        const lista = cronogramas
+          .map(c => {
+            let r = null;
+            try {
+              const aliq = cronSomaAliq(c.params?.tributos || CRON_TRIBUTOS_PADRAO);
+              r = calcCronograma({ itens: c.itens || [], prazo: c.contrato?.prazo_meses, pctBD: c.params?.pctBD ?? 15, base: c.params?.base || 'LIQUIDO', aliquotaTotal: aliq });
+            } catch (e) { r = null; }
+            return { c, r };
+          })
+          .filter(({ c }) => !q || [c.contrato?.objeto, c.nome, c.contrato?.contratante, c.contrato?.parceiro_executor, c.contratoVinculado].join(' ').toLowerCase().includes(q));
         return (
-          <div className="flex-1 overflow-y-auto">
+          <div key="lista" className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto px-6 py-6 space-y-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style={{background: BLUE}}>
-                  <Calculator className="w-5 h-5 text-white" />
-                </div>
+              <div className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
-                  <h1 className="text-xl font-black text-gray-800">Cronograma Financeiro</h1>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Rateio entre contratada e parceira, com cálculo de impostos e margem efetiva</p>
+                  <h1 className="text-xl font-semibold" style={{color: BLUE}}>Cronograma Financeiro</h1>
+                  <p className="text-xs text-slate-500 mt-0.5">Quem emite a NF recolhe os tributos e repassa a parte da parceira. Aqui você simula a divisão mês a mês.</p>
                 </div>
+                <input value={buscaLista} onChange={e => setBuscaLista(e.target.value)} placeholder="Buscar cronograma…"
+                  className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white w-64 focus:outline-none focus:border-slate-400" />
               </div>
 
               {/* Novo cronograma — IA ou manual */}
               <div className="grid lg:grid-cols-2 gap-4">
-                {/* Via IA */}
-                <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{borderColor:'#D5DEEB'}}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#E6ECF5', color:'#1d4ed8'}}>IA</span>
-                    <h2 className="font-bold text-sm text-gray-700">Analisar contrato em PDF</h2>
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800">Criar a partir do contrato (PDF)</p>
+                  <p className="text-xs text-slate-500 mt-0.5 mb-3">A IA lê itens, valores, prazo e partes. Você confere tudo antes de salvar.</p>
+                  <div className="flex gap-2">
+                    <input ref={fileRef} type="file" accept="application/pdf"
+                      onChange={e => setPdfFile(e.target.files?.[0] || null)}
+                      className="flex-1 min-w-0 text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
+                    <button onClick={analisarPdf} disabled={!pdfFile || analyzing}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 whitespace-nowrap" style={{background: BLUE}}>
+                      {analyzing ? 'Analisando…' : 'Analisar'}
+                    </button>
                   </div>
-                  <p className="text-[11px] text-gray-400 mb-4">A IA extrai itens, valores, prazo e partes automaticamente.</p>
-                  <label className={lc}>Contrato / Proposta (PDF)</label>
-                  <input ref={fileRef} type="file" accept="application/pdf"
-                    onChange={e => setPdfFile(e.target.files?.[0] || null)}
-                    className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer mb-3" />
-                  <button onClick={analisarPdf} disabled={!pdfFile || analyzing}
-                    className="w-full px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
-                    style={{background: BLUE}}>
-                    {analyzing ? 'Analisando contrato…' : 'Analisar e criar cronograma'}
-                  </button>
                 </div>
-
-                {/* Manual */}
-                <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{borderColor:'#e5e7eb'}}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#f3f4f6', color:'#4b5563'}}>MANUAL</span>
-                    <h2 className="font-bold text-sm text-gray-700">Cadastrar / simular</h2>
-                  </div>
-                  <p className="text-[11px] text-gray-400 mb-4">
-                    Crie um cronograma em branco para simular repasses, percentuais e cenários sem precisar de um contrato.
-                  </p>
-                  <div className="rounded-xl p-3 mb-3 text-[11px] text-gray-500" style={{background:'#f8fafc'}}>
-                    Já vem com os tributos padrão (14,45%), 15% / 85% e um item de exemplo — é só ajustar.
-                  </div>
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800">Simular do zero</p>
+                  <p className="text-xs text-slate-500 mt-0.5 mb-3">Começa com os tributos de referência (14,45%), 15% para a contratada e um item de exemplo.</p>
                   <button onClick={criarManual} disabled={saving}
-                    className="w-full px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-gray-50 border-2"
-                    style={{borderColor: BLUE, color: BLUE}}>
-                    + Criar cronograma em branco
+                    className="px-4 py-2 rounded-lg text-xs font-semibold border bg-white hover:bg-slate-50" style={{borderColor:'#E3E8EF', color: BLUE}}>
+                    + Novo cronograma em branco
                   </button>
                 </div>
               </div>
 
-              {/* Lista */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h2 className="font-bold text-sm text-gray-700">Cronogramas salvos</h2>
-                  <span className="text-[11px] text-gray-400">{cronogramas.length} registro{cronogramas.length!==1?'s':''}</span>
-                </div>
-                {cronogramas.length === 0 ? (
-                  <div className="text-center py-14 text-gray-300">
-                    <Calculator className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">Nenhum cronograma criado ainda</p>
+              {/* Cronogramas salvos */}
+              <div>
+                <p className="text-sm font-semibold text-slate-800 mb-2">Cronogramas salvos <span className="text-slate-400 font-normal">· {cronogramas.length}</span></p>
+                {lista.length === 0 ? (
+                  <div className={card + ' text-center text-sm text-slate-400 py-12'} style={cardSt}>
+                    {cronogramas.length ? 'Nenhum cronograma com essa busca.' : 'Nenhum cronograma criado ainda.'}
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead style={{background:'#f8fafc'}}>
-                      <tr>
-                        {['Objeto','Contratante','Parceira','Prazo','Valor Global','Contrato',''].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cronogramas.map(c => (
-                        <tr key={c.id} className="border-t border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer"
-                            onClick={() => setSelId(c.id)}>
-                          <td className="px-5 py-3 font-semibold text-gray-800 max-w-[280px]"><p className="truncate">{c.contrato?.objeto || c.nome || '—'}</p></td>
-                          <td className="px-5 py-3 text-gray-600 max-w-[180px]"><p className="truncate">{c.contrato?.contratante || '—'}</p></td>
-                          <td className="px-5 py-3 text-gray-600">{c.contrato?.parceiro_executor || '—'}</td>
-                          <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{Math.round(cronNum(c.contrato?.prazo_meses))} meses</td>
-                          <td className="px-5 py-3 font-bold whitespace-nowrap" style={{color: GREEN}}>{cronBRL(c.contrato?.valor_global)}</td>
-                          <td className="px-5 py-3 whitespace-nowrap">
-                            {c.contratoVinculado
-                              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-md" style={{background:'#dcfce7', color:'#15803d'}}>{c.contratoVinculado}</span>
-                              : <span className="text-gray-300 text-[11px]">—</span>}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <button onClick={e => { e.stopPropagation(); if (window.confirm('Excluir este cronograma?')) onDelete(c.id); }}
-                              className="text-xs font-semibold text-red-500 hover:underline">excluir</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {lista.map(({ c, r }) => {
+                      const valor = r ? r.tot.bruto : cronNum(c.contrato?.valor_global);
+                      return (
+                        <div key={c.id} onClick={() => setSelId(c.id)}
+                             className="bg-white rounded-xl border p-4 cursor-pointer hover:border-slate-300 transition-colors" style={cardSt}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800 truncate">{c.contrato?.objeto || c.nome || 'Sem objeto'}</p>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {c.contrato?.contratante || 'Contratante não informado'}
+                                {c.contrato?.parceiro_executor ? ` · parceira ${c.contrato.parceiro_executor}` : ''}
+                              </p>
+                            </div>
+                            {c.contratoVinculado && <span className="text-[10px] font-semibold px-2 py-0.5 rounded flex-shrink-0" style={{background:'#F4F7FB', color: BLUE}}>{c.contratoVinculado}</span>}
+                          </div>
+                          {r && (
+                            <>
+                              <div className="flex h-1.5 rounded-full overflow-hidden mt-3 bg-slate-100">
+                                {r.tot.bruto > 0 && [[r.tot.imposto, CRON_COR.imposto], [r.tot.repasse, CRON_COR.repasse], [r.tot.bd, CRON_COR.bd]].map(([v, cor], k) => (
+                                  <span key={k} style={{ width: `${Math.max(v, 0) / r.tot.bruto * 100}%`, background: cor }} />
+                                ))}
+                              </div>
+                              <div className="grid grid-cols-4 gap-2 mt-2.5 text-[11px]">
+                                <div><p className="text-slate-400">Contrato</p><p className="font-semibold text-slate-800 tabular-nums truncate">{fmtCurrencyShort(valor) === '—' ? 'R$ 0' : fmtCurrencyShort(valor)}</p></div>
+                                <div><p className="text-slate-400">Prazo</p><p className="font-semibold text-slate-800">{Math.round(cronNum(c.contrato?.prazo_meses)) || '—'} meses</p></div>
+                                <div><p className="text-slate-400">Contratada</p><p className="font-semibold text-slate-800">{cronPctTxt(c.params?.pctBD ?? 15)}</p></div>
+                                <div><p className="text-slate-400">Margem efetiva</p><p className="font-semibold tabular-nums" style={{color: r.margemEfetiva < 5 ? '#B91C1C' : CRON_COR.bd}}>{cronPctTxt(r.margemEfetiva)}</p></div>
+                              </div>
+                            </>
+                          )}
+                          <div className="flex items-center gap-3 mt-3 pt-2.5 border-t text-[11px]" style={{borderColor:'#F1F4F8'}}>
+                            <span className="text-slate-400 flex-1">{(c.itens || []).length} ite{(c.itens || []).length !== 1 ? 'ns' : 'm'}</span>
+                            <button onClick={e => { e.stopPropagation(); duplicar(c); }} className="font-semibold text-slate-500 hover:text-slate-800">Duplicar</button>
+                            <button onClick={e => { e.stopPropagation(); if (window.confirm('Excluir este cronograma?')) onDelete(c.id); }} className="font-semibold text-red-500 hover:text-red-700">Excluir</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -13904,331 +14008,368 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
 
       /* ── DETALHE ── */
       const prazo = Math.max(1, Math.round(cronNum(draft.contrato.prazo_meses)) || 1);
-      const blocos = Math.ceil(prazo / 12);
-      const nomeBD   = draft.contrato.contratada_emissora_nf || 'Contratada';
-      const nomeParc = draft.contrato.parceiro_executor || 'Parceira';
+      const nomeBD   = cronNomeCurto(draft.contrato.contratada_emissora_nf, 'Contratada');
+      const nomeParc = cronNomeCurto(draft.contrato.parceiro_executor, 'Parceira');
+      const sujo = baseJson !== null && JSON.stringify(draft) !== baseJson;
+      const somaItens = draft.itens.reduce((s, it) => s + cronNum(it.valor_total), 0);
+      // Mesma configuração com a outra base de repasse — para negociar sabendo a diferença
+      const outraBase = draft.params.base === 'BRUTO' ? 'LIQUIDO' : 'BRUTO';
+      const calcOutra = calcCronograma({ itens: draft.itens, prazo: draft.contrato.prazo_meses, pctBD: draft.params.pctBD, base: outraBase, aliquotaTotal });
+      // % nominal necessário para atingir uma margem efetiva desejada (sobre o bruto)
+      const pctParaMeta = meta => {
+        const a = aliquotaTotal / 100, m = cronNum(meta) / 100;
+        const p = draft.params.base === 'BRUTO' ? m + a : (a < 1 ? m / (1 - a) : 0);
+        return Math.min(Math.max(p * 100, 0), 100);
+      };
+      const nCrit = alertas.filter(a => a.nivel === 'CRITICO').length;
+      const nAlert = alertas.filter(a => a.nivel === 'ALERTA').length;
+      const voltar = () => {
+        if (sujo && !window.confirm('Há alterações não salvas neste cronograma. Sair mesmo assim?')) return;
+        setSelId(null); setDraft(null);
+      };
+      const kpis = [
+        ['Valor do contrato', calc.tot.bruto, `${prazo} meses · NF de ${nomeBD}`, CRON_COR.bruto],
+        [`Tributos (${cronPctTxt(aliquotaTotal)})`, calc.tot.imposto, 'recolhidos por quem emite a NF', CRON_COR.imposto],
+        [`Repasse · ${nomeParc}`, calc.tot.repasse, `${cronPctTxt(calc.pctParc)} do ${draft.params.base === 'BRUTO' ? 'bruto' : 'líquido'}`, CRON_COR.repasse],
+        [`Fica com ${nomeBD}`, calc.tot.bd, `margem efetiva ${cronPctTxt(calc.margemEfetiva)}`, CRON_COR.bd],
+      ];
 
       return (
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1200px] mx-auto px-6 py-6 space-y-5">
-
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3 min-w-0">
-                <button onClick={() => { setSelId(null); setDraft(null); }}
-                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-                  <ChevronRight className="w-4 h-4 rotate-180" />
-                </button>
-                <div className="min-w-0">
-                  <h1 className="text-lg font-black text-gray-800 truncate">{draft.contrato.objeto || 'Cronograma Financeiro'}</h1>
-                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                    {draft.contrato.numero ? `Contrato ${draft.contrato.numero} · ` : ''}{draft.contrato.contratante || '—'}
-                  </p>
-                </div>
+        <div key={'cron-' + selId} className="flex-1 overflow-y-auto">
+          {/* Barra superior fixa */}
+          <div className="sticky top-0 z-20 bg-white border-b" style={{borderColor:'#E3E8EF'}}>
+            <div className="max-w-[1240px] mx-auto px-6 py-3 flex items-center gap-3">
+              <button onClick={voltar} className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 flex-shrink-0">
+                <ChevronRight className="w-4 h-4 rotate-180" /> Cronogramas
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate" style={{color: BLUE}}>{draft.contrato.objeto || 'Cronograma financeiro'}</p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {draft.contrato.numero ? `Contrato ${draft.contrato.numero} · ` : ''}{draft.contrato.contratante || 'Contratante não informado'}
+                  {draft.contratoVinculado ? ` · vinculado ao ${draft.contratoVinculado}` : ''}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={exportar} disabled={exporting}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all hover:bg-green-50 disabled:opacity-50"
-                  style={{borderColor:'#16a34a', color:'#166534'}}>
-                  <Download className="w-4 h-4" />
-                  {exporting ? 'Gerando…' : 'Exportar Excel'}
-                </button>
-                <button onClick={salvar} disabled={saving}
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-                  style={{background: BLUE}}>
-                  {saving ? 'Salvando…' : 'Salvar alterações'}
-                </button>
-              </div>
+              <span className="text-[11px] font-medium flex-shrink-0" style={{color: sujo ? '#B45309' : '#94A3B8'}}>{sujo ? '● Alterações não salvas' : 'Tudo salvo'}</span>
+              <button onClick={exportar} disabled={exporting}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 flex-shrink-0" style={{borderColor:'#E3E8EF'}}>
+                <Download className="w-3.5 h-3.5" />{exporting ? 'Gerando…' : 'Excel'}
+              </button>
+              <button onClick={salvar} disabled={saving || !sujo}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0" style={{background: BLUE}}>
+                {saving ? 'Salvando…' : 'Salvar'}
+              </button>
             </div>
+          </div>
 
-            {/* Identificação */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="font-bold text-sm text-gray-700 mb-1">Identificação</h2>
-              <p className="text-[11px] text-gray-400 mb-4">Quem emite a NF carrega os impostos; a parceira recebe o repasse.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className={lc}>Objeto</label>
-                  <input value={draft.contrato.objeto} onChange={e => setC('objeto', e.target.value)}
-                    placeholder="Ex.: Sistema de Gestão de Processos Judiciais" className={icY} style={yStyle} />
-                </div>
-                <div>
-                  <label className={lc}>Contratante (órgão)</label>
-                  <input value={draft.contrato.contratante} onChange={e => setC('contratante', e.target.value)}
-                    placeholder="Ex.: PGM — Procuradoria Geral do Município" className={icY} style={yStyle} />
-                </div>
-                <div>
-                  <label className={lc}>Nº do contrato</label>
-                  <input value={draft.contrato.numero} onChange={e => setC('numero', e.target.value)}
-                    placeholder="Ex.: 012/2026" className={icY} style={yStyle} />
-                </div>
-                <div>
-                  <label className={lc}>Contratada — emite a NF</label>
-                  <input value={draft.contrato.contratada_emissora_nf} onChange={e => setC('contratada_emissora_nf', e.target.value)}
-                    placeholder="Ex.: Belém Digital" className={icY} style={yStyle} />
-                </div>
-                <div>
-                  <label className={lc}>Parceira executora</label>
-                  <input value={draft.contrato.parceiro_executor} onChange={e => setC('parceiro_executor', e.target.value)}
-                    placeholder="Ex.: Coreplan" className={icY} style={yStyle} />
-                </div>
-              </div>
-            </div>
-
-            {/* Vínculo com contrato ativo */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                <h2 className="font-bold text-sm text-gray-700">Contrato vinculado</h2>
-                {draft.contratoVinculado && (
-                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full" style={{background:'#dcfce7', color:'#15803d'}}>
-                    vinculado ao contrato {draft.contratoVinculado}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-gray-400 mb-3">
-                Ao vincular, este cronograma também fica visível dentro da página do contrato.
-              </p>
-              <select value={draft.contratoVinculado}
-                onChange={e => setDraft(d => ({ ...d, contratoVinculado: e.target.value }))}
-                className={icY} style={yStyle}>
-                <option value="">— Não vinculado —</option>
-                {contratosAtivos.map(([cn, m]) => (
-                  <option key={cn} value={cn}>
-                    {cn} · {(m.object || 'sem objeto').slice(0,70)} · {cronBRL(m.globalValue)}
-                  </option>
-                ))}
-              </select>
-              {contratosAtivos.length === 0 && (
-                <p className="text-[11px] text-gray-400 mt-2">Nenhum contrato ativo cadastrado no sistema.</p>
-              )}
-            </div>
-
-            {/* Painel de parâmetros */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="font-bold text-sm text-gray-700 mb-4">Parâmetros da parceria</h2>
+          <div className="max-w-[1240px] mx-auto px-6 py-5 space-y-4">
+            {/* Indicadores e divisão do valor */}
+            <div className={card} style={cardSt}>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className={lc}>% que FICA com a contratada</label>
-                  <input type="number" step="0.01" min="0" max="100" value={draft.params.pctBD}
-                    onChange={e => setP('pctBD', e.target.value === '' ? '' : cronNum(e.target.value))}
-                    className={icY} style={yStyle} />
-                  <p className="text-[10px] text-gray-400 mt-1 leading-tight truncate" title={nomeBD}>{nomeBD}</p>
-                </div>
-                <div>
-                  <label className={lc}>% REPASSADO à parceira (automático)</label>
-                  <input readOnly value={cronPctTxt(calc.pctParc)} className={ic + " bg-gray-50 text-gray-500 border-gray-200"} />
-                  <p className="text-[10px] text-gray-400 mt-1 leading-tight truncate" title={nomeParc}>{nomeParc}</p>
-                </div>
-                <div>
-                  <label className={lc}>Base de cálculo do repasse</label>
-                  <select value={draft.params.base} onChange={e => setP('base', e.target.value)}
-                    className={icY} style={yStyle}>
-                    <option value="LIQUIDO">LÍQUIDO — imposto rateado</option>
-                    <option value="BRUTO">BRUTO — contratada absorve o imposto</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={lc}>Prazo (meses)</label>
-                  <input type="number" min="1" value={draft.contrato.prazo_meses}
-                    onChange={e => setC('prazo_meses', cronNum(e.target.value))}
-                    className={icY} style={yStyle} />
-                </div>
-              </div>
-
-              {/* Tradução do rateio em linguagem simples — evita ler o percentual pelo lado errado */}
-              <div className="mt-4 rounded-xl px-4 py-3 text-xs leading-relaxed" style={{background:'#f8fafc', border:'1px solid #e2e8f0'}}>
-                <span className="font-bold text-gray-500">A cada R$ 100 faturados: </span>
-                <span className="font-black" style={{color:'#166534'}}>R$ {cronNum(draft.params.pctBD).toFixed(2).replace('.', ',')} ficam com {nomeBD}</span>
-                <span className="text-gray-400"> · </span>
-                <span className="font-black" style={{color:'#92400e'}}>R$ {cronNum(calc.pctParc).toFixed(2).replace('.', ',')} são repassados à {nomeParc}</span>
-                <span className="text-gray-400">
-                  {draft.params.base === 'BRUTO'
-                    ? ' — o repasse incide sobre o valor bruto, antes do imposto (a contratada absorve o tributo inteiro).'
-                    : ' — o repasse incide sobre o valor líquido, depois do imposto (o tributo é rateado entre as duas).'}
-                </span>
-              </div>
-            </div>
-
-            {/* Tributos */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                <h2 className="font-bold text-sm text-gray-700">Tributos sobre a NF</h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alíquota total</span>
-                  <span className="text-base font-black px-3 py-1 rounded-lg" style={{background:'#FCE4D6', color:'#9a3412'}}>
-                    {cronPctTxt(aliquotaTotal)}
-                  </span>
-                </div>
-              </div>
-              <p className="text-[11px] text-gray-400 mb-4">
-                Aceita ponto ou vírgula (ex.: <span className="font-semibold text-gray-500">1,8</span> ou <span className="font-semibold text-gray-500">1.8</span>).
-                Zere as linhas que não se aplicam ao regime tributário da contratada.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {draft.params.tributos.map((t, i) => (
-                  <div key={i}>
-                    <label className={lc}>{t.nome}</label>
-                    <div className="relative">
-                      <input type="text" inputMode="decimal" value={t.aliquota}
-                        onChange={e => setTrib(i, 'aliquota', e.target.value.replace(/[^\d.,]/g, ''))}
-                        className={icY + " pr-6"} style={{background:'#FCE4D6', borderColor:'#e8b48c', color:'#9a3412'}} />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold pointer-events-none" style={{color:'#c2703f'}}>%</span>
-                    </div>
+                {kpis.map(([r, v, sub, cor]) => (
+                  <div key={r} className="min-w-0">
+                    <p className="text-xs text-slate-500 flex items-center gap-1.5 truncate"><span className="w-2 h-2 rounded-sm flex-shrink-0" style={{background: cor}} />{r}</p>
+                    <p className="text-[22px] font-semibold text-slate-900 tabular-nums leading-tight mt-0.5 truncate">{cronBRL(v)}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{sub}</p>
                   </div>
                 ))}
               </div>
+              <CronDivisao calc={calc} nomeBD={nomeBD} nomeParc={nomeParc} />
             </div>
 
-            {/* Itens */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <h2 className="font-bold text-sm text-gray-700">Itens contratados</h2>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Todos os campos são editáveis. O valor total é calculado (qtde × unitário).</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              {/* Coluna principal: dados, rateio, tributos e itens */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800 mb-3">1. Contrato</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                    <div className="sm:col-span-6">
+                      <label className={lc}>Objeto</label>
+                      <input value={draft.contrato.objeto} onChange={e => setC('objeto', e.target.value)} placeholder="Ex.: Sistema de Gestão de Processos Judiciais" className={ic} />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className={lc}>Contratante (órgão)</label>
+                      <input value={draft.contrato.contratante} onChange={e => setC('contratante', e.target.value)} placeholder="Ex.: PGM" className={ic} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={lc}>Nº do contrato</label>
+                      <input value={draft.contrato.numero} onChange={e => setC('numero', e.target.value)} placeholder="012/2026" className={ic} />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className={lc}>Contratada (emite a NF)</label>
+                      <input value={draft.contrato.contratada_emissora_nf} onChange={e => setC('contratada_emissora_nf', e.target.value)} placeholder="Belém Digital" className={ic} />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className={lc}>Parceira executora</label>
+                      <input value={draft.contrato.parceiro_executor} onChange={e => setC('parceiro_executor', e.target.value)} placeholder="Nome da parceira" className={ic} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={lc}>Início da execução</label>
+                      <input type="date" value={draft.contrato.data_inicio || ''} onChange={e => setC('data_inicio', e.target.value)} className={ic} />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <label className={lc}>Prazo (meses)</label>
+                      <input type="number" min="1" value={draft.contrato.prazo_meses} onChange={e => setC('prazo_meses', cronNum(e.target.value))} className={ic} />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className={lc}>Contrato vinculado no sistema</label>
+                      <select value={draft.contratoVinculado} onChange={e => setDraft(d => ({ ...d, contratoVinculado: e.target.value }))} className={ic}>
+                        <option value="">Não vinculado</option>
+                        {contratosAtivos.map(([cn, m]) => <option key={cn} value={cn}>{cn} · {(m.object || 'sem objeto').slice(0, 50)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2">Com a data de início, o cronograma mostra os meses pelo nome (nov/26, dez/26…). Vinculado, ele aparece também na página do contrato.</p>
                 </div>
-                <button onClick={addItem}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all hover:bg-blue-50"
-                  style={{borderColor: BLUE, color: BLUE}}>+ Adicionar item</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs" style={{borderCollapse:'separate', borderSpacing:0}}>
-                  <thead>
-                    <tr style={{background:'#f8fafc'}}>
-                      {['#','Descrição','Tipo','Qtde','Valor unitário (R$)','Valor total (R$)','Mês início',''].map((h,hi) => (
-                        <th key={hi} className={`px-3 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap ${hi>=3&&hi<=6?'text-right':'text-left'}`}
-                            style={{borderBottom:'2px solid #e2e8f0'}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.itens.map((it, i) => {
-                      const mensal = it.tipo_recorrencia === 'MENSAL';
-                      return (
-                        <tr key={i} style={{background: i%2 ? '#fcfdfe' : '#fff'}}>
-                          <td className="px-3 py-2 text-gray-400 font-bold" style={{borderBottom:'1px solid #f1f5f9'}}>{it.item}</td>
-                          <td className="px-3 py-2" style={{borderBottom:'1px solid #f1f5f9', minWidth:220}}>
-                            <input value={it.descricao} onChange={e => setItem(i,'descricao', e.target.value)}
-                              placeholder="Descrição do item"
-                              className="w-full border rounded-lg px-2 py-1 text-xs font-medium" style={yStyle} />
-                          </td>
-                          <td className="px-3 py-2" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <select value={it.tipo_recorrencia} onChange={e => setItem(i,'tipo_recorrencia', e.target.value)}
-                              className="border rounded-lg px-2 py-1 text-[11px] font-bold cursor-pointer"
-                              style={mensal ? {background:'#F4F7FB', borderColor:'#D5DEEB', color:'#1d4ed8'} : {background:'#f5f3ff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
-                              <option value="UNICO">Único</option>
-                              <option value="MENSAL">Mensal</option>
-                            </select>
-                          </td>
-                          <td className="px-3 py-2 text-right" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <input type="text" inputMode="decimal" value={it.quantidade}
-                              onChange={e => setItem(i,'quantidade', e.target.value.replace(/[^\d.,]/g,''))}
-                              className="w-16 border rounded-lg px-2 py-1 text-xs font-bold text-right" style={yStyle} />
-                            {mensal && <span className="text-gray-300 ml-1">meses</span>}
-                          </td>
-                          <td className="px-3 py-2 text-right" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <InputMoeda valor={it.valor_unitario}
-                              onChange={v => setItem(i,'valor_unitario', v)}
-                              className="w-32 border rounded-lg px-2 py-1 text-xs font-bold text-right" style={yStyle} />
-                          </td>
-                          <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{borderBottom:'1px solid #f1f5f9', color:'#166534', fontVariantNumeric:'tabular-nums'}}>
-                            {cronBRL(it.valor_total)}
-                          </td>
-                          <td className="px-3 py-2 text-right" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <input type="number" min="1" value={it.mes_inicio}
-                              onChange={e => setItem(i,'mes_inicio', cronNum(e.target.value))}
-                              className="w-16 border rounded-lg px-2 py-1 text-xs font-bold text-right" style={yStyle} />
-                          </td>
-                          <td className="px-2 py-2 text-center" style={{borderBottom:'1px solid #f1f5f9'}}>
-                            <button onClick={() => delItem(i)} title="Remover item"
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
+
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800 mb-3">2. Divisão com a parceira</p>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className={lc}>Percentual que fica com {nomeBD}</label>
+                      <div className="flex items-center gap-3">
+                        <input type="range" min="0" max="100" step="0.5" value={cronNum(draft.params.pctBD)}
+                               onChange={e => setP('pctBD', cronNum(e.target.value))} className="flex-1" style={{accentColor: BLUE}} />
+                        <div className="relative w-24">
+                          <input type="number" step="0.01" min="0" max="100" value={draft.params.pctBD}
+                                 onChange={e => setP('pctBD', e.target.value === '' ? '' : cronNum(e.target.value))} className={ic + ' pr-6 text-right font-semibold'} />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1.5">Repasse à {nomeParc}: <b className="text-slate-700">{cronPctTxt(calc.pctParc)}</b> (automático)</p>
+                    </div>
+                    <div>
+                      <label className={lc}>O repasse é calculado sobre</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['LIQUIDO', 'Valor líquido', 'depois dos tributos — o imposto é dividido entre as duas'], ['BRUTO', 'Valor bruto', 'antes dos tributos — a contratada paga o imposto sozinha']].map(([k, t, d]) => {
+                          const on = draft.params.base === k;
+                          return (
+                            <button key={k} onClick={() => setP('base', k)} className="text-left rounded-lg border px-3 py-2 transition-colors"
+                                    style={on ? { borderColor: BLUE, background:'#F4F7FB' } : { borderColor:'#E3E8EF', background:'#fff' }}>
+                              <p className="text-xs font-semibold" style={{color: on ? BLUE : '#334155'}}>{on ? '● ' : '○ '}{t}</p>
+                              <p className="text-[10px] text-slate-500 leading-snug mt-0.5">{d}</p>
                             </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-lg px-3.5 py-2.5 text-xs leading-relaxed" style={{background:'#F8FAFC'}}>
+                    <b className="text-slate-600">A cada R$ 100,00 faturados:</b>{' '}
+                    {(() => {
+                      const a = aliquotaTotal, liq = 100 - a;
+                      const rep = draft.params.base === 'BRUTO' ? calc.pctParc : liq * calc.pctParc / 100;
+                      const bd = liq - rep;
+                      const f = v => 'R$ ' + v.toFixed(2).replace('.', ',');
+                      return (<>
+                        <span style={{color: CRON_COR.imposto}}>{f(a)} de tributos</span>{' · '}
+                        <span style={{color: CRON_COR.repasse}}>{f(rep)} para a {nomeParc}</span>{' · '}
+                        <b style={{color: CRON_COR.bd}}>{f(bd)} ficam com {nomeBD}</b>.
+                      </>);
+                    })()}
+                  </div>
+                </div>
+
+                <div className={card} style={cardSt}>
+                  <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">3. Tributos sobre a NF</p>
+                      <p className="text-[11px] text-slate-500">Valores de referência: confirme com a contabilidade. Aceita 1,8 ou 1.8. Zere o que não se aplica.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setP('tributos', CRON_TRIBUTOS_PADRAO.map(t => ({ ...t })))} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">Restaurar referência</button>
+                      <span className="text-sm font-semibold px-2.5 py-1 rounded-lg" style={{background:'#FBF1EA', color: CRON_COR.imposto}}>{cronPctTxt(aliquotaTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {draft.params.tributos.map((t, i) => (
+                      <div key={i}>
+                        <label className={lc}>{t.nome}</label>
+                        <div className="relative">
+                          <input type="text" inputMode="decimal" value={t.aliquota}
+                            onChange={e => setTrib(i, 'aliquota', e.target.value.replace(/[^\d.,]/g, ''))} className={ic + ' pr-6 text-right'} />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border overflow-hidden" style={cardSt}>
+                  <div className="px-5 py-3.5 border-b flex items-center justify-between flex-wrap gap-2" style={{borderColor:'#F1F4F8'}}>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">4. Itens e quando são faturados</p>
+                      <p className="text-[11px] text-slate-500">Valor total = quantidade × unitário. Mensal: fatura todo mês durante a quantidade de meses; único: fatura uma vez no mês de início.</p>
+                    </div>
+                    <button onClick={addItem} className="px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white hover:bg-slate-50" style={{borderColor:'#E3E8EF', color: BLUE}}>+ Item</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-slate-400 text-left">
+                          {['#', 'Descrição', 'Faturamento', 'Qtde', 'Valor unitário', 'Valor total', 'Mês início', 'Período', ''].map((h, hi) => (
+                            <th key={hi} className={`px-3 py-2 font-medium whitespace-nowrap ${hi >= 3 && hi <= 6 ? 'text-right' : ''}`}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {draft.itens.map((it, i) => {
+                          const mensal = it.tipo_recorrencia === 'MENSAL';
+                          const ini = Math.round(cronNum(it.mes_inicio)) || 1;
+                          const dur = mensal ? (Math.round(cronNum(it.meses_duracao)) || Math.round(cronNum(it.quantidade)) || 1) : 1;
+                          const fimIt = ini + dur - 1;
+                          return (
+                            <tr key={i} className="border-t" style={{borderColor:'#F1F4F8'}}>
+                              <td className="px-3 py-2 text-slate-400">{it.item}</td>
+                              <td className="px-3 py-2" style={{minWidth:200}}>
+                                <input value={it.descricao} onChange={e => setItem(i, 'descricao', e.target.value)} placeholder="Descrição do item"
+                                  className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:border-slate-400" />
+                              </td>
+                              <td className="px-3 py-2">
+                                <select value={it.tipo_recorrencia} onChange={e => setItem(i, 'tipo_recorrencia', e.target.value)}
+                                  className="border border-slate-200 rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none">
+                                  <option value="UNICO">Único</option>
+                                  <option value="MENSAL">Mensal</option>
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 text-right whitespace-nowrap">
+                                <input type="text" inputMode="decimal" value={it.quantidade}
+                                  onChange={e => setItem(i, 'quantidade', e.target.value.replace(/[^\d.,]/g, ''))}
+                                  className="w-14 border border-slate-200 rounded-md px-2 py-1.5 text-xs text-right focus:outline-none focus:border-slate-400" />
+                                {mensal && <span className="text-slate-400 ml-1">m</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <InputMoeda valor={it.valor_unitario} onChange={v => setItem(i, 'valor_unitario', v)}
+                                  className="w-32 border border-slate-200 rounded-md px-2 py-1.5 text-xs text-right focus:outline-none focus:border-slate-400" />
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-800 whitespace-nowrap tabular-nums">{cronBRL(it.valor_total)}</td>
+                              <td className="px-3 py-2 text-right">
+                                <input type="number" min="1" value={it.mes_inicio} onChange={e => setItem(i, 'mes_inicio', cronNum(e.target.value))}
+                                  className="w-14 border border-slate-200 rounded-md px-2 py-1.5 text-xs text-right focus:outline-none focus:border-slate-400" />
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap" style={{color: fimIt > prazo ? '#B91C1C' : '#64748B'}} title={fimIt > prazo ? 'Passa do prazo do contrato' : ''}>
+                                {mensal ? `${cronRotuloMes(ini, draft.contrato.data_inicio)} → ${cronRotuloMes(fimIt, draft.contrato.data_inicio)}` : cronRotuloMes(ini, draft.contrato.data_inicio)}
+                              </td>
+                              <td className="px-2 py-2 text-center">
+                                <button onClick={() => delItem(i)} title="Remover item" className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {draft.itens.length === 0 && (
+                          <tr><td colSpan={9} className="px-3 py-8 text-center text-xs text-slate-400">Nenhum item. Clique em "+ Item".</td></tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t" style={{borderColor:'#E3E8EF', background:'#F8FAFC'}}>
+                          <td colSpan={5} className="px-3 py-2.5 text-xs font-semibold text-slate-600">Soma dos itens · {prazo} meses</td>
+                          <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap" style={{color: BLUE}}>{cronBRL(somaItens)}</td>
+                          <td colSpan={3} className="px-3 py-2.5 text-[11px]">
+                            {cronNum(draft.contrato.valor_global) > 0 && Math.abs(somaItens - cronNum(draft.contrato.valor_global)) > 0.5
+                              ? <span style={{color:'#B45309'}}>valor global do contrato: {cronBRL(draft.contrato.valor_global)}</span>
+                              : null}
                           </td>
                         </tr>
-                      );
-                    })}
-                    {draft.itens.length === 0 && (
-                      <tr><td colSpan={8} className="px-3 py-8 text-center text-xs text-gray-400">Nenhum item — clique em "Adicionar item".</td></tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Coluna lateral: simulador, demonstrativo e observações */}
+              <div className="space-y-4 lg:sticky lg:top-[72px]">
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800">Simulador</p>
+                  <p className="text-[11px] text-slate-500 mb-3">Quanto a contratada precisa negociar para ficar com a margem que quer.</p>
+                  <label className={lc}>Margem efetiva desejada (sobre o bruto)</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input type="text" inputMode="decimal" value={metaMargem} onChange={e => setMetaMargem(e.target.value.replace(/[^\d.,]/g, ''))}
+                             placeholder="Ex.: 12" className={ic + ' pr-6 text-right'} />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                    </div>
+                    <button disabled={!metaMargem} onClick={() => setP('pctBD', Math.round(pctParaMeta(metaMargem) * 100) / 100)}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40" style={{background: BLUE}}>Aplicar</button>
+                  </div>
+                  {metaMargem && (
+                    <p className="text-[11px] text-slate-600 mt-2">
+                      Para ficar com <b>{cronPctTxt(metaMargem)}</b> do valor bruto, a contratada precisa de <b style={{color: BLUE}}>{cronPctTxt(pctParaMeta(metaMargem))}</b> na divisão
+                      {' '}(repasse de {cronPctTxt(100 - pctParaMeta(metaMargem))}).
+                      {pctParaMeta(metaMargem) >= 100 && <span style={{color:'#B91C1C'}}> Não é possível com esses tributos.</span>}
+                    </p>
+                  )}
+                  <div className="mt-4 pt-3 border-t" style={{borderColor:'#F1F4F8'}}>
+                    <p className="text-xs font-medium text-slate-500 mb-2">Mesmo percentual, base diferente</p>
+                    <table className="w-full text-[11px]">
+                      <thead><tr className="text-slate-400"><th className="text-left font-medium pb-1"></th><th className="text-right font-medium pb-1">Líquido</th><th className="text-right font-medium pb-1">Bruto</th></tr></thead>
+                      <tbody>
+                        {(() => {
+                          const L = draft.params.base === 'LIQUIDO' ? calc : calcOutra, B = draft.params.base === 'BRUTO' ? calc : calcOutra;
+                          return [['Repasse', L.tot.repasse, B.tot.repasse], [`Fica com ${nomeBD}`, L.tot.bd, B.tot.bd], ['Margem efetiva', null, null]].map(([r, l, b]) => (
+                            <tr key={r} className="border-t" style={{borderColor:'#F1F4F8'}}>
+                              <td className="py-1.5 text-slate-600">{r}</td>
+                              <td className={`py-1.5 text-right tabular-nums ${draft.params.base === 'LIQUIDO' ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{l == null ? cronPctTxt(L.margemEfetiva) : fmtCurrencyShort(l)}</td>
+                              <td className={`py-1.5 text-right tabular-nums ${draft.params.base === 'BRUTO' ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{b == null ? cronPctTxt(B.margemEfetiva) : fmtCurrencyShort(b)}</td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className={card} style={cardSt}>
+                  <p className="text-sm font-semibold text-slate-800 mb-3">Demonstrativo do contrato</p>
+                  <CronogramaResumo calc={calc} pctBD={draft.params.pctBD} nomeBD={nomeBD} nomeParc={nomeParc} aliquotaTotal={aliquotaTotal} />
+                </div>
+
+                {(alertas.length > 0 || draft.alertasIA.length > 0) && (
+                  <div className={card} style={cardSt}>
+                    <button onClick={() => setShowAlertas(v => !v)} className="w-full flex items-center justify-between gap-2 text-left">
+                      <p className="text-sm font-semibold text-slate-800">
+                        Observações <span className="text-xs font-normal text-slate-500">
+                          {nCrit > 0 && <span style={{color:'#B91C1C'}}>{nCrit} crítica{nCrit > 1 ? 's' : ''} · </span>}
+                          {nAlert > 0 && <span style={{color:'#B45309'}}>{nAlert} alerta{nAlert > 1 ? 's' : ''} · </span>}
+                          {alertas.length + draft.alertasIA.length} no total
+                        </span>
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-slate-400 transition-transform" style={{transform: showAlertas ? 'rotate(90deg)' : 'none'}} />
+                    </button>
+                    {showAlertas && (
+                      <div className="mt-3 space-y-2">
+                        {alertas.map((a, i) => {
+                          const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
+                          return <p key={i} className="text-[11px] leading-snug rounded-lg px-3 py-2" style={{background: st.bg, color: st.color}}><b className="mr-1">{st.label}</b>{a.txt}</p>;
+                        })}
+                        {draft.alertasIA.map((a, i) => <p key={'ia' + i} className="text-[11px] leading-snug rounded-lg px-3 py-2 bg-slate-50 text-slate-600"><b className="mr-1">IA</b>{a}</p>)}
+                      </div>
                     )}
-                    <tr style={{background:'#F4F7FB'}}>
-                      <td colSpan={5} className="px-3 py-3 text-[10px] font-black uppercase tracking-widest" style={{color:'#3730a3', borderTop:'2px solid #c7d2fe'}}>
-                        Valor global do contrato · {prazo} meses
-                      </td>
-                      <td className="px-3 py-3 text-right font-black text-sm whitespace-nowrap" style={{color:'#3730a3', borderTop:'2px solid #c7d2fe', fontVariantNumeric:'tabular-nums'}}>
-                        {cronBRL(draft.itens.reduce((s,it)=>s+cronNum(it.valor_total),0))}
-                      </td>
-                      <td colSpan={2} style={{borderTop:'2px solid #c7d2fe'}} />
-                    </tr>
-                  </tbody>
-                </table>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Resumo da divisão */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="font-bold text-sm text-gray-700 mb-1">Resumo da divisão — visão de negociação</h2>
-              <p className="text-[11px] text-gray-400 mb-4">Totais do contrato inteiro ({prazo} meses). Valores em reais.</p>
-              <CronogramaResumo calc={calc} pctBD={draft.params.pctBD} nomeBD={nomeBD} nomeParc={nomeParc} aliquotaTotal={aliquotaTotal} />
+            {/* Distribuição mês a mês */}
+            <div className={card} style={cardSt}>
+              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Distribuição mês a mês</p>
+                  <p className="text-[11px] text-slate-500">Cada barra é a NF do mês, dividida em tributos, repasse e o que fica com {nomeBD}.</p>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                  {[['Tributos', CRON_COR.imposto], [`Repasse ${nomeParc}`, CRON_COR.repasse], [nomeBD, CRON_COR.bd]].map(([r, c]) => (
+                    <span key={r} className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{background: c}} />{r}</span>
+                  ))}
+                </div>
+              </div>
+              <CronGraficoMensal calc={calc} dataInicio={draft.contrato.data_inicio} prazo={prazo} />
             </div>
 
-            {/* Alertas — recolhidos por padrão */}
-            {(alertas.length > 0 || draft.alertasIA.length > 0) && (() => {
-              const nCrit = alertas.filter(a => a.nivel === 'CRITICO').length;
-              const nAlert = alertas.filter(a => a.nivel === 'ALERTA').length;
-              const nTotal = alertas.length + draft.alertasIA.length;
-              const pior = nCrit > 0 ? CRON_ALERT_STYLE.CRITICO
-                         : nAlert > 0 ? CRON_ALERT_STYLE.ALERTA
-                         : CRON_ALERT_STYLE.INFO;
-              return (
-                <div className="rounded-2xl border overflow-hidden" style={{borderColor: pior.border, background: pior.bg}}>
-                  <button onClick={() => setShowAlertas(v => !v)}
-                    className="w-full px-4 py-3 flex items-center gap-3 text-left transition-all hover:opacity-80">
-                    <span className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-black text-[13px]"
-                          style={{background: pior.color, color:'#fff'}}>!</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold" style={{color: pior.color}}>
-                        {nTotal} {nTotal === 1 ? 'observação' : 'observações'} sobre este cronograma
-                      </p>
-                      <p className="text-[11px] font-medium" style={{color: pior.color, opacity:.75}}>
-                        {nCrit > 0 && `${nCrit} crítica${nCrit>1?'s':''} · `}
-                        {nAlert > 0 && `${nAlert} alerta${nAlert>1?'s':''} · `}
-                        {draft.alertasIA.length > 0 && `${draft.alertasIA.length} da IA · `}
-                        clique para {showAlertas ? 'ocultar' : 'ver'}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 flex-shrink-0 transition-transform"
-                                  style={{color: pior.color, transform: showAlertas ? 'rotate(90deg)' : 'none'}} />
-                  </button>
+            <CronogramaTabelaMensal calc={calc} prazo={prazo} itens={draft.itens} nomeBD={nomeBD} nomeParc={nomeParc} dataInicio={draft.contrato.data_inicio} />
 
-                  {showAlertas && (
-                    <div className="px-3 pb-3 space-y-2 fade-in">
-                      {alertas.map((a,i) => {
-                        const st = CRON_ALERT_STYLE[a.nivel] || CRON_ALERT_STYLE.INFO;
-                        return (
-                          <div key={i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
-                               style={{background:'#fff', borderColor:st.border, color:st.color}}>
-                            <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">{st.label}</span>
-                            <span className="font-medium">{a.txt}</span>
-                          </div>
-                        );
-                      })}
-                      {draft.alertasIA.map((a,i) => (
-                        <div key={'ia'+i} className="rounded-xl px-4 py-2.5 text-[12px] flex items-start gap-2.5 border"
-                             style={{background:'#fff', borderColor:'#ddd6fe', color:'#6d28d9'}}>
-                          <span className="text-[9px] font-black uppercase tracking-widest mt-0.5 flex-shrink-0">IA</span>
-                          <span className="font-medium">{a}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Cronograma mensal */}
-            <CronogramaTabelaMensal calc={calc} prazo={prazo} itens={draft.itens} nomeBD={nomeBD} nomeParc={nomeParc} />
-
-            <p className="text-[10px] text-gray-400 text-center pb-2">
-              Valores em reais. As alíquotas tributárias pré-preenchidas são valores de REFERÊNCIA e devem ser confirmadas pela contabilidade.
+            <p className="text-[11px] text-slate-400 text-center pb-2">
+              Valores em reais. As alíquotas pré-preenchidas são de referência e devem ser confirmadas pela contabilidade.
             </p>
           </div>
         </div>
