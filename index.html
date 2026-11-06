@@ -20921,7 +20921,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
         };
       }, [currentUser]);
       async function handleUpdateUser(updated) {
-        await db.collection(COL('users')).doc(String(updated.id)).set(updated);
+        // Atualiza só os campos enviados: o que não veio (senha, e-mail…) continua como está
+        const dados = { ...updated };
+        if (!dados.password) delete dados.password;                    // nunca apaga a senha
+        if (!String(dados.email || '').trim()) delete dados.email;     // não apaga o e-mail com campo vazio
+        await db.collection(COL('users')).doc(String(updated.id)).set(dados, { merge: true });
         setCurrentUser(updated);
       }
       async function handleRegister(data) {
