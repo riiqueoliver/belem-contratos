@@ -14735,6 +14735,622 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       );
     }
 
+    /* ═══════════════════════════════════════════════════════
+       BI DO PAINEL ADMIN — dados, gráficos (SVG próprio) e modo apresentação
+       Carteira vigente no ano = soma do valor global dos contratos vigentes em
+       algum momento daquele ano (início ≤ 31/12 e término ≥ 01/01).
+    ═══════════════════════════════════════════════════════ */
+    const BI_COR = { azul: '#0B2B5E', azul2: '#2457A6', azul3: '#5B7BB4', verde: '#2E7D32', ambar: '#C27C0E', vermelho: '#B91C1C', cinza: '#64748B', borda: '#E3E8EF' };
+    const BI_PALETA = ['#0B2B5E', '#2457A6', '#5B7BB4', '#8FA8D0', '#2E7D32', '#6BA368', '#C27C0E', '#94A3B8'];
+    const BI_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const BI_SIGLAS = [[/finan/i, 'SEFIN'], [/procurad/i, 'PGM'], [/governo/i, 'SEGOV'], [/sa[uú]de/i, 'SESMA'], [/educa/i, 'SEMEC'],
+                       [/meio ambiente/i, 'SEMMA'], [/comunica/i, 'SECOM'], [/previd|belémprev|belemprev/i, 'BELÉMPREV'], [/procuradores/i, 'APMB']];
+
+    function biOrgao(m) {
+      if (m.client) return m.client;
+      const u = String(m.unit || '');
+      const sig = /[-–—]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,12})\s*$/.exec(u);
+      if (sig) return sig[1];
+      if (u && u === u.toUpperCase() && u.length <= 14) return u;
+      const k = BI_SIGLAS.find(([re]) => re.test(u));
+      return k ? k[1] : (u.split(' ').slice(0, 3).join(' ') || '—');
+    }
+    const biAno = d => d ? Number(String(d).slice(0, 4)) : null;
+    const biVar = (a, b) => b > 0 ? (a - b) / b : null;
+    // Variação: em % até +500%; acima disso, em vezes (ex.: 112× em vez de +11.118%)
+    const biPct = v => v == null ? '—' : v >= 5 ? `${(1 + v).toLocaleString('pt-BR', { maximumFractionDigits: v >= 20 ? 0 : 1 })}× maior` : `${v >= 0 ? '+' : ''}${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+    const biVezes = (a, b) => b > 0 ? `${(a / b).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}×` : '—';
+    const biCurto = v => VALORES_OCULTOS ? MASCARA_VALOR : !v ? '0' : v >= 1e6 ? `${(v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : v >= 1e3 ? `${Math.round(v / 1e3).toLocaleString('pt-BR')} mil` : Math.round(v).toLocaleString('pt-BR');
+
+    function biDados(contracts, contractMeta, anoSel) {
+      const ano = Number(anoSel);
+      const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+      const nums = [...new Set([...contracts.map(c => c.contractNumber), ...Object.keys(contractMeta)])].filter(Boolean);
+      const lista = nums.map(num => {
+        const m = contractMeta[num] || {};
+        const parcelas = contracts.filter(c => c.contractNumber === num);
+        const valor = parseFloat(m.globalValue) || 0;
+        const parceria = m.contractType === 'parceria' || (parseFloat(m.partnerTotal) || 0) > 0;
+        const bd = parceria ? (parseFloat(m.bdTotal) || 0) : valor;
+        const parceiro = parceria ? (parseFloat(m.partnerTotal) || 0) : 0;
+        const faturado = parcelas.reduce((s, c) => s + parseBRL(c.billingValue), 0);
+        const pagas = parcelas.filter(c => c.currentStep > TOTAL_STEPS);
+        const recebido = pagas.reduce((s, c) => s + parseBRL(c.billingValue), 0);
+        const inicio = m.startDate || '', fim = m.endDate || '';
+        const sit = effectiveSituation(m);
+        const herdado = /CINBESA|TECNOLOGIA DA INFORMA/i.test(m.contractorName || '');
+        return { num, orgao: biOrgao(m), objeto: m.object || '', valor, bd, parceiro, parceria, parceiroNome: m.partnerName || '',
+                 faturado, recebido, exec: valor > 0 ? Math.min(faturado / valor, 1) : 0, inicio, fim, sit, herdado, parcelas };
+      });
+      const vigenteEm = (c, a) => {
+        if (!c.inicio && !c.fim) return false;
+        const ini = c.inicio ? c.inicio : '0000-01-01', fim = c.fim ? c.fim : '9999-12-31';
+        return ini <= `${a}-12-31` && fim >= `${a}-01-01`;
+      };
+      const anosTodos = lista.flatMap(c => [biAno(c.inicio), biAno(c.fim)]).filter(Boolean);
+      const anoMin = Math.max(Math.min(...anosTodos, ano), ano - 4);
+      const anos = []; for (let a = anoMin; a <= Math.max(ano, new Date().getFullYear()); a++) anos.push(a);
+      const carteira = anos.map(a => { const v = lista.filter(c => vigenteEm(c, a)); return { ano: a, valor: v.reduce((s, c) => s + c.valor, 0), qtd: v.length }; });
+      const novos = anos.map(a => { const v = lista.filter(c => biAno(c.inicio) === a); return { ano: a, valor: v.reduce((s, c) => s + c.valor, 0), qtd: v.length, itens: v }; });
+      const vig = lista.filter(c => vigenteEm(c, ano));
+      const vigAnt = lista.filter(c => vigenteEm(c, ano - 1));
+      // Mensal: faturado pela data da NF; recebido pela data de pagamento
+      const mensal = a => BI_MESES.map((_, i) => {
+        const ym = `${a}-${String(i + 1).padStart(2, '0')}`;
+        const fat = contracts.filter(c => (c.nfDate || '').startsWith(ym)).reduce((s, c) => s + parseBRL(c.billingValue), 0);
+        const rec = contracts.filter(c => c.currentStep > TOTAL_STEPS && (c.paymentDate || '').startsWith(ym)).reduce((s, c) => s + parseBRL(c.billingValue), 0);
+        return { fat, rec };
+      });
+      const mAtual = mensal(ano), mAnt = mensal(ano - 1);
+      const mesLimite = ano === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;   // comparação no mesmo período
+      const soma = (arr, k, ate = 12) => arr.slice(0, ate).reduce((s, x) => s + x[k], 0);
+      const porOrgao = Object.values(vig.reduce((acc, c) => { (acc[c.orgao] ||= { orgao: c.orgao, valor: 0, qtd: 0 }); acc[c.orgao].valor += c.valor; acc[c.orgao].qtd++; return acc; }, {}))
+        .sort((a, b) => b.valor - a.valor);
+      const aReceber = contracts.filter(c => c.currentStep <= TOTAL_STEPS && c.nfNumber).reduce((s, c) => s + parseBRL(c.billingValue), 0);
+      const dias = d => Math.round((new Date(d + 'T12:00:00') - hoje) / 86400000);
+      const ativos = lista.filter(c => c.sit === 'ativo');
+      const vencimentos = ativos.filter(c => c.fim).map(c => ({ ...c, dias: dias(c.fim) })).filter(c => c.dias <= 180).sort((a, b) => a.dias - b.dias);
+      const vencidos = lista.filter(c => c.sit === 'vencido');
+      const cAno = carteira.find(x => x.ano === ano) || { valor: 0, qtd: 0 };
+      const cAnt = carteira.find(x => x.ano === ano - 1) || { valor: 0, qtd: 0 };
+      const nAno = novos.find(x => x.ano === ano) || { valor: 0, qtd: 0, itens: [] };
+      const nAnt = novos.find(x => x.ano === ano - 1) || { valor: 0, qtd: 0, itens: [] };
+      return {
+        ano, anos, lista, vig, carteira, novos, porOrgao, mAtual, mAnt, mesLimite, vencimentos, vencidos,
+        k: {
+          carteira: cAno.valor, carteiraAnt: cAnt.valor, qtd: cAno.qtd, qtdAnt: cAnt.qtd,
+          novos: nAno.valor, novosQtd: nAno.qtd, novosAnt: nAnt.valor, novosQtdAnt: nAnt.qtd,
+          bd: vig.reduce((s, c) => s + c.bd, 0), parceiros: vig.reduce((s, c) => s + c.parceiro, 0),
+          fat: soma(mAtual, 'fat', mesLimite), fatAnt: soma(mAnt, 'fat', mesLimite), fatAntTotal: soma(mAnt, 'fat'),
+          rec: soma(mAtual, 'rec', mesLimite), recAnt: soma(mAnt, 'rec', mesLimite),
+          aReceber, orgaos: porOrgao.length, orgaosAnt: new Set(vigAnt.map(c => c.orgao)).size,
+          herdados: vig.filter(c => c.herdado), proprios: vig.filter(c => !c.herdado),
+          ticket: cAno.qtd ? cAno.valor / cAno.qtd : 0,
+        },
+      };
+    }
+
+    // Número que conta do zero até o valor (uma vez, ao aparecer)
+    function useBIConta(alvo, ms = 1200, ativo = true) {
+      const [v, setV] = React.useState(ativo ? 0 : alvo);
+      React.useEffect(() => {
+        if (!ativo) { setV(alvo); return; }
+        let raf, t0;
+        const passo = t => { t0 ??= t; const p = Math.min((t - t0) / ms, 1); setV(alvo * (1 - Math.pow(1 - p, 3))); if (p < 1) raf = requestAnimationFrame(passo); };
+        raf = requestAnimationFrame(passo);
+        return () => cancelAnimationFrame(raf);
+      }, [alvo, ativo]);
+      return v;
+    }
+    // Liga a animação de entrada dos gráficos depois do primeiro desenho
+    function useBIEntrada(dep) {
+      const [on, setOn] = React.useState(false);
+      React.useEffect(() => { setOn(false); const t = setTimeout(() => setOn(true), 60); return () => clearTimeout(t); }, [dep]);
+      return on;
+    }
+
+    /* Colunas por ano (carteira, novos contratos) — destaque no ano selecionado */
+    function BIColunas({ dados, anoDestaque, escuro, altura = 220, rotuloValor = biCurto, sub }) {
+      const on = useBIEntrada(JSON.stringify(dados.map(d => d.valor)) + anoDestaque);
+      const max = Math.max(...dados.map(d => d.valor), 1);
+      const cTexto = escuro ? 'rgba(255,255,255,.85)' : '#334155', cFraco = escuro ? 'rgba(255,255,255,.45)' : '#94A3B8';
+      return (
+        <div className="flex items-end gap-3 w-full" style={{ height: altura }}>
+          {dados.map((d, i) => {
+            const h = Math.max((d.valor / max) * (altura - 56), d.valor ? 4 : 2);
+            const dest = d.ano === anoDestaque;
+            const cor = dest ? (escuro ? '#7FB3FF' : BI_COR.azul) : (escuro ? 'rgba(255,255,255,.22)' : '#C9D5E8');
+            return (
+              <div key={d.ano} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+                <p className="text-xs font-semibold tabular-nums whitespace-nowrap mb-1.5" style={{ color: dest ? (escuro ? '#fff' : BI_COR.azul) : cTexto, opacity: on ? 1 : 0, transition: `opacity .4s ${0.5 + i * 0.08}s` }}>
+                  {rotuloValor(d.valor)}
+                </p>
+                <div className="w-full rounded-t-lg" style={{ maxWidth: 72, height: on ? h : 0, background: cor, transition: `height .9s cubic-bezier(.2,.8,.2,1) ${i * 0.08}s` }} />
+                <p className="text-xs mt-2 font-semibold" style={{ color: dest ? (escuro ? '#fff' : BI_COR.azul) : cFraco }}>{d.ano}</p>
+                {sub && <p className="text-[10px]" style={{ color: cFraco }}>{sub(d)}</p>}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* Linhas mensais: ano selecionado × ano anterior (acumulado ou mês a mês) */
+    function BILinhas({ atual, anterior, rotA, rotB, escuro, altura = 220, acumulado = true, ateMes = 12 }) {
+      const on = useBIEntrada(JSON.stringify(atual) + JSON.stringify(anterior) + acumulado);
+      const acum = arr => arr.reduce((o, v, i) => (o.push((i ? o[i - 1] : 0) + v), o), []);
+      const A = (acumulado ? acum(atual) : atual).slice(0, ateMes), B = acumulado ? acum(anterior) : anterior;
+      const max = Math.max(...A, ...B, 1);
+      const W = 640, H = altura, pl = 8, pr = 8, pt = 16, pb = 26;
+      const x = i => pl + (i * (W - pl - pr)) / 11, y = v => pt + (1 - v / max) * (H - pt - pb);
+      const caminho = arr => arr.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      const area = arr => arr.length ? `${caminho(arr)} L${x(arr.length - 1).toFixed(1)},${H - pb} L${x(0)},${H - pb} Z` : '';
+      const cA = escuro ? '#7FB3FF' : BI_COR.azul, cB = escuro ? 'rgba(255,255,255,.4)' : '#A7B4C8';
+      const grade = escuro ? 'rgba(255,255,255,.08)' : '#EEF2F7', txt = escuro ? 'rgba(255,255,255,.5)' : '#94A3B8';
+      return (
+        <div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: altura }} preserveAspectRatio="none">
+            {[0.25, 0.5, 0.75, 1].map(f => <line key={f} x1={pl} x2={W - pr} y1={y(max * f)} y2={y(max * f)} stroke={grade} strokeWidth="1" />)}
+            <defs><linearGradient id={`biA${escuro ? 'e' : 'c'}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={cA} stopOpacity=".28" /><stop offset="1" stopColor={cA} stopOpacity="0" /></linearGradient></defs>
+            <path d={caminho(B)} fill="none" stroke={cB} strokeWidth="2" strokeDasharray="5 5" vectorEffect="non-scaling-stroke"
+                  style={{ opacity: on ? 1 : 0, transition: 'opacity .6s' }} />
+            <path d={area(A)} fill={`url(#biA${escuro ? 'e' : 'c'})`} style={{ opacity: on ? 1 : 0, transition: 'opacity .8s .5s' }} />
+            <path d={caminho(A)} fill="none" stroke={cA} strokeWidth="3" vectorEffect="non-scaling-stroke" pathLength="1"
+                  style={{ strokeDasharray: 1, strokeDashoffset: on ? 0 : 1, transition: 'stroke-dashoffset 1.4s ease-out' }} />
+            {BI_MESES.map((m, i) => <text key={m} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill={txt}>{m}</text>)}
+          </svg>
+          <div className="flex items-center gap-4 mt-1 text-xs" style={{ color: escuro ? 'rgba(255,255,255,.7)' : '#64748B' }}>
+            <span className="flex items-center gap-1.5"><span className="w-4 h-[3px] rounded" style={{ background: cA }} />{rotA}</span>
+            <span className="flex items-center gap-1.5"><span className="w-4 h-0 border-t-2 border-dashed" style={{ borderColor: cB }} />{rotB}</span>
+          </div>
+        </div>
+      );
+    }
+
+    /* Rosca (composição) */
+    function BIRosca({ partes, escuro, tamanho = 170, centro, centroSub }) {
+      const on = useBIEntrada(JSON.stringify(partes.map(p => p.valor)));
+      const tot = partes.reduce((s, p) => s + p.valor, 0) || 1;
+      const r = 42, C = 2 * Math.PI * r;
+      let acc = 0;
+      return (
+        <div className="relative flex-shrink-0" style={{ width: tamanho, height: tamanho }}>
+          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+            <circle cx="50" cy="50" r={r} fill="none" stroke={escuro ? 'rgba(255,255,255,.08)' : '#EEF2F7'} strokeWidth="12" />
+            {partes.map((p, i) => {
+              const fr = p.valor / tot, off = acc; acc += fr;
+              return <circle key={i} cx="50" cy="50" r={r} fill="none" stroke={p.cor} strokeWidth="12"
+                             strokeDasharray={`${on ? fr * C : 0} ${C}`} strokeDashoffset={-off * C}
+                             style={{ transition: `stroke-dasharray 1s ease-out ${i * 0.15}s` }} />;
+            })}
+          </svg>
+          {centro && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <p className="text-lg font-semibold tabular-nums leading-none" style={{ color: escuro ? '#fff' : BI_COR.azul }}>{centro}</p>
+              {centroSub && <p className="text-[10px] mt-1" style={{ color: escuro ? 'rgba(255,255,255,.55)' : '#94A3B8' }}>{centroSub}</p>}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* Barras horizontais (por órgão, por contrato) */
+    function BIBarrasH({ itens, escuro, formato = biCurto, max: maxFixo }) {
+      const on = useBIEntrada(JSON.stringify(itens.map(i => i.valor)));
+      const max = maxFixo || Math.max(...itens.map(i => i.valor), 1);
+      return (
+        <div className="space-y-2.5">
+          {itens.map((it, i) => (
+            <div key={it.rotulo + i}>
+              <div className="flex items-baseline justify-between gap-3 text-xs mb-1">
+                <span className="truncate" style={{ color: escuro ? 'rgba(255,255,255,.85)' : '#334155' }}>{it.rotulo}{it.sub && <span style={{ color: escuro ? 'rgba(255,255,255,.45)' : '#94A3B8' }}> · {it.sub}</span>}</span>
+                <span className="font-semibold tabular-nums whitespace-nowrap" style={{ color: escuro ? '#fff' : '#0F172A' }}>{formato(it.valor)}</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: escuro ? 'rgba(255,255,255,.08)' : '#EEF2F7' }}>
+                <div className="h-full rounded-full" style={{ width: on ? `${Math.max((it.valor / max) * 100, it.valor ? 1.5 : 0)}%` : 0, background: it.cor || (escuro ? '#7FB3FF' : BI_COR.azul2), transition: `width .9s ease-out ${i * 0.05}s` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* Linha do tempo das vigências (Gantt) */
+    function BIVigencias({ itens, escuro }) {
+      const on = useBIEntrada(itens.length);
+      const datas = itens.flatMap(c => [c.inicio, c.fim]).filter(Boolean).map(d => new Date(d + 'T12:00:00').getTime());
+      if (!datas.length) return null;
+      const ini = new Date(new Date(Math.min(...datas)).getFullYear(), 0, 1).getTime();
+      const fim = new Date(new Date(Math.max(...datas)).getFullYear() + 1, 0, 1).getTime();
+      const pos = d => ((new Date(d + 'T12:00:00').getTime() - ini) / (fim - ini)) * 100;
+      const hojeP = ((Date.now() - ini) / (fim - ini)) * 100;
+      const anos = []; for (let a = new Date(ini).getFullYear(); a < new Date(fim).getFullYear(); a++) anos.push(a);
+      const txt = escuro ? 'rgba(255,255,255,.55)' : '#94A3B8';
+      return (
+        <div>
+          <div className="relative ml-[110px] h-5 mb-1">
+            {anos.map(a => <span key={a} className="absolute text-[10px]" style={{ left: `${pos(`${a}-01-01`)}%`, color: txt }}>{a}</span>)}
+          </div>
+          <div className="relative space-y-1.5">
+            <div className="absolute top-0 bottom-0 w-px z-10" style={{ left: `calc(110px + (100% - 110px) * ${hojeP / 100})`, background: escuro ? '#FBBF24' : BI_COR.vermelho, opacity: .7 }} title="Hoje" />
+            {itens.map((c, i) => {
+              const a = c.inicio ? pos(c.inicio) : 0, b = c.fim ? pos(c.fim) : 100;
+              const cor = c.sit === 'ativo' ? (c.fim && (new Date(c.fim) - Date.now()) / 86400000 < 90 ? BI_COR.ambar : (escuro ? '#7FB3FF' : BI_COR.azul2)) : (escuro ? 'rgba(255,255,255,.25)' : '#CBD5E1');
+              return (
+                <div key={c.num} className="flex items-center h-6">
+                  <span className="w-[110px] flex-shrink-0 text-[11px] truncate pr-2" style={{ color: escuro ? 'rgba(255,255,255,.8)' : '#334155' }} title={c.objeto}>{c.num} · {c.orgao}</span>
+                  <div className="relative flex-1 h-full">
+                    <div className="absolute top-1 bottom-1 rounded-md" title={`${c.inicio || '?'} → ${c.fim || '?'}`}
+                         style={{ left: `${a}%`, width: on ? `${Math.max(b - a, 0.8)}%` : 0, background: cor, transition: `width .9s ease-out ${i * 0.05}s` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* Cartão de indicador com comparação ao ano anterior */
+    function BIKpi({ rotulo, valor, sub, variacao, cor = BI_COR.azul, destaque }) {
+      const pos = variacao != null && variacao >= 0;
+      return (
+        <div className={`bg-white rounded-xl border p-4 ${destaque ? 'col-span-2' : ''}`} style={{ borderColor: BI_COR.borda, borderLeft: destaque ? `4px solid ${cor}` : undefined }}>
+          <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full" style={{ background: cor }} />{rotulo}</p>
+          <p className={`${destaque ? 'text-[30px]' : 'text-[22px]'} font-semibold text-slate-900 tabular-nums leading-tight mt-1 truncate`}>{valor}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {variacao != null && (
+              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ color: pos ? BI_COR.verde : BI_COR.vermelho, background: pos ? '#F2F8F4' : '#FCF3F3' }}>
+                {pos ? '▲' : '▼'} {biPct(variacao)}
+              </span>
+            )}
+            {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    function BICard({ titulo, sub, children, acao, className = '' }) {
+      return (
+        <div className={`bg-white rounded-xl border p-5 ${className}`} style={{ borderColor: BI_COR.borda }}>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{titulo}</p>
+              {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+            </div>
+            {acao}
+          </div>
+          {children}
+        </div>
+      );
+    }
+
+    /* ── BI (aba Dashboard do Painel Admin) ─────────────────── */
+    function PainelBI({ contracts, contractMeta, ano, setAno, anos, onApresentar }) {
+      const D = React.useMemo(() => biDados(contracts, contractMeta, ano), [contracts, contractMeta, ano]);
+      const [visaoMensal, setVisaoMensal] = React.useState('acumulado');
+      const [ordemTab, setOrdemTab] = React.useState('valor');
+      const k = D.k, a = D.ano;
+      const vC = biVar(k.carteira, k.carteiraAnt);
+      const tabela = [...D.vig].sort((x, y) => ordemTab === 'exec' ? y.exec - x.exec : ordemTab === 'fim' ? String(x.fim).localeCompare(String(y.fim)) : y.valor - x.valor);
+      const mesesTxt = D.mesLimite < 12 ? `jan–${BI_MESES[D.mesLimite - 1]}` : 'ano todo';
+      return (
+        <div className="space-y-4 max-w-7xl mx-auto">
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold" style={{ color: BI_COR.azul }}>Visão executiva {a}</h2>
+              <p className="text-xs text-slate-500">Carteira de contratos, execução financeira e vigências · comparação com {a - 1}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 border rounded-lg px-2.5 py-1.5 bg-white" style={{ borderColor: BI_COR.borda }}>
+                <span className="text-[11px] text-slate-400">exercício</span>
+                <select value={ano} onChange={e => setAno(e.target.value)} className="text-xs font-semibold bg-transparent focus:outline-none cursor-pointer" style={{ color: BI_COR.azul }}>
+                  {anos.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <button onClick={onApresentar} className="text-xs font-semibold px-3.5 py-2 rounded-lg text-white flex items-center gap-1.5" style={{ background: BI_COR.azul }}>
+                <Maximize2 className="w-3.5 h-3.5" /> Modo apresentação
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <BIKpi destaque rotulo={`Carteira vigente em ${a}`} valor={fmtCurrency(k.carteira)} variacao={vC}
+                   sub={k.carteiraAnt ? `${biVezes(k.carteira, k.carteiraAnt)} a carteira de ${a - 1} (${fmtCurrencyShort(k.carteiraAnt)})` : `${k.qtd} contratos`} />
+            <BIKpi rotulo={`Novos contratos em ${a}`} valor={fmtCurrencyShort(k.novos)} variacao={biVar(k.novos, k.novosAnt)} sub={`${k.novosQtd} assinado${k.novosQtd !== 1 ? 's' : ''}`} cor={BI_COR.azul2} />
+            <BIKpi rotulo="Receita Belém Digital" valor={fmtCurrencyShort(k.bd)} sub={`repasse a parceiros ${fmtCurrencyShort(k.parceiros)}`} cor={BI_COR.azul3} />
+            <BIKpi rotulo={`Faturado (${mesesTxt})`} valor={fmtCurrencyShort(k.fat)} variacao={biVar(k.fat, k.fatAnt)} sub={`${a - 1}: ${fmtCurrencyShort(k.fatAnt)}`} cor={BI_COR.cinza} />
+            <BIKpi rotulo={`Recebido (${mesesTxt})`} valor={fmtCurrencyShort(k.rec)} variacao={biVar(k.rec, k.recAnt)} sub={`a receber ${fmtCurrencyShort(k.aReceber)}`} cor={BI_COR.verde} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <BICard className="lg:col-span-2" titulo="Evolução da carteira vigente" sub="Soma do valor global dos contratos vigentes em cada ano">
+              <BIColunas dados={D.carteira} anoDestaque={a} altura={240} sub={d => `${d.qtd} contrato${d.qtd !== 1 ? 's' : ''}`} />
+              {k.carteiraAnt > 0 && (
+                <p className="text-xs text-slate-500 mt-3">
+                  De <b className="text-slate-700">{fmtCurrencyShort(k.carteiraAnt)}</b> em {a - 1} para <b style={{ color: BI_COR.azul }}>{fmtCurrencyShort(k.carteira)}</b> em {a}: crescimento de <b style={{ color: BI_COR.verde }}>{biPct(vC)}</b> ({biVezes(k.carteira, k.carteiraAnt)}).
+                </p>
+              )}
+            </BICard>
+            <BICard titulo={`Composição da carteira ${a}`} sub="Receita própria × repasse a parceiros">
+              <div className="flex flex-col items-center gap-4">
+                <BIRosca centro={fmtCurrencyShort(k.carteira)} centroSub="carteira"
+                         partes={[{ valor: k.bd, cor: BI_COR.azul }, { valor: k.parceiros, cor: '#8FA8D0' }]} />
+                <div className="w-full space-y-1.5 text-xs">
+                  {[['Belém Digital', k.bd, BI_COR.azul], ['Parceiros', k.parceiros, '#8FA8D0']].map(([r, v, c]) => (
+                    <div key={r} className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-sm" style={{ background: c }} /><span className="flex-1 text-slate-600">{r}</span>
+                      <span className="font-semibold tabular-nums text-slate-800">{fmtCurrencyShort(v)}</span>
+                      <span className="text-slate-400 w-10 text-right">{k.carteira ? Math.round(v / k.carteira * 100) : 0}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </BICard>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <BICard className="lg:col-span-2" titulo={`Execução financeira ${a} × ${a - 1}`} sub="Faturado pela data da nota fiscal"
+              acao={<div className="flex text-[11px] border rounded-lg overflow-hidden" style={{ borderColor: BI_COR.borda }}>
+                {[['acumulado', 'Acumulado'], ['mensal', 'Mês a mês']].map(([v, r]) => (
+                  <button key={v} onClick={() => setVisaoMensal(v)} className="px-2.5 py-1 font-semibold" style={visaoMensal === v ? { background: BI_COR.azul, color: '#fff' } : { color: '#64748B' }}>{r}</button>))}
+              </div>}>
+              <BILinhas atual={D.mAtual.map(m => m.fat)} anterior={D.mAnt.map(m => m.fat)} rotA={`Faturado ${a}`} rotB={`Faturado ${a - 1}`}
+                        acumulado={visaoMensal === 'acumulado'} ateMes={D.mesLimite} />
+            </BICard>
+            <BICard titulo={`Novos contratos por ano`} sub="Valor global pela data de início">
+              <BIColunas dados={D.novos} anoDestaque={a} altura={200} sub={d => `${d.qtd} novo${d.qtd !== 1 ? 's' : ''}`} />
+            </BICard>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <BICard titulo={`Carteira por órgão · ${a}`} sub={`${k.orgaos} órgão${k.orgaos !== 1 ? 's' : ''} atendido${k.orgaos !== 1 ? 's' : ''}${k.orgaosAnt ? ` (${k.orgaosAnt} em ${a - 1})` : ''}`}>
+              <BIBarrasH formato={fmtCurrencyShort} itens={D.porOrgao.slice(0, 8).map((o, i) => ({ rotulo: o.orgao, sub: `${o.qtd} contr.`, valor: o.valor, cor: BI_PALETA[i % BI_PALETA.length] }))} />
+            </BICard>
+            <BICard className="lg:col-span-2" titulo="Vigências" sub="Linha vermelha = hoje · âmbar = vence em menos de 90 dias">
+              <BIVigencias itens={[...D.lista].filter(c => c.inicio || c.fim).sort((x, y) => String(x.inicio).localeCompare(String(y.inicio)))} />
+            </BICard>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <BICard className="lg:col-span-2" titulo={`Contratos vigentes em ${a}`} sub="Execução = faturado ÷ valor global"
+              acao={<select value={ordemTab} onChange={e => setOrdemTab(e.target.value)} className="text-[11px] border rounded-lg px-2 py-1 bg-white text-slate-600" style={{ borderColor: BI_COR.borda }}>
+                <option value="valor">Maior valor</option><option value="exec">Maior execução</option><option value="fim">Vence primeiro</option>
+              </select>}>
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-xs">
+                  <thead><tr className="text-left text-slate-400">
+                    {['Contrato', 'Órgão', 'Valor global', 'Faturado', 'Execução', 'Término'].map(h => <th key={h} className="font-medium pb-2 px-1">{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {tabela.map(c => (
+                      <tr key={c.num} className="border-t" style={{ borderColor: '#F1F4F8' }}>
+                        <td className="py-2 px-1 font-semibold text-slate-800 whitespace-nowrap">{c.num}{c.parceria && <span className="ml-1 text-[9px] font-semibold text-slate-400">parceria</span>}</td>
+                        <td className="py-2 px-1 text-slate-600">{c.orgao}</td>
+                        <td className="py-2 px-1 tabular-nums text-slate-800 whitespace-nowrap">{fmtCurrencyShort(c.valor)}</td>
+                        <td className="py-2 px-1 tabular-nums text-slate-600 whitespace-nowrap">{fmtCurrencyShort(c.faturado)}</td>
+                        <td className="py-2 px-1 w-32">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${c.exec * 100}%`, background: c.exec > .8 ? BI_COR.verde : BI_COR.azul2 }} /></div>
+                            <span className="tabular-nums text-slate-500 w-8 text-right">{Math.round(c.exec * 100)}%</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-1 text-slate-600 whitespace-nowrap">{c.fim ? new Date(c.fim + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </BICard>
+            <BICard titulo="Atenção" sub="Vencidos e vencimentos nos próximos 180 dias">
+              {D.vencidos.length === 0 && D.vencimentos.length === 0 && <p className="text-xs text-slate-400">Nada a vencer nos próximos 180 dias.</p>}
+              <div className="space-y-2">
+                {D.vencidos.map(c => (
+                  <div key={c.num} className="flex items-center gap-2 text-xs"><span className="w-1.5 h-1.5 rounded-full" style={{ background: BI_COR.vermelho }} />
+                    <span className="flex-1 text-slate-700">{c.num} · {c.orgao}</span><span className="font-semibold" style={{ color: BI_COR.vermelho }}>vencido</span></div>
+                ))}
+                {D.vencimentos.map(c => (
+                  <div key={c.num} className="flex items-center gap-2 text-xs"><span className="w-1.5 h-1.5 rounded-full" style={{ background: c.dias < 30 ? BI_COR.vermelho : c.dias < 90 ? BI_COR.ambar : BI_COR.cinza }} />
+                    <span className="flex-1 text-slate-700">{c.num} · {c.orgao}</span>
+                    <span className="font-semibold tabular-nums" style={{ color: c.dias < 30 ? BI_COR.vermelho : c.dias < 90 ? BI_COR.ambar : '#64748B' }}>{c.dias < 0 ? 'vencido' : `${c.dias} dias`}</span></div>
+                ))}
+              </div>
+              <div className="mt-5 pt-4 border-t space-y-1.5 text-xs" style={{ borderColor: '#F1F4F8' }}>
+                <p className="text-slate-500">Origem dos contratos vigentes</p>
+                <div className="flex justify-between"><span className="text-slate-600">Celebrados pela Belém Digital</span><b className="text-slate-800">{k.proprios.length} · {fmtCurrencyShort(k.proprios.reduce((s, c) => s + c.valor, 0))}</b></div>
+                <div className="flex justify-between"><span className="text-slate-600">Herdados da CINBESA</span><b className="text-slate-800">{k.herdados.length} · {fmtCurrencyShort(k.herdados.reduce((s, c) => s + c.valor, 0))}</b></div>
+                <div className="flex justify-between"><span className="text-slate-600">Valor médio por contrato</span><b className="text-slate-800">{fmtCurrencyShort(k.ticket)}</b></div>
+              </div>
+            </BICard>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── MODO APRESENTAÇÃO — slides em tela cheia (← → espaço, Esc sai) ── */
+    function ApresentacaoBI({ contracts, contractMeta, ano, onSair }) {
+      const D = React.useMemo(() => biDados(contracts, contractMeta, ano), [contracts, contractMeta, ano]);
+      const k = D.k, a = D.ano;
+      const [i, setI] = React.useState(0);
+      const [auto, setAuto] = React.useState(false);
+      const slides = ['capa', 'carteira', 'novos', 'composicao', 'execucao', 'orgaos', 'vigencias', 'fim'];
+      const n = slides.length;
+      const ir = d => setI(x => Math.min(Math.max(x + d, 0), n - 1));
+      React.useEffect(() => {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+        const tecla = e => {
+          if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); ir(1); }
+          else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); ir(-1); }
+          else if (e.key === 'Escape') onSair();
+          else if (e.key === 'Home') setI(0);
+          else if (e.key === 'End') setI(n - 1);
+        };
+        const saiuTela = () => { if (!document.fullscreenElement) onSair(); };
+        document.addEventListener('keydown', tecla);
+        document.addEventListener('fullscreenchange', saiuTela);
+        return () => {
+          document.removeEventListener('keydown', tecla);
+          document.removeEventListener('fullscreenchange', saiuTela);
+          if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+        };
+      }, []);
+      React.useEffect(() => {
+        if (!auto) return;
+        const t = setTimeout(() => setI(x => (x + 1) % n), 12000);
+        return () => clearTimeout(t);
+      }, [auto, i]);
+
+      const carteiraAnim = useBIConta(k.carteira, 1600, slides[i] === 'carteira' && !VALORES_OCULTOS);
+      const antAnim = useBIConta(k.carteiraAnt, 1200, slides[i] === 'carteira' && !VALORES_OCULTOS);
+      const T = ({ children }) => <p className="text-[13px] font-semibold tracking-wide uppercase" style={{ color: '#7FB3FF' }}>{children}</p>;
+      const H = ({ children }) => <h2 className="text-[40px] font-semibold leading-tight text-white mt-2">{children}</h2>;
+      const hoje = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+      const vC = biVar(k.carteira, k.carteiraAnt);
+
+      const conteudo = () => {
+        switch (slides[i]) {
+          case 'capa': return (
+            <div className="flex flex-col items-start justify-center h-full">
+              <img src="gc-simbolo-branco.png" alt="" style={{ height: 72 }} className="mb-10 opacity-95" />
+              <p className="text-[15px] font-semibold tracking-[.2em] uppercase" style={{ color: '#7FB3FF' }}>Belém Digital · NGCC</p>
+              <h1 className="text-[64px] font-semibold text-white leading-[1.05] mt-3">Gestão de Contratos<br />Panorama {a}</h1>
+              <p className="text-lg mt-6" style={{ color: 'rgba(255,255,255,.6)' }}>Carteira, crescimento e execução financeira · {hoje}</p>
+            </div>
+          );
+          case 'carteira': return (
+            <div className="grid grid-cols-5 gap-14 h-full items-center">
+              <div className="col-span-2">
+                <T>Carteira vigente</T>
+                <p className="text-[76px] font-semibold text-white leading-none mt-6 tabular-nums">{VALORES_OCULTOS ? MASCARA_VALOR : `R$ ${biCurto(carteiraAnim)}`}</p>
+                <p className="text-lg mt-3" style={{ color: 'rgba(255,255,255,.6)' }}>em contratos vigentes em {a} · {k.qtd} contratos</p>
+                {k.carteiraAnt > 0 && (<>
+                  <div className="mt-10 flex items-end gap-6">
+                    <div>
+                      <p className="text-[44px] font-semibold leading-none" style={{ color: '#6EE7A0' }}>{biVezes(k.carteira, k.carteiraAnt)}</p>
+                      <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,.55)' }}>a carteira de {a - 1}</p>
+                    </div>
+                    <div>
+                      <p className="text-[44px] font-semibold leading-none" style={{ color: '#6EE7A0' }}>{biPct(vC)}</p>
+                      <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,.55)' }}>de crescimento</p>
+                    </div>
+                  </div>
+                  <p className="text-base mt-8" style={{ color: 'rgba(255,255,255,.7)' }}>Em {a - 1}: <b className="text-white">{VALORES_OCULTOS ? MASCARA_VALOR : `R$ ${biCurto(antAnim)}`}</b> em {k.qtdAnt} contratos.</p>
+                </>)}
+              </div>
+              <div className="col-span-3"><BIColunas escuro dados={D.carteira} anoDestaque={a} altura={420} sub={d => `${d.qtd} contratos`} /></div>
+            </div>
+          );
+          case 'novos': return (
+            <div className="grid grid-cols-5 gap-14 h-full items-center">
+              <div className="col-span-2">
+                <T>Novos contratos</T>
+                <H>{k.novosQtd} contrato{k.novosQtd !== 1 ? 's' : ''} assinado{k.novosQtd !== 1 ? 's' : ''} em {a}</H>
+                <p className="text-[56px] font-semibold text-white mt-6 tabular-nums leading-none">{fmtCurrencyShort(k.novos)}</p>
+                <p className="text-base mt-3" style={{ color: 'rgba(255,255,255,.6)' }}>{a - 1}: {k.novosQtdAnt} contrato{k.novosQtdAnt !== 1 ? 's' : ''} · {fmtCurrencyShort(k.novosAnt)}</p>
+                <div className="mt-8 space-y-2">
+                  {(D.novos.find(x => x.ano === a)?.itens || []).sort((x, y) => y.valor - x.valor).slice(0, 5).map(c => (
+                    <p key={c.num} className="text-sm flex gap-3" style={{ color: 'rgba(255,255,255,.75)' }}><span className="w-32 font-semibold text-white">{c.orgao}</span><span className="flex-1 truncate">{c.objeto.slice(0, 70)}</span><span className="tabular-nums text-white">{fmtCurrencyShort(c.valor)}</span></p>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-3"><BIColunas escuro dados={D.novos} anoDestaque={a} altura={400} sub={d => `${d.qtd} novos`} /></div>
+            </div>
+          );
+          case 'composicao': return (
+            <div className="grid grid-cols-2 gap-16 h-full items-center">
+              <div>
+                <T>Composição da carteira {a}</T>
+                <H>Receita própria e parcerias</H>
+                <div className="mt-10 space-y-6">
+                  {[['Belém Digital', k.bd, '#7FB3FF'], ['Parceiros (repasse)', k.parceiros, '#3B5B8F']].map(([r, v, c]) => (
+                    <div key={r} className="flex items-center gap-4">
+                      <span className="w-4 h-4 rounded" style={{ background: c }} />
+                      <span className="text-lg flex-1" style={{ color: 'rgba(255,255,255,.75)' }}>{r}</span>
+                      <span className="text-[34px] font-semibold text-white tabular-nums">{fmtCurrencyShort(v)}</span>
+                      <span className="text-lg w-16 text-right" style={{ color: 'rgba(255,255,255,.5)' }}>{k.carteira ? Math.round(v / k.carteira * 100) : 0}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-center"><BIRosca escuro tamanho={380} centro={fmtCurrencyShort(k.carteira)} centroSub="carteira total" partes={[{ valor: k.bd, cor: '#7FB3FF' }, { valor: k.parceiros, cor: '#3B5B8F' }]} /></div>
+            </div>
+          );
+          case 'execucao': return (
+            <div className="flex flex-col h-full justify-center">
+              <T>Execução financeira</T>
+              <H>Faturamento acumulado · {a} × {a - 1}</H>
+              <div className="grid grid-cols-3 gap-10 mt-8 mb-6">
+                {[[`Faturado ${a}`, k.fat, biVar(k.fat, k.fatAnt)], [`Recebido ${a}`, k.rec, biVar(k.rec, k.recAnt)], ['A receber', k.aReceber, null]].map(([r, v, va]) => (
+                  <div key={r}>
+                    <p className="text-sm" style={{ color: 'rgba(255,255,255,.55)' }}>{r}</p>
+                    <p className="text-[40px] font-semibold text-white tabular-nums leading-tight">{fmtCurrencyShort(v)}</p>
+                    {va != null && <p className="text-sm font-semibold" style={{ color: va >= 0 ? '#6EE7A0' : '#FCA5A5' }}>{va >= 0 ? '▲' : '▼'} {biPct(va)} sobre {a - 1}</p>}
+                  </div>
+                ))}
+              </div>
+              <BILinhas escuro altura={300} atual={D.mAtual.map(m => m.fat)} anterior={D.mAnt.map(m => m.fat)} rotA={`${a}`} rotB={`${a - 1}`} ateMes={D.mesLimite} />
+            </div>
+          );
+          case 'orgaos': return (
+            <div className="grid grid-cols-5 gap-14 h-full items-center">
+              <div className="col-span-2">
+                <T>Clientes</T>
+                <H>{k.orgaos} órgãos atendidos em {a}</H>
+                <p className="text-lg mt-4" style={{ color: 'rgba(255,255,255,.6)' }}>{k.orgaosAnt ? `Eram ${k.orgaosAnt} em ${a - 1}.` : ''} Valor médio por contrato: <b className="text-white">{fmtCurrencyShort(k.ticket)}</b>.</p>
+              </div>
+              <div className="col-span-3"><BIBarrasH escuro formato={fmtCurrencyShort} itens={D.porOrgao.slice(0, 9).map(o => ({ rotulo: o.orgao, sub: `${o.qtd} contrato${o.qtd !== 1 ? 's' : ''}`, valor: o.valor }))} /></div>
+            </div>
+          );
+          case 'vigencias': return (
+            <div className="flex flex-col h-full justify-center">
+              <T>Vigências</T>
+              <H>Linha do tempo dos contratos</H>
+              <div className="mt-8"><BIVigencias escuro itens={[...D.lista].filter(c => c.inicio || c.fim).sort((x, y) => String(x.inicio).localeCompare(String(y.inicio)))} /></div>
+              {D.vencimentos.filter(c => c.dias >= 0 && c.dias < 90).length > 0 && (
+                <p className="text-base mt-6" style={{ color: '#FCD34D' }}>
+                  Atenção: {D.vencimentos.filter(c => c.dias >= 0 && c.dias < 90).map(c => `${c.num} (${c.orgao}) em ${c.dias} dias`).join(' · ')}
+                </p>
+              )}
+            </div>
+          );
+          default: return (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <img src="gc-simbolo-branco.png" alt="" style={{ height: 64 }} className="mb-8" />
+              <p className="text-[44px] font-semibold text-white">Obrigado.</p>
+              <p className="text-lg mt-3" style={{ color: 'rgba(255,255,255,.6)' }}>Núcleo de Gestão Comercial e Contratual · Belém Digital</p>
+            </div>
+          );
+        }
+      };
+
+      return ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[500] text-white select-none" style={{ background: 'radial-gradient(1200px 700px at 85% 10%, #1B4A8F 0%, transparent 60%), linear-gradient(160deg, #061A3A 0%, #0B2B5E 55%, #0A2550 100%)' }}
+             onClick={e => { if (e.target === e.currentTarget) ir(1); }}>
+          <div key={i} className="absolute inset-0 px-24 pt-20 pb-24 pres-in" onClick={() => ir(1)}>{conteudo()}</div>
+          <div className="absolute top-6 left-24 right-8 flex items-center justify-between text-xs" style={{ color: 'rgba(255,255,255,.45)' }}>
+            <span>Gestão de Contratos · Panorama {a}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={e => { e.stopPropagation(); setAuto(v => !v); }} className="px-3 py-1.5 rounded-lg hover:bg-white/10" style={{ color: auto ? '#7FB3FF' : undefined }}>{auto ? '❚❚ Pausar' : '▶ Automático'}</button>
+              <button onClick={e => { e.stopPropagation(); onSair(); }} className="px-3 py-1.5 rounded-lg hover:bg-white/10">Sair (Esc)</button>
+            </div>
+          </div>
+          <div className="absolute bottom-8 left-24 right-24 flex items-center gap-3">
+            <button onClick={e => { e.stopPropagation(); ir(-1); }} disabled={i === 0} className="w-9 h-9 rounded-full hover:bg-white/10 disabled:opacity-20 text-lg">‹</button>
+            <div className="flex-1 flex gap-1.5">
+              {slides.map((s, j) => (
+                <button key={s} onClick={e => { e.stopPropagation(); setI(j); }} className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.15)' }}>
+                  <span className="block h-full rounded-full" style={{ width: j < i ? '100%' : j === i ? (auto ? '100%' : '100%') : '0%', background: j <= i ? '#7FB3FF' : 'transparent', transition: j === i && auto ? 'width 12s linear' : 'none' }} />
+                </button>
+              ))}
+            </div>
+            <span className="text-xs tabular-nums w-12 text-center" style={{ color: 'rgba(255,255,255,.5)' }}>{i + 1}/{n}</span>
+            <button onClick={e => { e.stopPropagation(); ir(1); }} disabled={i === n - 1} className="w-9 h-9 rounded-full hover:bg-white/10 disabled:opacity-20 text-lg">›</button>
+          </div>
+        </div>,
+        document.body
+      );
+    }
+
     function AdminDashboard({ open, onClose, contracts, contractMeta, pendingUsers, onApproveUser, onRejectUser, users, currentUserId, onToggleAdmin, onDeleteUser, apiKey, onAddInstallment, addToast, initialTab, gcspModules, onToggleGcspModule, tema = {}, onTema = () => {}, leads = [], propostasEmitidas = [], certidoes = [] }) {
       const [filter, setFilter]               = useState('');
       const [tab, setTab]                     = useState('dashboard');
@@ -15714,307 +16330,50 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
       /* ══════════════════════════════════════════════════════════
          MODO APRESENTAÇÃO — layout executivo profissional
       ══════════════════════════════════════════════════════════ */
-      if (presentMode) {
-        // Dados da lista expandida ao clicar nos KPIs
-        const kpiListData = (() => {
-          if (!kpiOpen) return null;
-          if (kpiOpen === 'billed') {
-            const sorted = [...allMeta].sort((a,b) => (b.totalBilled||0) - (a.totalBilled||0));
-            const max = Math.max(...sorted.map(m => m.totalBilled||0), 1);
-            return { sorted, max, getValue: m => m.totalBilled||0, title:'Total Faturado por Contrato', color:'#059669' };
-          }
-          const sorted = [...allMeta].sort((a,b) => (b.globalValue||0) - (a.globalValue||0));
-          const max = Math.max(...sorted.map(m => m.globalValue||0), 1);
-          return { sorted, max, getValue: m => m.globalValue||0, title:'Contratos por Valor Global', color:'#1D4ED8' };
-        })();
-
-        return (
-          <div className="fixed inset-0 z-[200] overflow-y-auto" style={{background:'#ffffff'}}>
-
-            {/* ── Botão Sair — sempre visível, canto superior direito ── */}
-            <button onClick={() => { setPresentMode(false); setKpiOpen(null); }} title="Sair (Esc)"
-                    className="fixed top-5 right-5 z-[210] flex items-center gap-2 text-white text-xs font-bold px-4 py-2.5 rounded-md shadow-lg hover:opacity-90 transition-opacity"
-                    style={{background:'#dc2626', letterSpacing:'0.05em'}}>
-              <Minimize2 className="w-3.5 h-3.5" /> SAIR
-            </button>
-
-            <div style={{maxWidth:'1160px', margin:'0 auto', padding:'52px 48px 80px'}}>
-
-              {/* ── Cabeçalho editorial ── */}
-              <div className="pres-in" style={{animationDelay:'0.05s', paddingBottom:'28px', marginBottom:'40px', borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
-                <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.18em', color:'rgba(0,0,0,0.35)', textTransform:'uppercase', marginBottom:'12px'}}>
-                  Núcleo Comercial · Belém Digital
-                </p>
-                <div style={{display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:'16px'}}>
-                  <h1 style={{fontSize:'34px', fontWeight:'800', color:BLUE, letterSpacing:'-0.025em', lineHeight:'1', margin:0}}>
-                    Dashboard Financeiro
-                  </h1>
-                  <p style={{fontSize:'13px', color:'rgba(0,0,0,0.38)', fontWeight:'500', paddingBottom:'3px', whiteSpace:'nowrap', margin:0}}>
-                    {today.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-                  </p>
-                </div>
-              </div>
-
-              {/* ── Faixa de KPIs — clicáveis (exceto Taxa de Execução) ── */}
-              <div className="pres-in" style={{animationDelay:'0.14s', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:'48px'}}>
-                {[
-                  { label:'Contratos',          value: String(contractsYrCount),                       sub:`${activeCountYr} ativo${activeCountYr!==1?'s':''} em ${adminStatsYear}`,  hi:false, action:'contracts' },
-                  { label:'Receita Prevista',  value: fmtCurrencyShort(valorNoAnoAdmin),              sub:`valor proporcional ao exercício ${adminStatsYear}`, hi:false, action:'value'   },
-                  { label:'Total Faturado',    value: fmtCurrencyShort(totalBilledAll),               sub:`NFs pagas em ${adminStatsYear}`,                  hi:true,  action:'billed'    },
-                  { label:'Taxa de Execução',  value: `${execRateAll.toFixed(1).replace('.',',')}%`,  sub:'executado / receita prevista',                    hi:execRateAll>=50, action:null },
-                ].map(({label, value, sub, hi, action}, i) => {
-                  const isActive  = action && kpiOpen === action;
-                  const clickable = action !== null;
-                  return (
-                    <div key={i}
-                         onClick={clickable ? () => setKpiOpen(kpiOpen === action ? null : action) : undefined}
-                         style={{
-                           paddingBottom:'28px',
-                           borderLeft: i>0 ? '1px solid rgba(0,0,0,0.08)' : 'none',
-                           paddingLeft: i===0 ? '0' : '28px',
-                           cursor: clickable ? 'pointer' : 'default',
-                           userSelect:'none',
-                         }}>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', textTransform:'uppercase', margin:'0 0 14px 0',
-                                 color: isActive ? '#1D4ED8' : 'rgba(0,0,0,0.38)', transition:'color 0.2s'}}>
-                        {label}{isActive ? ' ▴' : (clickable ? ' ▾' : '')}
-                      </p>
-                      {action === null ? (
-                        <span className="kpi-scale-hover" style={{fontSize:'44px', fontWeight:'800', color: hi ? '#059669' : '#0B2B5E', letterSpacing:'-0.03em', lineHeight:'1', display:'inline-block'}}>
-                          {value}
-                        </span>
-                      ) : (
-                        <p style={{fontSize:'44px', fontWeight:'800', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 8px 0',
-                                   color: isActive ? '#1D4ED8' : (hi ? '#059669' : '#0B2B5E'), transition:'color 0.2s'}}>
-                          {value}
-                        </p>
-                      )}
-                      <p style={{fontSize:'11px', color:'rgba(0,0,0,0.35)', margin: action === null ? '8px 0 0 0' : '0'}}>{sub}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* ── Conteúdo principal: lista expandida OU gráficos ── */}
-              {kpiListData ? (
-
-                /* ── Lista detalhada ao clicar nos KPIs ── */
-                <div>
-                  <div className="pres-in" style={{animationDelay:'0s', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'32px', marginBottom:'24px'}}>
-                    <div>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 3px 0'}}>
-                        {kpiListData.title}
-                      </p>
-                      <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', margin:0}}>do maior para o menor</p>
-                    </div>
-                    <button onClick={() => setKpiOpen(null)}
-                            style={{fontSize:'11px', fontWeight:'600', color:'rgba(0,0,0,0.40)', background:'none', border:'1px solid rgba(0,0,0,0.14)', borderRadius:'6px', padding:'5px 14px', cursor:'pointer', letterSpacing:'0.04em'}}>
-                      Fechar ×
-                    </button>
-                  </div>
-                  {kpiListData.sorted.map((m, i) => {
-                    const val = kpiListData.getValue(m);
-                    const pct = (val / kpiListData.max) * 100;
-                    return (
-                      <div key={m.contractNumber} className="pres-in" style={{
-                        display:'grid', gridTemplateColumns:'24px 1fr auto', gap:'16px', alignItems:'center',
-                        padding:'12px 0', borderBottom:'1px solid rgba(0,0,0,0.05)',
-                        animationDelay:`${i * 0.04}s`
-                      }}>
-                        <span style={{fontSize:'11px', color:'rgba(0,0,0,0.22)', fontWeight:'600', textAlign:'right'}}>{i+1}</span>
-                        <div>
-                          <div style={{display:'flex', alignItems:'baseline', gap:'10px', marginBottom:'6px'}}>
-                            <span style={{fontSize:'13px', fontWeight:'700', color:BLUE}}>{m.contractNumber}</span>
-                            {m.contractorName && <span style={{fontSize:'11px', color:'rgba(0,0,0,0.40)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'520px'}}>{m.contractorName}</span>}
-                          </div>
-                          <div style={{height:'2px', background:'rgba(0,0,0,0.06)', borderRadius:'2px', overflow:'hidden'}}>
-                            <div className="present-bar" style={{height:'100%', background:kpiListData.color, opacity:0.55, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${0.05 + i * 0.04}s`}} />
-                          </div>
-                        </div>
-                        <span style={{fontSize:'15px', fontWeight:'800', color:BLUE, whiteSpace:'nowrap', letterSpacing:'-0.02em'}}>
-                          {fmtCurrencyShort(val)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-              ) : (
-
-                /* ── Gráficos + Top contratos + Alertas ── */
-                <>
-                  {/* Gráfico mensal + Situação dos contratos */}
-                  <div style={{display:'grid', gridTemplateColumns:'1fr 300px', gap:'0', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'40px', marginBottom:'48px'}}>
-
-                    {/* Faturamento mensal */}
-                    <div className="pres-in" style={{animationDelay:'0.24s', paddingRight:'44px', borderRight:'1px solid rgba(0,0,0,0.08)'}}>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 4px 0'}}>
-                        Faturamento Mensal
-                      </p>
-                      <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', margin:'0 0 32px 0'}}>
-                        Últimos 6 meses · por emissão de NF
-                      </p>
-                      <div style={{display:'flex', alignItems:'flex-end', gap:'8px', height:'130px'}}>
-                        {monthlyBilling.map((m, mi) => {
-                          const pct    = maxMonthly > 0 ? (m.value / maxMonthly) * 100 : 0;
-                          const isCurr = m.key === todayKey;
-                          return (
-                            <div key={m.key} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', height:'100%', justifyContent:'flex-end'}}>
-                              <div style={{width:'100%', position:'relative', display:'flex', flexDirection:'column', justifyContent:'flex-end', height:'96px'}}>
-                                {m.value > 0 && (
-                                  <span style={{position:'absolute', top:'-18px', left:'50%', transform:'translateX(-50%)', fontSize:'9px', fontWeight:'700', color: isCurr ? '#059669' : 'rgba(0,0,0,0.45)', whiteSpace:'nowrap'}}>
-                                    {fmtCurrencyShort(m.value)}
-                                  </span>
-                                )}
-                                <div className="present-bar" style={{
-                                  width:'100%', height:`${Math.max(pct, m.value>0 ? 4 : 0.5)}%`, maxHeight:'96px',
-                                  background: isCurr ? '#059669' : '#1D4ED8', opacity: isCurr ? 1 : 0.55,
-                                  borderRadius:'2px 2px 0 0', '--bar-w':'100%', animationDelay:`${0.62 + mi*0.06}s`
-                                }} />
-                              </div>
-                              <span style={{fontSize:'10px', whiteSpace:'nowrap', color: isCurr ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0.32)', fontWeight: isCurr ? '700' : '400'}}>
-                                {m.label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Situação dos contratos */}
-                    <div className="pres-in" style={{animationDelay:'0.30s', paddingLeft:'44px'}}>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 32px 0'}}>
-                        Situação dos Contratos
-                      </p>
-                      {uniqueNums.length === 0 ? (
-                        <p style={{fontSize:'12px', color:'rgba(0,0,0,0.30)', fontStyle:'italic'}}>Sem dados</p>
-                      ) : (
-                        <div style={{display:'flex', flexDirection:'column', gap:'22px'}}>
-                          {Object.entries(CONTRACT_SITUATION).map(([key, val], si) => {
-                            const count = bySituation[key] || 0;
-                            const pct   = uniqueNums.length > 0 ? (count / uniqueNums.length) * 100 : 0;
-                            const clr   = key==='ativo' ? '#059669' : key==='suspenso' ? '#D97706' : key==='encerrado' ? 'rgba(0,0,0,0.22)' : key==='vencido' ? '#EF4444' : '#DC2626';
-                            return (
-                              <div key={key}>
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'7px'}}>
-                                  <span style={{fontSize:'12px', color:'rgba(0,0,0,0.50)', fontWeight:'500'}}>{val.label}</span>
-                                  <span style={{fontSize:'20px', fontWeight:'800', color: count > 0 ? clr : 'rgba(0,0,0,0.15)', letterSpacing:'-0.02em', lineHeight:'1'}}>{count}</span>
-                                </div>
-                                <div style={{height:'2px', background:'rgba(0,0,0,0.07)', borderRadius:'2px', overflow:'hidden'}}>
-                                  <div className="present-bar" style={{height:'100%', background:clr, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${0.88 + si*0.07}s`}} />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Maiores contratos — tabela limpa */}
-                  {topContracts.length > 0 && (
-                    <div className="pres-in" style={{animationDelay:'0.35s', borderTop:'1px solid rgba(0,0,0,0.08)', paddingTop:'36px', marginBottom:'40px'}}>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(0,0,0,0.38)', textTransform:'uppercase', margin:'0 0 24px 0'}}>
-                        Maiores Contratos por Valor Global
-                      </p>
-                      {topContracts.map((m, ti) => {
-                        const pct = (m.globalValue / topContracts[0].globalValue) * 100;
-                        return (
-                          <div key={m.contractNumber} style={{display:'grid', gridTemplateColumns:'20px 1fr auto', gap:'16px', alignItems:'center', padding:'13px 0', borderBottom:'1px solid rgba(0,0,0,0.05)'}}>
-                            <span style={{fontSize:'11px', color:'rgba(0,0,0,0.22)', fontWeight:'600', textAlign:'right'}}>{ti+1}</span>
-                            <div>
-                              <div style={{display:'flex', alignItems:'baseline', gap:'12px', marginBottom:'7px'}}>
-                                <span style={{fontSize:'14px', fontWeight:'700', color:BLUE}}>{m.contractNumber}</span>
-                                {m.contractorName && <span style={{fontSize:'11px', color:'rgba(0,0,0,0.38)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'340px'}}>{m.contractorName}</span>}
-                              </div>
-                              <div style={{height:'2px', background:'rgba(0,0,0,0.06)', borderRadius:'2px', overflow:'hidden'}}>
-                                <div className="present-bar" style={{height:'100%', background:'#1D4ED8', opacity:0.55, borderRadius:'2px', '--bar-w':`${pct}%`, animationDelay:`${1.0 + ti*0.06}s`}} />
-                              </div>
-                            </div>
-                            <span style={{fontSize:'16px', fontWeight:'800', color:BLUE, whiteSpace:'nowrap', letterSpacing:'-0.02em'}}>
-                              {fmtCurrencyShort(m.globalValue)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Alertas de vigência */}
-                  {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0) && (
-                    <div className="pres-in" style={{animationDelay:'0.42s', borderTop:'1px solid rgba(239,68,68,0.20)', paddingTop:'32px'}}>
-                      <p style={{fontSize:'10px', fontWeight:'700', letterSpacing:'0.14em', color:'rgba(220,38,38,0.60)', textTransform:'uppercase', margin:'0 0 20px 0'}}>
-                        Alertas de Vigência
-                      </p>
-                      <div style={{display:'flex', gap:'52px'}}>
-                        {expiredList.length > 0 && (
-                          <div>
-                            <p style={{fontSize:'42px', fontWeight:'800', color:'#DC2626', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{expiredList.length}</p>
-                            <p style={{fontSize:'11px', color:'rgba(220,38,38,0.60)', margin:0}}>contrato{expiredList.length!==1?'s':''} vencido{expiredList.length!==1?'s':''}</p>
-                          </div>
-                        )}
-                        {exp7List.length > 0 && (
-                          <div>
-                            <p style={{fontSize:'42px', fontWeight:'800', color:'#D97706', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp7List.length}</p>
-                            <p style={{fontSize:'11px', color:'rgba(217,119,6,0.60)', margin:0}}>vence{exp7List.length===1?'':'m'} em 7 dias</p>
-                          </div>
-                        )}
-                        {exp30List.length > 0 && (
-                          <div>
-                            <p style={{fontSize:'42px', fontWeight:'800', color:'rgba(0,0,0,0.35)', letterSpacing:'-0.03em', lineHeight:'1', margin:'0 0 6px 0'}}>{exp30List.length}</p>
-                            <p style={{fontSize:'11px', color:'rgba(0,0,0,0.30)', margin:0}}>vence{exp30List.length===1?'':'m'} em 30 dias</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-            </div>
-          </div>
-        );
-      }
+      if (presentMode) return <ApresentacaoBI contracts={contracts} contractMeta={contractMeta} ano={adminStatsYear} onSair={() => setPresentMode(false)} />;
 
       return (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-slate-100 overflow-hidden">
+        <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden ds ds-cores" style={{background:'#F3F5F8'}}>
 
-          {/* ── HEADER ── */}
-          <div className="flex-shrink-0 shadow-md" style={{background:BLUE}}>
-            <div className="px-5 py-4 flex items-center justify-between text-white">
+          {/* ── CABEÇALHO (design system) ── */}
+          <div className="flex-shrink-0 bg-white border-b" style={{borderColor:'#E3E8EF'}}>
+            <div className="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <LayoutDashboard className="w-5 h-5" />
+                <span className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background:BLUE}}>
+                  <img src="gc-simbolo-branco.png" alt="" style={{height:22, width:22, objectFit:'contain'}} />
+                </span>
                 <div>
-                  <h1 className="font-bold text-base leading-tight">Painel Administrativo</h1>
-                  <p className="text-xs text-blue-200">{uniqueNums.length} contrato{uniqueNums.length!==1?'s':''} · {contracts.length} parcela{contracts.length!==1?'s':''}</p>
+                  <h1 className="font-semibold text-base leading-tight" style={{color:BLUE}}>Painel Administrativo</h1>
+                  <p className="text-xs text-slate-500">{uniqueNums.length} contrato{uniqueNums.length!==1?'s':''} · {contracts.length} parcela{contracts.length!==1?'s':''}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPresentMode(true)}
-                        className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
-                  <Maximize2 className="w-4 h-4" />Apresentação
+                        className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors" style={{background:BLUE}}>
+                  <Maximize2 className="w-3.5 h-3.5" />Apresentação
                 </button>
                 <button onClick={generateAdminPDF}
-                        className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
-                  <FilePdf className="w-4 h-4" />Emitir Relatório
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border bg-white text-slate-600 hover:bg-slate-50 transition-colors" style={{borderColor:'#E3E8EF'}}>
+                  <FilePdf className="w-3.5 h-3.5" />Emitir relatório
                 </button>
                 <button onClick={handleExport}
-                        className="flex items-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-bold border-2 border-white/30 hover:bg-white/10 transition-colors">
-                  <Download className="w-4 h-4" />Exportar Excel
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border bg-white text-slate-600 hover:bg-slate-50 transition-colors" style={{borderColor:'#E3E8EF'}}>
+                  <Download className="w-3.5 h-3.5" />Exportar Excel
                 </button>
-                <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10"><X className="w-5 h-5" /></button>
+                <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Fechar"><X className="w-5 h-5" /></button>
               </div>
             </div>
-            <div className="flex px-5 gap-1 pb-0">
+            <div className="flex px-6 gap-1">
               {[
-                { key:'dashboard',     label:'Dashboard' },
+                { key:'dashboard',     label:'BI · Visão executiva' },
                 { key:'lancar-nf',    label:'Lançar NF' },
                 { key:'contratos',    label:'Contratos' },
                 { key:'usuarios',     label: <span className="flex items-center gap-1.5">Usuários {pendingUsers?.length > 0 && <span className="w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white" style={{background:'#f59e0b'}}>{pendingUsers.length}</span>}</span> },
                 { key:'configuracoes', label:'Configurações' },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                        className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-colors relative ${tab===t.key ? 'bg-slate-100 text-blue-700' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
+                        className="px-3.5 py-2.5 text-xs font-semibold transition-colors relative border-b-2 -mb-px"
+                        style={tab===t.key ? {borderColor:BLUE, color:BLUE} : {borderColor:'transparent', color:'#64748B'}}>
                   {t.label}
                   {t.key==='dashboard' && totalAlerts > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white bg-red-500">{totalAlerts > 9 ? '9+' : totalAlerts}</span>
@@ -16022,348 +16381,14 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
                 </button>
               ))}
             </div>
-            <div className="h-1" style={{background:`linear-gradient(to right, ${BLUE}, ${GREEN})`}} />
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-6">
 
           {/* ══════════════════ DASHBOARD ══════════════════ */}
           {tab === 'dashboard' && (
-            <div className="space-y-5">
-
-              {/* ── Cabeçalho do Dashboard com seletor de ano ── */}
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm" style={{background: BLUE}}>
-                    <LayoutDashboard className="w-4 h-4"/>
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-black leading-none" style={{color: BLUE}}>Dashboard</h2>
-                    <p className="text-[10px] text-gray-400 mt-0.5 leading-none">
-                      {issuedYr} parcela{issuedYr!==1?'s':''} · {completedYr} concluída{completedYr!==1?'s':''}
-                      {overdueYr > 0
-                        ? <> · <span className="text-red-500 font-bold">{overdueYr} atrasada{overdueYr!==1?'s':''}</span></>
-                        : ' · sem atrasos'} em {adminStatsYear}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white shadow-sm">
-                  <Calendar className="w-3.5 h-3.5 text-gray-400"/>
-                  <span className="text-[11px] text-gray-500 font-medium">Ano de referência:</span>
-                  <select value={adminStatsYear} onChange={e => setAdminStatsYear(e.target.value)}
-                          className="text-sm font-black bg-transparent focus:outline-none cursor-pointer pr-1"
-                          style={{color: BLUE}}>
-                    {adminAvailableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Central de Alertas */}
-              {(expiredList.length > 0 || exp7List.length > 0 || exp30List.length > 0 || overdueYr > 0 || dueTodayYr > 0) && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2" style={{background:'#fef9f0'}}>
-                    <Bell className="w-4 h-4 text-amber-500" />
-                    <h2 className="text-xs font-black uppercase tracking-widest text-amber-700">Central de Alertas</h2>
-                    <span className="ml-auto text-[10px] text-amber-500 font-semibold">
-                      {expiredList.length + exp7List.length + exp30List.length + overdueYr + dueTodayYr} item{(expiredList.length + exp7List.length + exp30List.length + overdueYr + dueTodayYr) !== 1 ? 's' : ''} de atenção
-                    </span>
-                  </div>
-                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {expiredList.length > 0 && (
-                      <AlertGroupCard color="red" icon={<AlertTriangle />} count={expiredList.length}
-                        title="Contratos Vencidos" subtitle="Vigência expirada — encerrar ou aditvar"
-                        expanded={expandedAlert==='expired'} onToggle={() => setExpandedAlert(p => p==='expired' ? null : 'expired')}
-                        contracts={expiredList} daysUntil={daysUntil} />
-                    )}
-                    {exp7List.length > 0 && (
-                      <AlertGroupCard color="orange" icon={<AlertTriangle />} count={exp7List.length}
-                        title="Vence em 7 Dias" subtitle="Ação urgente — prazo crítico"
-                        expanded={expandedAlert==='exp7'} onToggle={() => setExpandedAlert(p => p==='exp7' ? null : 'exp7')}
-                        contracts={exp7List} daysUntil={daysUntil} />
-                    )}
-                    {exp30List.length > 0 && (
-                      <AlertGroupCard color="yellow" icon={<Clock />} count={exp30List.length}
-                        title="Vence em 30 Dias" subtitle="Providenciar renovação ou encerramento"
-                        expanded={expandedAlert==='exp30'} onToggle={() => setExpandedAlert(p => p==='exp30' ? null : 'exp30')}
-                        contracts={exp30List} daysUntil={daysUntil} />
-                    )}
-                    {(overdueYr > 0 || dueTodayYr > 0) && (
-                      <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 flex-shrink-0">
-                            <Clock className="w-4 h-4 text-red-600" />
-                          </span>
-                          <div>
-                            <p className="text-xs font-bold text-red-700">SLA de Parcelas</p>
-                            <p className="text-[10px] text-red-500">{adminStatsYear} · prazo de processamento</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-4">
-                          {overdueYr > 0 && (
-                            <div>
-                              <p className="text-2xl font-black text-red-600">{overdueYr}</p>
-                              <p className="text-[10px] text-red-500">atrasada{overdueYr!==1?'s':''}</p>
-                            </div>
-                          )}
-                          {dueTodayYr > 0 && (
-                            <div>
-                              <p className="text-2xl font-black text-yellow-600">{dueTodayYr}</p>
-                              <p className="text-[10px] text-yellow-600">vence hoje</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* KPIs */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{color:BLUE}}>Indicadores</span>
-                <span className="flex items-center gap-1.5 text-[11px] text-slate-500"><span className="w-1.5 h-1.5 rounded-full" style={{background:GREEN}} />atualizado em tempo real</span>
-                <span className="text-[10px] text-gray-400 font-medium">{adminStatsYear}</span>
-              </div>
-              {/* KPIs */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <DashKpiCard icon={<Clipboard />} label="Contratos Ativos" value={contractsYrCount} color={BLUE}
-                  sub={`${activeCountYr} ativo${activeCountYr!==1?'s':''} · ${suspendedCountYr} suspenso${suspendedCountYr!==1?'s':''} em ${adminStatsYear}`} />
-                <DashKpiCard icon={<DollarSign />} label={`Receita Prevista ${adminStatsYear}`} value={fmtCurrencyShort(valorNoAnoAdmin)} color="#1e40af"
-                  sub="valor anual proporcional ao exercício"
-                  onClick={() => setShowAdminReceita(v => !v)} active={showAdminReceita} />
-                {partnerRepasseAdmin > 0 && (
-                  <DashKpiCard icon={<LinkIcon />} label="Repasse" value={fmtCurrencyShort(partnerRepasseAdmin)} color="#1d4ed8"
-                    sub={`destinado às parceiras em ${adminStatsYear}`} />
-                )}
-                <DashKpiCard icon={<CheckCircle />} label="Total Pago" value={fmtCurrencyShort(totalBilledAll)} color={GREEN}
-                  sub={`${completedYr} parcela${completedYr!==1?'s':''} c/ pagamento concluído em ${adminStatsYear}`} />
-                <DashKpiCard icon={<TrendingUp />} label="Taxa de Execução"
-                  value={`${execRateAll.toFixed(1).replace('.',',')}%`}
-                  color={execRateAll>=75 ? '#166534' : execRateAll>=40 ? '#854d0e' : '#991b1b'}
-                  progressBar={execRateAll}
-                  sub={`${overdueYr > 0 ? `${overdueYr} atrasada${overdueYr!==1?'s':''} · ` : ''}${fmtCurrencyShort(valorNoAnoAdmin - totalBilledAll)} a receber`} />
-              </div>
-
-              {/* ── Painel detalhe Receita Prevista ── */}
-              {showAdminReceita && (() => {
-                const fmtV = v => { const n = Number(v); if (!n) return '—'; return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-                const rows = Object.entries(contractMeta).map(([cn, m]) => {
-                  if (!m.startDate || !m.endDate) return null;
-                  const isParceria = m.contractType === 'parceria';
-                  const gv = isParceria && m.bdTotal > 0 ? parseFloat(m.bdTotal)||0 : parseFloat(m.globalValue)||0;
-                  if (gv === 0) return null;
-                  const cStart = toAdmIdx(m.startDate), cEnd = toAdmIdx(m.endDate);
-                  const totalMeses = m.prazoMeses > 0 ? m.prazoMeses : (cEnd - cStart + 1);
-                  if (totalMeses <= 0) return null;
-                  const yStart = adminYearInt*12+1, yEnd = adminYearInt*12+12;
-                  if (Math.min(cEnd, yEnd) < Math.max(cStart, yStart)) return null;
-                  const mesesNoAno = Math.min(cEnd, yEnd) - Math.max(cStart, yStart) + 1;
-                  const receitaAno = (gv / totalMeses) * 12;
-                  return { cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno };
-                }).filter(Boolean).sort((a,b) => b.receitaAno - a.receitaAno);
-                const total = rows.reduce((s, r) => s + r.receitaAno, 0);
-                return (
-                  <div className="mt-3 bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden fade-in">
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                      <h3 className="text-sm font-bold" style={{color:'#1e40af'}}>Receita Prevista {adminStatsYear} — por Contrato</h3>
-                      <button onClick={() => setShowAdminReceita(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr style={{background:'#f1f5f9'}}>
-                            {['Nº Contrato','Órgão','Objeto','Tipo','Prazo Total','Meses em '+adminStatsYear,'Valor Base','Receita '+adminStatsYear].map(h => (
-                              <th key={h} className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {rows.map(({ cn, m, isParceria, gv, totalMeses, mesesNoAno, receitaAno }) => {
-                            const sigla = getUnitSigla(m.unit||'');
-                            return (
-                              <tr key={cn} className="hover:bg-indigo-50 transition-colors cursor-pointer"
-                                  onClick={() => { setActiveContractNumber(cn); setShowAdminReceita(false); }}>
-                                <td className="px-4 py-2.5 font-black whitespace-nowrap" style={{color:'#1e40af'}}>{cn}</td>
-                                <td className="px-4 py-2.5 whitespace-nowrap">
-                                  {sigla
-                                    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-md" style={{background:'#1e40af14',color:'#1e40af'}}>{sigla}</span>
-                                    : <span className="text-gray-400 text-[11px]">{(m.unit||'—').substring(0,20)}</span>}
-                                </td>
-                                <td className="px-4 py-2.5 text-gray-700 max-w-[200px]"><p className="truncate">{m.object||'—'}</p></td>
-                                <td className="px-4 py-2.5 whitespace-nowrap">
-                                  {isParceria
-                                    ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{background:'#F2F8F4',color:'#166534',borderColor:'#86efac'}}>Parceria</span>
-                                    : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-gray-50">Direto</span>}
-                                </td>
-                                <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-center">{totalMeses}m</td>
-                                <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                                  <span className="font-bold text-indigo-700">{mesesNoAno}</span>
-                                  <span className="text-gray-400 text-[10px]"> / 12</span>
-                                </td>
-                                <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtV(gv)}</td>
-                                <td className="px-4 py-2.5 font-black whitespace-nowrap text-indigo-800">{fmtV(receitaAno)}</td>
-                              </tr>
-                            );
-                          })}
-                          {rows.length > 0 && (
-                            <tr style={{background:'#F4F7FB', borderTop:'2px solid #a5b4fc'}}>
-                              <td colSpan={7} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-400">Total Receita {adminStatsYear}</td>
-                              <td className="px-4 py-2.5 font-black text-sm text-indigo-800">{fmtV(total)}</td>
-                            </tr>
-                          )}
-                          {rows.length === 0 && (
-                            <tr><td colSpan={8} className="px-4 py-8 text-center text-xs text-gray-400">Nenhum contrato com vigência em {adminStatsYear}</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Gráfico mensal + Situação */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-xs font-black uppercase tracking-widest" style={{color:BLUE}}>Faturamento Mensal</h3>
-                    <span className="text-[10px] text-gray-400 font-medium">{adminStatsYear} · 12 meses</span>
-                  </div>
-                  <p className="text-[10px] text-gray-400 mb-4">Valores pagos (etapa Pagamento concluída) por mês em {adminStatsYear}</p>
-                  <div className="flex items-end gap-2" style={{height:'160px'}}>
-                    {monthlyBilling.map(m => {
-                      const pct = (m.value / maxMonthly) * 100;
-                      const isCurr = adminStatsYear === String(new Date().getFullYear()) && m.key === todayKey;
-                      return (
-                        <div key={m.key} className="flex flex-col items-center gap-1 flex-1 h-full justify-end group">
-                          <div className="relative w-full flex flex-col justify-end" style={{height:'128px'}}>
-                            {m.value > 0 && (
-                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-gray-600 whitespace-nowrap bg-white px-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                                {fmtCurrencyShort(m.value)}
-                              </span>
-                            )}
-                            <div className="w-full rounded-t-lg transition-all duration-700 flex-shrink-0"
-                                 style={{height:`${Math.max(pct*1.28, m.value>0?3:2)}px`, maxHeight:'128px', background:isCurr?GREEN:BLUE, opacity:isCurr?1:0.6}} />
-                          </div>
-                          <span className={`text-[10px] whitespace-nowrap ${isCurr?'text-gray-700 font-bold':'text-gray-400 font-medium'}`}>{m.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-5 text-[10px] text-gray-400">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{background:BLUE,opacity:0.6}} /> Meses anteriores</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{background:GREEN}} /> Mês atual</span>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Situação dos Contratos</h3>
-                  <p className="text-[10px] text-gray-400 mb-3">Contratos com NFs em {adminStatsYear}</p>
-                  {contractsYrCount === 0 ? <p className="text-xs text-gray-400 italic">Nenhum contrato com NFs em {adminStatsYear}</p> : (
-                    <div className="space-y-3 flex-1">
-                      {Object.entries(CONTRACT_SITUATION).map(([key, val]) => {
-                        const count = bySituationYr[key] || 0;
-                        const pct   = contractsYrCount > 0 ? (count / contractsYrCount) * 100 : 0;
-                        const barColor = key==='ativo' ? GREEN : key==='suspenso' ? '#f59e0b' : key==='encerrado' ? '#64748b' : key==='vencido' ? '#ef4444' : '#dc2626';
-                        return (
-                          <div key={key}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${val.badge}`}>{val.label}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-400">{pct.toFixed(0)}%</span>
-                                <span className="text-sm font-black text-gray-700 w-5 text-right">{count}</span>
-                              </div>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`, background:barColor}} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
-                    <div className="p-2 rounded-xl" style={{background:'#F2F8F4'}}>
-                      <p className="text-lg font-black" style={{color:GREEN}}>{activeCountYr}</p>
-                      <p className="text-[9px] text-green-600 font-semibold">Ativos</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-yellow-50">
-                      <p className="text-lg font-black text-yellow-600">{suspendedCountYr}</p>
-                      <p className="text-[9px] text-yellow-600 font-semibold">Suspensos</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-gray-50">
-                      <p className="text-lg font-black text-gray-500">{closedCountYr}</p>
-                      <p className="text-[9px] text-gray-500 font-semibold">Encerrados</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Valor por unidade + Top contratos */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Faturado por Unidade</h3>
-                  <p className="text-[10px] text-gray-400 mb-4">Valores faturados por unidade/órgão em {adminStatsYear}</p>
-                  {byUnit.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhum dado</p> : (
-                    <div className="space-y-3">
-                      {byUnit.map(([unit, value], i) => {
-                        const pct = Math.round((value / maxUnit) * 100);
-                        return (
-                          <div key={unit} className="flex items-center gap-3">
-                            <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-black text-white flex-shrink-0"
-                                  style={{background:BLUE, opacity: Math.max(1 - i*0.1, 0.4)}}>
-                              {i+1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-semibold text-gray-700 truncate">{unit}</span>
-                                <span className="text-xs font-bold text-gray-500 ml-2 flex-shrink-0">{fmtCurrencyShort(value)}</span>
-                              </div>
-                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full rounded-full transition-all duration-700"
-                                     style={{width:`${pct}%`, background:BLUE, opacity:Math.max(1-i*0.1,0.4)}} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-1" style={{color:BLUE}}>Top 5 — Mais Faturados</h3>
-                  <p className="text-[10px] text-gray-400 mb-4">Contratos com maior faturamento em {adminStatsYear} · Verde = faturado · Cinza = valor total do contrato</p>
-                  {topContracts.length === 0 ? <p className="text-xs text-gray-400 italic">Nenhuma parcela faturada em {adminStatsYear}</p> : (
-                    <div className="space-y-4">
-                      {topContracts.map((m, i) => {
-                        const rankColor = i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#cd7f32':BLUE;
-                        const maxVal = topContracts[0].totalBilled || 1;
-                        const barW   = m.globalValue > 0 ? Math.min((m.globalValue / Math.max(topContracts.reduce((mx,x)=>Math.max(mx,x.globalValue||0),0),1)) * 100, 100) : 0;
-                        const billW  = (m.totalBilled / maxVal) * 100;
-                        return (
-                          <div key={m.contractNumber}>
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0" style={{background:rankColor}}>{i+1}</span>
-                              <span className="text-xs font-bold flex-1 truncate" style={{color:BLUE}}>{m.contractNumber}{m.unit ? ` · ${m.unit.toUpperCase()}` : ''}</span>
-                              <span className="text-xs font-bold flex-shrink-0" style={{color:GREEN}}>{fmtCurrencyShort(m.totalBilled)}</span>
-                            </div>
-                            <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="absolute inset-y-0 left-0 rounded-full bg-gray-200 transition-all duration-700" style={{width:`${barW}%`}} />
-                              <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700" style={{width:`${billW}%`, background:GREEN}} />
-                            </div>
-                            <div className="flex items-center justify-between mt-1">
-                              {m.object && <p className="text-[10px] text-gray-400 truncate flex-1">{m.object}</p>}
-                              <span className="text-[10px] font-bold flex-shrink-0 ml-2" style={{color:GREEN}}>{m.execRate.toFixed(0)}% exec.</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
+            <PainelBI contracts={contracts} contractMeta={contractMeta} ano={adminStatsYear} setAno={setAdminStatsYear}
+                      anos={adminAvailableYears} onApresentar={() => setPresentMode(true)} />
           )}
 
           {/* ══════════════════ CONTRATOS ══════════════════ */}
