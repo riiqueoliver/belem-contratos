@@ -21986,53 +21986,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={handleGoHome} />
               )}
 
-              {/* Botão + com dropdown — apenas para usuários não-exclusivos do Arcanjo */}
-              {!ARCANJO_ONLY.has(currentUser.username) && (
-                <div className="relative">
-                  <button
-                    title="Novo…"
-                    onClick={() => setShowPlusMenu(v => !v)}
-                    className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 focus:outline-none
-                      ${showPlusMenu || showForm ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`}>
-                    {showPlusMenu
-                      ? <X className="w-5 h-5 text-white" />
-                      : <Plus className="w-5 h-5 text-white/80 hover:text-white" />}
-                  </button>
-
-                  {showPlusMenu && (
-                    <div className="absolute left-[52px] top-0 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] w-44 overflow-hidden"
-                         style={{boxShadow:'0 8px 32px rgba(0,0,0,0.15)'}}
-                         onMouseDown={e => e.stopPropagation()}>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 px-3 pt-2 pb-1">Criar novo</p>
-                      <button
-                        onClick={() => { setShowPlusMenu(false); setShowForm(true); setActiveContractNumber(null); setShowContractsPage(false); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-blue-50 transition-colors group">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#E6ECF5'}}>
-                          <FileText className="w-3.5 h-3.5" style={{color: BLUE}} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-800">Novo Contrato</p>
-                          <p className="text-[10px] text-gray-400">Cadastrar contrato</p>
-                        </div>
-                      </button>
-                      {currentUser.role === 'admin' && (
-                        <button
-                          onClick={() => { setShowPlusMenu(false); setAdminInitialTab('lancar-nf'); setShowAdmin(true); }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-green-50 transition-colors group">
-                          <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:'#dcfce7'}}>
-                            <Plus className="w-3.5 h-3.5" style={{color: GREEN}} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-800">Nova Parcela</p>
-                            <p className="text-[10px] text-gray-400">Lançar nota fiscal</p>
-                          </div>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('contratos') && (
                 <SidebarBtn
                   icon={Clipboard}
@@ -22048,38 +22001,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={() => { setShowArcanjoAcoes(false); setShowInstallmentsPage(true); setShowContractsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && (
-                <SidebarBtn icon={Briefcase} label="Propostas"
-                  active={showProposalsPage}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
-              )}
-
-              {/* BI de Propostas: acessado pelo indicador dentro do módulo de Propostas */}
-
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('cronograma') && (
-                <SidebarBtn icon={Calculator} label="Cronograma Financeiro"
-                  active={showCronogramaPage}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCronogramaPage(true); }} />
-              )}
-
-              {!ARCANJO_ONLY.has(currentUser.username) && !MENU_OCULTO.has('oportunidades') && (
-                <SidebarBtn icon={TrendingUp} label="Oportunidades"
-                  active={showLeadsPage}
-                  badge={leads.filter(l => l.status === 'novo').length}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowLeadsPage(true); }} />
-              )}
-
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && !MENU_OCULTO.has('emitirProposta') && (
-                <SidebarBtn icon={FileText} label="Emitir Proposta"
-                  active={showPropEmissao}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowPropEmissao(true); }} />
-              )}
-
-              {!ARCANJO_ONLY.has(currentUser.username) && (
-                <SidebarBtn icon={Shield} label="Certidões"
-                  active={showCertidoesPage}
-                  badge={certidoes.filter(c => ['expired','expiring'].includes(certStatus(c))).length}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCertidoesPage(true); }} />
+              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && (
+                <SidebarBtn icon={Layers} label={SYS.id === 'main' ? 'Gestão GDoc' : 'GDoc'}
+                  active={showGdocPage}
+                  badge={SYS.id === 'main' ? gdocCaixa.filter(p => p.presente && p.novidadePara === currentUser.username).length : 0}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && (
@@ -22096,16 +22022,50 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={Shield} label="Certidões"
+                  active={showCertidoesPage}
+                  badge={certidoes.filter(c => ['expired','expiring'].includes(certStatus(c))).length}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCertidoesPage(true); }} />
+              )}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('cronograma') && (
+                <SidebarBtn icon={Calculator} label="Cronograma Financeiro"
+                  active={showCronogramaPage}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCronogramaPage(true); }} />
+              )}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && (
+                <SidebarBtn icon={Briefcase} label="Propostas"
+                  active={showProposalsPage}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+              )}
+
+              {/* BI de Propostas: acessado pelo indicador dentro do módulo de Propostas */}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && !MENU_OCULTO.has('oportunidades') && (
+                <SidebarBtn icon={TrendingUp} label="Oportunidades"
+                  active={showLeadsPage}
+                  badge={leads.filter(l => l.status === 'novo').length}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowLeadsPage(true); }} />
+              )}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('propostas') && !MENU_OCULTO.has('emitirProposta') && (
+                <SidebarBtn icon={FileText} label="Emitir Proposta"
+                  active={showPropEmissao}
+                  onClick={() => { setShowArcanjoAcoes(false); setShowProposalBI(false); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowPropEmissao(true); }} />
+              )}
+
+              {currentUser.role === 'admin' && !ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={LayoutDashboard} label="Painel Admin"
+                  active={showAdmin}
+                  badge={pendingUsers.length}
+                  onClick={() => setShowAdmin(true)} />
+              )}
+
+              {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={IaMenuIcon} label={IA_NOME}
                   active={showAssistentePage} badge={iaRecebidosNovos}
                   onClick={abrirAssistente} />
-              )}
-
-              {!ARCANJO_ONLY.has(currentUser.username) && moduleOn('gdoc') && (
-                <SidebarBtn icon={Layers} label={SYS.id === 'main' ? 'Gestão GDoc' : 'GDoc'}
-                  active={showGdocPage}
-                  badge={SYS.id === 'main' ? gdocCaixa.filter(p => p.presente && p.novidadePara === currentUser.username).length : 0}
-                  onClick={() => { setShowArcanjoAcoes(false); setShowGdocPage(true); setShowProposalsPage(false); setShowInstallmentsPage(false); setShowContractsPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
               {ARCANJO_USERS.has(currentUser.username) && (
@@ -22129,13 +22089,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               {(showArcanjoPage || showArcanjoGerencial) && ARCANJO_USERS.has(currentUser.username) && (
                 <SidebarBtn icon={Download} label="Exportar Excel"
                   onClick={handleExportArcanjo} />
-              )}
-
-              {currentUser.role === 'admin' && !ARCANJO_ONLY.has(currentUser.username) && (
-                <SidebarBtn icon={LayoutDashboard} label="Painel Admin"
-                  active={showAdmin}
-                  badge={pendingUsers.length}
-                  onClick={() => setShowAdmin(true)} />
               )}
 
               {!ARCANJO_ONLY.has(currentUser.username) && (
