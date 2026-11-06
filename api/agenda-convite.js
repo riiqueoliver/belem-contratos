@@ -3,7 +3,7 @@
 // Avisa por e-mail os participantes de um evento da Agenda, com convite de calendário
 // (.ics) para o evento entrar direto no Google Agenda/Outlook de quem recebe.
 // O evento e os e-mails de destino vêm do Firestore, nunca do navegador; só quem criou
-// o evento (sessão assinada de /api/login) pode disparar o aviso.
+// o evento ou participa dele (sessão assinada de /api/login) pode disparar o aviso.
 const { getDb } = require('../lib/firebaseAdmin');
 const { sendEmail } = require('../lib/email');
 const { validarPasse } = require('../lib/baseIA');
@@ -101,7 +101,8 @@ module.exports = async (req, res) => {
     const snap = await ref.get();
     if (!snap.exists) { res.status(404).json({ error: 'evento não encontrado' }); return; }
     const ev = snap.data();
-    if (ev.criadoPor !== sessao.u) { res.status(403).json({ error: 'só quem criou o evento envia o convite' }); return; }
+    // Quem criou e os participantes do sistema podem avisar (o organizador continua sendo quem criou)
+    if (ev.criadoPor !== sessao.u && !(ev.participantes || []).includes(sessao.u)) { res.status(403).json({ error: 'só quem criou ou participa do evento envia o aviso' }); return; }
 
     const usuarios = (await db.collection(sistema.prefixo + 'users').get()).docs.map(d => d.data());
     const pessoa = u => usuarios.find(x => x.username === u) || {};

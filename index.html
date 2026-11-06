@@ -928,56 +928,62 @@
     }
 
     /* Painel do sininho: movimentações do GDoc + vencimentos de contrato */
-    function AlertasPainel({ movs, vencimentos, onAbrirMov, onVerContratos, onMarcarLidas, onFechar }) {
-      const naoLidas = movs.filter(m => !m.lido).length;
+    /* Sino de alertas: vencimentos de contrato e certidão e movimentações do GDoc.
+       "Visto" tira o alerta da lista (vai para a aba "Marcados como vistos"); vale por usuário. */
+    const ALERTA_ESTILO = {
+      vermelho: { cor: '#B91C1C', fundo: '#FCF3F3' },
+      ambar:    { cor: '#B45309', fundo: '#FBF7EE' },
+      azul:     { cor: '#0B2B5E', fundo: '#F4F7FB' },
+      cinza:    { cor: '#64748B', fundo: '#F1F5F9' },
+    };
+    function AlertasPainel({ novos, vistos, onAbrir, onVisto, onTodosVistos, onDesfazer, onFechar }) {
+      const [aba, setAba] = React.useState('novos');
       const ref = React.useRef(null);
       React.useEffect(() => {
         const fora = e => { if (ref.current && !ref.current.contains(e.target)) onFechar(); };
         document.addEventListener('mousedown', fora);
         return () => document.removeEventListener('mousedown', fora);
       }, [onFechar]);
+      const lista = aba === 'novos' ? novos : vistos;
       return (
-        <div ref={ref} className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-2xl border border-gray-200 z-[200] overflow-hidden slide-in">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100" style={{background:'#f8fafc'}}>
-            <p className="text-sm font-bold text-gray-800">Alertas e movimentações</p>
-            {naoLidas > 0 && (
-              <button onClick={onMarcarLidas} className="text-[11px] font-semibold hover:underline" style={{color: BLUE}}>
-                Marcar todas como lidas
+        <div ref={ref} className="absolute right-0 top-full mt-2 w-[400px] max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-2xl border border-gray-200 z-[200] overflow-hidden slide-in">
+          <div className="flex items-center justify-between px-4 pt-3 border-b border-gray-100">
+            <div className="flex gap-1">
+              {[['novos', `Novos (${novos.length})`], ['vistos', `Marcados como vistos (${vistos.length})`]].map(([k, r]) => (
+                <button key={k} onClick={() => setAba(k)} className="text-xs font-semibold px-2 py-2 -mb-px border-b-2"
+                        style={aba === k ? { borderColor: BLUE, color: BLUE } : { borderColor: 'transparent', color: '#94A3B8' }}>{r}</button>
+              ))}
+            </div>
+            {aba === 'novos' && novos.length > 0 && (
+              <button onClick={() => onTodosVistos(novos.map(a => a.id))} className="text-[11px] font-semibold hover:underline pb-2" style={{color: BLUE}}>
+                Marcar todos
               </button>
             )}
           </div>
-          {vencimentos > 0 && (
-            <button onClick={onVerContratos} className="w-full text-left px-4 py-2.5 border-b border-gray-100 hover:bg-red-50/60 flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-              <span className="text-xs text-gray-700"><b className="text-red-600">{vencimentos}</b> contrato{vencimentos !== 1 ? 's' : ''} com vencimento em até 30 dias</span>
-            </button>
-          )}
-          <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Processos no GDoc</p>
-          <div className="max-h-[420px] overflow-y-auto">
-            {movs.length === 0 && (
-              <p className="px-4 pb-4 pt-1 text-xs text-gray-400">Nenhuma movimentação registrada ainda. A extensão do GDoc verifica os processos 3 vezes ao dia.</p>
+          <div className="max-h-[460px] overflow-y-auto">
+            {lista.length === 0 && (
+              <p className="px-4 py-8 text-xs text-gray-400 text-center">{aba === 'novos' ? 'Nenhum alerta novo. Tudo em dia.' : 'Nenhum alerta marcado como visto.'}</p>
             )}
-            {movs.map(m => {
-              const t = GDOC_MOV_TIPOS[m.tipo] || GDOC_MOV_TIPOS.aviso;
+            {lista.map(a => {
+              const e = ALERTA_ESTILO[a.nivel] || ALERTA_ESTILO.cinza;
               return (
-                <button key={m.id} onClick={() => onAbrirMov(m)}
-                  className={`w-full text-left px-4 py-2.5 border-t border-gray-50 hover:bg-slate-50 flex gap-3 ${m.lido ? '' : 'bg-blue-50/40'}`}>
-                  <span className="mt-1 w-2 h-2 rounded-full flex-shrink-0" style={{background: m.lido ? '#e2e8f0' : t.cor}} />
-                  <span className="min-w-0 flex-1">
+                <div key={a.id} className="group flex gap-3 px-4 py-2.5 border-b border-gray-50 hover:bg-slate-50">
+                  <span className="mt-1.5 w-2 h-2 rounded-full flex-shrink-0" style={{background: aba === 'novos' ? e.cor : '#CBD5E1'}} />
+                  <button onClick={() => onAbrir(a)} className="min-w-0 flex-1 text-left">
                     <span className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{color: t.cor, background: t.fundo}}>{t.rotulo}</span>
-                      <span className="text-[10px] text-gray-400">{quandoRelativo(m.criadoEm)}</span>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{color: e.cor, background: e.fundo}}>{a.rotulo}</span>
+                      {a.quando && <span className="text-[10px] text-gray-400">{a.quando}</span>}
                     </span>
-                    <span className="block text-xs font-semibold text-gray-800 mt-1 truncate">
-                      GDoc {m.gdoc}{m.contractNumber ? ` · Contrato ${m.contractNumber}` : ''}
-                    </span>
-                    <span className="block text-[11px] text-gray-600 leading-snug">{m.descricao}</span>
-                    {m.resultado && <span className="block text-[11px] text-gray-500 mt-0.5">{m.resultado}</span>}
-                    {m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') && (
-                      <span className="block text-[10px] text-amber-600 mt-0.5">Importando o PDF para a parcela…</span>
-                    )}
-                  </span>
-                </button>
+                    <span className="block text-xs font-semibold text-gray-800 mt-1">{a.titulo}</span>
+                    {a.texto && <span className="block text-[11px] text-gray-600 leading-snug">{a.texto}</span>}
+                    {a.extra && <span className="block text-[11px] text-gray-500 mt-0.5">{a.extra}</span>}
+                  </button>
+                  {aba === 'novos'
+                    ? <button onClick={() => onVisto(a.id)} title="Marcar como visto"
+                              className="self-start text-[10px] font-semibold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-white flex-shrink-0">✓ Visto</button>
+                    : <button onClick={() => onDesfazer(a.id)} title="Voltar para os novos"
+                              className="self-start text-[10px] font-semibold px-2 py-1 rounded-md text-gray-400 hover:text-gray-700 flex-shrink-0">Desfazer</button>}
+                </div>
               );
             })}
           </div>
@@ -9652,12 +9658,12 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    /* Criar/editar evento. Quem criou edita; participantes só visualizam. */
+    /* Criar/editar evento. Quem criou e os participantes podem editar e excluir, mesmo depois da data. */
     function EventoModal({ evento, eu, users, addToast, onFechar }) {
       const [f, setF] = useState(evento);
       const [salvando, setSalvando] = useState(false);
       const novo = !evento.id;
-      const podeEditar = novo || evento.criadoPor === eu;
+      const podeEditar = novo || evento.criadoPor === eu || (evento.participantes || []).includes(eu);
       const set = (k, v) => setF(x => ({ ...x, [k]: v }));
       const outros = users.filter(u => u.username !== eu && u.username !== (evento.criadoPor || eu));
       const emails = s => String(s || '').split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
@@ -9752,7 +9758,7 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
                   {novo ? 'Enviar convite por e-mail aos participantes' : 'Avisar os participantes da alteração por e-mail'}
                 </label>
               )}
-              {!podeEditar && <p className="text-[11px] text-gray-400">Criado por {users.find(u => u.username === evento.criadoPor)?.name || evento.criadoPor}. Só quem criou pode alterar.</p>}
+              {!novo && <p className="text-[11px] text-gray-400">Criado por {users.find(u => u.username === evento.criadoPor)?.name || evento.criadoPor}.{!podeEditar && ' Só quem criou e os participantes podem alterar.'}</p>}
             </div>
             <div className="flex items-center gap-2 px-5 py-3.5 border-t border-gray-100 bg-gray-50">
               {!novo && podeEditar && <button onClick={excluir} disabled={salvando} className="text-xs font-semibold px-3 py-2 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50">Excluir</button>}
@@ -18984,6 +18990,7 @@ Regras:
    e) Depois de entregar, pergunte em uma linha se quer ajustar algo (ex.: tom, seções, valores).
 8. Dados pessoais: use só o necessário para a tarefa.
 9. Respostas no chat são curtas e diretas, em Markdown simples.
+10. Não emita avisos de vencimento por iniciativa própria: eles ficam no sino de alertas do sistema. Use os alertas abaixo só se o usuário perguntar sobre vencimentos.
 
 Memória — aprendizados anteriores:
 ${memorias.length ? memorias.map(m => `- ${m.fato}`).join('\n') : '(nenhum ainda)'}
@@ -19858,19 +19865,8 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 <IaAvatar size={compacto ? 48 : 64} className={compacto ? 'mb-3' : 'mb-4'} />
                 <p className="text-sm font-bold text-gray-800">Olá, {primeiroNome}! Sou o {IA_NOME}.</p>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm">
-                  Redijo GDocs, e-mails, ofícios, DFD, ETP e TR, consulto os dados do sistema e aviso vencimentos. Escreva ou fale o que precisa.
+                  Redijo GDocs, e-mails, ofícios, DFD, ETP e TR, consulto os dados do sistema. Escreva ou fale o que precisa.
                 </p>
-                {alertas.length > 0 && (
-                  <div className="mt-3 w-full max-w-md text-left rounded-xl border border-red-100 bg-red-50 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-red-600 mb-1">Atenção · próximos 30 dias</p>
-                    {alertas.slice(0, 5).map((a, k) => (
-                      <p key={k} className="text-xs text-gray-700">
-                        • {a.referencia} — {a.dias < 0 ? `vencido há ${-a.dias} dia(s)` : a.dias === 0 ? 'vence hoje' : `vence em ${a.dias} dia(s)`}
-                      </p>
-                    ))}
-                    {alertas.length > 5 && <p className="text-[11px] text-gray-500 mt-0.5">e mais {alertas.length - 5}.</p>}
-                  </div>
-                )}
                 <div className={`mt-4 grid gap-2 w-full ${compacto ? 'grid-cols-1' : 'grid-cols-2 max-w-2xl'}`}>
                   {IA_SUGESTOES.map(s => (
                     <button key={s} onClick={() => enviar(s)}
@@ -20170,7 +20166,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const setConversaId = id => { setConversaIdS(id); iaGravarConversaAtiva(currentUser.username, id); };
       // Ao abrir, retoma a conversa que estiver ativa (pode ter mudado no módulo)
       useEffect(() => { if (aberto) setConversaIdS(iaLerConversaAtiva(currentUser.username)); }, [aberto]);
-      const qtdAlertas = useMemo(() => iaAlertas(dados, 30).length, [dados.contractMeta, dados.contracts, dados.certidoes]);
 
       return (
         <>
@@ -20202,10 +20197,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                     className="absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
                     style={{ background: '#0B2B5E' }}>{recebidos > 9 ? '9+' : recebidos}</span>
             )}
-            {!aberto && qtdAlertas > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
-                    style={{ background: '#ef4444' }}>{qtdAlertas > 9 ? '9+' : qtdAlertas}</span>
-            )}
+            {/* avisos de vencimento ficam só no sino de alertas, não no assistente */}
           </button>
         </>
       );
@@ -20277,6 +20269,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [arcanjoEventos,       setArcanjoEventos]       = useState([]);
       const [gdocs,                setGdocs]                = useState([]);
       const [gdocMovs,             setGdocMovs]             = useState([]);
+      const [alertasVistos,        setAlertasVistos]        = useState({});   // { idDoAlerta: quandoMarcou } do usuário logado
       const [gdocCaixa,            setGdocCaixa]            = useState([]);   // Gestão do GDoc: caixa do setor
       const [gdocCaixaMeta,        setGdocCaixaMeta]        = useState(null);
       const [gdocAbrirId,          setGdocAbrirId]          = useState(null);
@@ -20594,6 +20587,66 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
           issued:      byYear.length,
         };
       }, [uniqueContracts, contracts, statsYear, contractMeta]);
+
+      // Vistos do sino: um documento por usuário
+      useEffect(() => {
+        if (!currentUser?.username) return;
+        return db.collection(COL('alertas_vistos')).doc(currentUser.username)
+          .onSnapshot(d => setAlertasVistos((d.exists && d.data().vistos) || {}), () => {});
+      }, [currentUser?.username]);
+
+      // Lista de alertas do sino. O id muda quando a situação piora (ex.: 30 → 7 dias),
+      // e aí o alerta volta a aparecer como novo mesmo que o anterior tenha sido visto.
+      const alertasSino = useMemo(() => {
+        const t = new Date(); t.setHours(12,0,0,0);
+        const dias = d => Math.round((new Date(d + 'T12:00:00') - t) / 86400000);
+        const lista = [];
+        Object.entries(contractMeta).forEach(([num, m]) => {
+          if (!m.endDate || (m.situation || 'ativo') !== 'ativo') return;
+          const d = dias(m.endDate);
+          if (d > 30) return;
+          const nivel = d < 0 ? 'vencido' : d <= 7 ? '7' : '30';
+          lista.push({ id: `ctr:${num}:${m.endDate}:${nivel}`, tipo: 'contrato', num, nivel: d <= 7 ? 'vermelho' : 'ambar',
+            rotulo: d < 0 ? 'Contrato vencido' : 'Vencimento de contrato', ordem: d,
+            titulo: `Contrato ${num}${m.client ? ' · ' + m.client : ''}`,
+            texto: d < 0 ? `Vencido há ${-d} dia${-d !== 1 ? 's' : ''} (${new Date(m.endDate + 'T12:00:00').toLocaleDateString('pt-BR')}).`
+                 : d === 0 ? 'Vence hoje.' : `Vence em ${d} dia${d !== 1 ? 's' : ''} (${new Date(m.endDate + 'T12:00:00').toLocaleDateString('pt-BR')}).` });
+        });
+        certidoes.forEach(c => {
+          const st = certStatus(c);
+          if (st !== 'expired' && st !== 'expiring') return;
+          const d = certDiasAte(c.expiryDate);
+          lista.push({ id: `cert:${c.id}:${c.expiryDate}:${st}`, tipo: 'certidao', nivel: st === 'expired' ? 'vermelho' : 'ambar',
+            rotulo: st === 'expired' ? 'Certidão vencida' : 'Certidão a vencer', ordem: d,
+            titulo: c.label || c.type || 'Certidão',
+            texto: d < 0 ? `Vencida há ${-d} dia${-d !== 1 ? 's' : ''}.` : d === 0 ? 'Vence hoje.' : `Vence em ${d} dia${d !== 1 ? 's' : ''}.` });
+        });
+        gdocMovs.forEach(m => {
+          const tp = GDOC_MOV_TIPOS[m.tipo] || GDOC_MOV_TIPOS.aviso;
+          lista.push({ id: `mov:${m.id}`, tipo: 'gdoc', mov: m, nivel: m.tipo === 'aviso' ? 'ambar' : 'azul', rotulo: `GDoc · ${tp.rotulo}`,
+            ordem: 1000 + (Date.now() - new Date(m.criadoEm || 0).getTime()) / 864e5, quando: quandoRelativo(m.criadoEm),
+            titulo: `GDoc ${m.gdoc}${m.contractNumber ? ' · Contrato ' + m.contractNumber : ''}`, texto: m.descricao,
+            extra: m.aplicado === false && (m.tipo === 'nf' || m.tipo === 'nl') ? 'Importando o PDF para a parcela…' : m.resultado });
+        });
+        return lista.sort((a, b) => a.ordem - b.ordem);
+      }, [contractMeta, certidoes, gdocMovs]);
+      // Visto: marcado pelo usuário; movimentação do GDoc já lida conta como vista (até ele desfazer)
+      const alertaVisto = a => a.id in alertasVistos ? !!alertasVistos[a.id] : (a.tipo === 'gdoc' && !!a.mov.lido);
+      const alertasNovos  = alertasSino.filter(a => !alertaVisto(a));
+      const alertasJaVistos = alertasSino.filter(alertaVisto)
+        .sort((a, b) => String(alertasVistos[b.id] || '').localeCompare(String(alertasVistos[a.id] || '')));
+      function marcarAlertasVistos(ids) {
+        if (!ids.length || !currentUser?.username) return;
+        const agora = new Date().toISOString();
+        db.collection(COL('alertas_vistos')).doc(currentUser.username)
+          .set({ vistos: Object.fromEntries(ids.map(id => [id, agora])) }, { merge: true }).catch(() => {});
+        const movs = ids.filter(id => id.startsWith('mov:')).map(id => id.slice(4));
+        movs.forEach(id => db.collection(COL('gdoc_movs')).doc(id).update({ lido: true }).catch(() => {}));
+      }
+      function desfazerAlertaVisto(id) {
+        db.collection(COL('alertas_vistos')).doc(currentUser.username)
+          .set({ vistos: { [id]: false } }, { merge: true }).catch(() => {});
+      }
 
       const homeAlerts = useMemo(() => {
         const t = new Date(); t.setHours(12,0,0,0);
@@ -22185,8 +22238,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                 {!showArcanjoPage && !showArcanjoGerencial && !showArcanjoAcoes && (<>
                   {/* Indicador de alertas — abre o painel com vencimentos e movimentações do GDoc */}
                   {(() => {
-                    const movsNaoLidas = gdocMovs.filter(m => !m.lido).length;
-                    const total = totalHomeAlerts_sb + movsNaoLidas;
+                    const total = alertasNovos.length;
                     return (
                       <div className="relative">
                         <button onClick={() => setShowAlertas(v => !v)}
@@ -22199,11 +22251,16 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                           {total > 0 ? `${total} alerta${total!==1?'s':''}` : 'Alertas'}
                         </button>
                         {showAlertas && (
-                          <AlertasPainel movs={gdocMovs} vencimentos={totalHomeAlerts_sb}
-                            onAbrirMov={abrirMovGdoc}
-                            onMarcarLidas={marcarMovsLidas}
+                          <AlertasPainel novos={alertasNovos} vistos={alertasJaVistos}
+                            onVisto={id => marcarAlertasVistos([id])} onTodosVistos={marcarAlertasVistos} onDesfazer={desfazerAlertaVisto}
                             onFechar={() => setShowAlertas(false)}
-                            onVerContratos={() => { setShowAlertas(false); setShowArcanjoAcoes(false); setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
+                            onAbrir={a => {
+                              if (a.tipo === 'gdoc') { marcarAlertasVistos([a.id]); abrirMovGdoc(a.mov); return; }
+                              setShowAlertas(false);
+                              if (a.tipo === 'certidao') { setShowArcanjoAcoes(false); setShowContractsPage(false); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); setShowCertidoesPage(true); return; }
+                              setShowArcanjoAcoes(false); setShowContractsPage(false); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setShowForm(false); setShowAdmin(false); setActiveContractNumber(a.num);
+                            }}
+                            onVerContratosAntigo={() => { setShowAlertas(false); setShowArcanjoAcoes(false); setShowContractsPage(true); setShowInstallmentsPage(false); setShowProposalsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
                         )}
                       </div>
                     );
