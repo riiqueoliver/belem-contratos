@@ -20216,6 +20216,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [showAdmin,            setShowAdmin]            = useState(false);
       const [adminInitialTab,      setAdminInitialTab]      = useState('dashboard');
       const [showPlusMenu,         setShowPlusMenu]         = useState(false);
+      const [menuAberto,           setMenuAberto]           = useState(false);   // menu lateral expandido (hover)
       const [showContractsPage,    setShowContractsPage]    = useState(false);
       const [showInstallmentsPage, setShowInstallmentsPage] = useState(false);
       const [showProposalsPage,    setShowProposalsPage]    = useState(false);
@@ -21857,24 +21858,27 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
 
       function SidebarBtn({ icon: Icon, label, onClick, active, badge, isAvatar }) {
         return (
-          <button onClick={onClick} title={label}
-            className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 group focus:outline-none
-              ${active ? 'bg-white/25 shadow-inner' : 'hover:bg-white/15'}`}>
-            {isAvatar
-              ? <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white select-none"
-                      style={{background: GREEN}}>{userInitials}</span>
-              : <Icon className={`w-5 h-5 transition-colors ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`} />
-            }
-            {badge > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                    style={{background:'#ef4444'}}>{badge > 9 ? '9+' : badge}</span>
-            )}
-            {/* Tooltip */}
-            <span className="absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap
-                             opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]"
-                  style={{background:'#1e293b'}}>
+          <button onClick={onClick} title={menuAberto ? undefined : label}
+            className={`relative w-full h-10 rounded-xl flex items-center gap-3 px-2.5 transition-colors duration-150 group focus:outline-none flex-shrink-0
+              ${active ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+            <span className="relative w-5 h-5 flex items-center justify-center flex-shrink-0">
+              {isAvatar
+                ? <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black text-white select-none flex-shrink-0"
+                        style={{background: GREEN}}>{userInitials}</span>
+                : <Icon className={`w-5 h-5 transition-colors ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`} />}
+              {badge > 0 && !menuAberto && (
+                <span className="absolute -top-2 -right-2 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
+                      style={{background:'#ef4444'}}>{badge > 9 ? '9+' : badge}</span>
+              )}
+            </span>
+            <span className={`flex-1 text-left text-[13px] whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-150
+                              ${menuAberto ? 'opacity-100 delay-75' : 'opacity-0'} ${active ? 'text-white font-semibold' : 'text-white/75 group-hover:text-white'}`}>
               {label}
             </span>
+            {badge > 0 && menuAberto && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white flex-shrink-0"
+                    style={{background:'#ef4444'}}>{badge > 99 ? '99+' : badge}</span>
+            )}
           </button>
         );
       }
@@ -21942,17 +21946,22 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                           addToast={addToast} />
 
           {/* ── SIDEBAR ────────────────────────────────────────── */}
-          <aside className="fixed top-0 left-0 h-screen w-16 flex flex-col items-center py-3 z-50 overflow-visible"
-                 style={ARCANJO_ONLY.has(currentUser.username)
-                   ? {background:'#7b61c7', boxShadow:'4px 0 24px rgba(90,55,160,0.22)'}
-                   : {background: BLUE,     boxShadow:'4px 0 24px rgba(11,43,94,0.18)'}}>
+          <aside className="fixed top-0 left-0 h-screen flex flex-col py-3 z-50 overflow-hidden"
+                 onMouseEnter={() => setMenuAberto(true)} onMouseLeave={() => setMenuAberto(false)}
+                 style={{ width: menuAberto ? 232 : 64, transition: 'width .22s ease, box-shadow .22s ease',
+                   ...(ARCANJO_ONLY.has(currentUser.username)
+                     ? {background:'#7b61c7', boxShadow: menuAberto ? '8px 0 32px rgba(90,55,160,0.32)' : '4px 0 24px rgba(90,55,160,0.22)'}
+                     : {background: BLUE,     boxShadow: menuAberto ? '8px 0 32px rgba(11,43,94,0.30)' : '4px 0 24px rgba(11,43,94,0.18)'}) }}>
 
-            {/* Logo / Home — só no GCSP e no Arcanjo's; no sistema principal o logo fica no cabeçalho */}
-            {(SYS.id === 'gcsp' || ARCANJO_ONLY.has(currentUser.username)) && (<>
-            <button onClick={handleGoHome} title="Início"
-                    className="mb-4 mt-1 focus:outline-none group relative">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/15"
-                   style={{background:'rgba(255,255,255,0.08)'}}>
+            {/* Símbolo do logo no topo; com o menu aberto, o nome do sistema ao lado */}
+            <>
+            <button onClick={handleGoHome} title={menuAberto ? undefined : 'Início'}
+                    className="mb-4 mt-1 mx-3 focus:outline-none group relative flex items-center gap-3 flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all hover:bg-white/15"
+                   style={{background: SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) ? 'transparent' : 'rgba(255,255,255,0.08)'}}>
+                {SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && (
+                  <img src="gc-simbolo-branco.png" alt="Gestão de Contratos" style={{height:34, width:34, objectFit:'contain'}} />
+                )}
                 {ARCANJO_ONLY.has(currentUser.username) ? (
                   <img src="arcanjo-logo.jpg" alt="Instituto Arcanjo's"
                        style={{height:34, width:34, objectFit:'contain', borderRadius:6, background:'#fff', padding:1}} />
@@ -21967,19 +21976,20 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   </>
                 )}
               </div>
-              <span className="absolute left-[52px] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white whitespace-nowrap
-                               opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 shadow-xl z-[100]"
-                    style={{background:'#1e293b'}}>
-                {ARCANJO_ONLY.has(currentUser.username) ? 'Instituto Arcanjo\'s' : `${SYS.brand} — ${SYS.sub}`}
+              <span className={`text-left leading-tight whitespace-nowrap transition-opacity duration-150 ${menuAberto ? 'opacity-100 delay-75' : 'opacity-0'}`}>
+                <span className="block text-sm font-bold text-white">
+                  {ARCANJO_ONLY.has(currentUser.username) ? 'Instituto Arcanjo\'s' : SYS.id === 'main' ? 'Gestão de Contratos' : SYS.brand}
+                </span>
+                <span className="block text-[10px] text-white/60">{ARCANJO_ONLY.has(currentUser.username) ? 'Acolher, Cuidar e Transformar' : SYS.id === 'main' ? 'Belém Digital · NGCC' : SYS.sub}</span>
               </span>
             </button>
 
             {/* Divider */}
-            <div className="w-8 h-px mb-3" style={{background:'rgba(255,255,255,0.15)'}} />
-            </>)}
+            <div className="h-px mb-3 mx-4 flex-shrink-0" style={{background:'rgba(255,255,255,0.15)'}} />
+            </>
 
             {/* Nav principal */}
-            <nav className={`flex flex-col gap-1.5 flex-1 items-center w-full px-3 overflow-visible ${SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) ? 'pt-2' : ''}`}>
+            <nav className="flex flex-col gap-1 flex-1 w-full px-3 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth:'none'}}>
               {!ARCANJO_ONLY.has(currentUser.username) && (
                 <SidebarBtn icon={Home} label="Início"
                   active={!showForm && !activeContractNumber && !showAdmin && !showContractsPage && !showInstallmentsPage && !showProposalsPage && !showGdocPage && !showArcanjoPage}
@@ -22098,11 +22108,11 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             </nav>
 
             {/* Divider bottom */}
-            <div className="w-8 h-px mb-3" style={{background:'rgba(255,255,255,0.15)'}} />
+            <div className="h-px my-3 mx-4 flex-shrink-0" style={{background:'rgba(255,255,255,0.15)'}} />
 
             {/* Profile */}
-            <div className="flex flex-col items-center gap-1.5 w-full px-3 overflow-visible">
-              <SidebarBtn icon={null} label={`Perfil — ${currentUser.name || currentUser.username}`}
+            <div className="flex flex-col gap-1.5 w-full px-3 flex-shrink-0">
+              <SidebarBtn icon={null} label={currentUser.name || currentUser.username}
                 isAvatar onClick={() => setShowProfile(true)} />
             </div>
 
@@ -22116,13 +22126,6 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             <header className="bg-white sticky top-0 z-40 px-6 flex items-center justify-between"
                     style={{height:'56px', borderBottom:'1px solid #e2e8f0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)'}}>
               <div className="flex items-center gap-3">
-                {SYS.id === 'main' && !emArcanjo && (
-                  <>
-                    <img src="gestao-contratos-cor.png" alt="Gestão de Contratos" onClick={handleGoHome}
-                         className="cursor-pointer select-none" style={{height:38, width:'auto', objectFit:'contain'}} />
-                    <span className="w-px h-8 bg-gray-200" />
-                  </>
-                )}
                 <div>
                   <p className="text-sm font-bold leading-tight" style={{color: BLUE}}>
                     {saudacao}, {firstName}!
