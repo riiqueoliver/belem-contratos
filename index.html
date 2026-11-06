@@ -10277,6 +10277,400 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
+    /* ═══════════════════════════════════════════════════════
+       DOCUMENTOS — repositório central
+       Duas origens no mesmo índice:
+       • automáticas (só leitura, sempre atualizadas): PDFs de contratos, parcerias,
+         aditivos, NFs, NLs, certidões, documentos redigidos pela IA e pastas de relatórios;
+       • do repositório (doc_pastas + documentos): pastas, subpastas e arquivos enviados aqui.
+       O arquivo enviado fica em pdfs/doc_{id}, igual aos demais PDFs do sistema.
+    ═══════════════════════════════════════════════════════ */
+    const DOC_PASTAS_PADRAO = ['Ofícios', 'Memorandos', 'Despachos', 'Propostas comerciais', 'Parcerias e RFPs',
+      'Termos de referência, DFD e ETP', 'Atas e reuniões', 'Notificações', 'Modelos', 'Outros'];
+    const DOC_LIMITE_KB = 900;
+    const docIcone = tipo => ({ pdf: 'PDF', ia: 'IA', link: 'LINK', arquivo: 'ARQ' }[tipo] || 'ARQ');
+    const docCorTipo = tipo => ({ pdf: '#B91C1C', ia: '#2457A6', link: '#2E7D32', arquivo: '#64748B' }[tipo] || '#64748B');
+    const docData = iso => {
+      if (!iso) return '';
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      const d = new Date(iso); return isNaN(d) ? String(iso).slice(0, 10) : d.toLocaleDateString('pt-BR');
+    };
+    const docSemAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+    function DocumentosPage({ currentUser, users, contracts, contractMeta, contractAdditives, pdfStorage, certidoes, addToast }) {
+      const eu = currentUser.username;
+      const [pastas, setPastas] = React.useState(null);
+      const [docs, setDocs] = React.useState([]);
+      const [iaDocs, setIaDocs] = React.useState([]);
+      const [relProj, setRelProj] = React.useState([]);
+      const [sel, setSel] = React.useState('raiz');
+      const [abertas, setAbertas] = React.useState({ 'auto:contratos': true });
+      const [busca, setBusca] = React.useState('');
+      const [ordem, setOrdem] = React.useState('data');
+      const [verPdf, setVerPdf] = React.useState(null);
+      const [verIa, setVerIa] = React.useState(null);
+      const [enviando, setEnviando] = React.useState(false);
+      const [editando, setEditando] = React.useState(null);      // documento do repositório em edição
+      const fileRef = React.useRef(null);
+
+      React.useEffect(() => {
+        const u1 = db.collection(COL('doc_pastas')).onSnapshot(s => setPastas(s.docs.map(d => ({ ...d.data(), id: d.id }))), () => setPastas([]));
+        const u2 = db.collection(COL('documentos')).onSnapshot(s => setDocs(s.docs.map(d => ({ ...d.data(), id: d.id }))), () => {});
+        const u3 = db.collection(IA_COL.documentos).onSnapshot(s => setIaDocs(s.docs.map(d => ({ ...d.data(), id: d.id }))), () => {});
+        const u4 = db.collection(REL_COL).onSnapshot(s => setRelProj(s.docs.map(d => ({ ...d.data(), id: d.id }))), () => {});
+        return () => { u1(); u2(); u3(); u4(); };
+      }, []);
+
+      // Primeira vez: cria as categorias de trabalho do NGCC
+      const semeou = React.useRef(false);
+      React.useEffect(() => {
+        if (!pastas || pastas.length || semeou.current) return;
+        semeou.current = true;
+        const lote = db.batch();
+        DOC_PASTAS_PADRAO.forEach((nome, i) => lote.set(db.collection(COL('doc_pastas')).doc(), { nome, paiId: '', ordem: i, criadoPor: 'sistema', criadoEm: new Date().toISOString() }));
+        lote.commit().catch(() => {});
+      }, [pastas]);
+
+      /* ── Árvore de pastas ── */
+      const nomeContrato = cn => { const m = contractMeta[cn] || {}; return [cn, m.client || (m.unit || '').split(/\s[-–—]\s/).pop()].filter(Boolean).join(' · '); };
+      const numerosContrato = React.useMemo(() => [...new Set([...Object.keys(contractMeta || {}), ...contracts.map(c => c.contractNumber).filter(Boolean)])].sort(), [contractMeta, contracts]);
+      const tiposIa = React.useMemo(() => [...new Set(iaDocs.map(d => d.tipo || 'outro'))].sort(), [iaDocs]);
+      const pastasUsuario = pastas || [];
+      const filhosDe = paiId => pastasUsuario.filter(p => (p.paiId || '') === paiId).sort((a, b) => (a.ordem ?? 99) - (b.ordem ?? 99) || a.nome.localeCompare(b.nome));
+      const caminhoPasta = id => { const out = []; let p = pastasUsuario.find(x => x.id === id); let n = 0; while (p && n++ < 20) { out.unshift(p.nome); p = pastasUsuario.find(x => x.id === p.paiId); } return out; };
+
+      /* ── Índice: tudo o que existe, cada item com sua pasta ── */
+      const indice = React.useMemo(() => {
+        const out = [];
+        const pdf = k => pdfStorage[k] || null;
+        const tem = k => !!pdfStorage[k];
+        numerosContrato.forEach(cn => {
+          const safe = cn.replace(/\//g, '-');
+          const pasta = 'auto:ctr:' + cn;
+          const cam = ['Contratos', nomeContrato(cn)];
+          const m = contractMeta[cn] || {};
+          const kC = tem('contract_' + safe) ? 'contract_' + safe : tem('contract_' + cn) ? 'contract_' + cn : null;
+          if (kC) out.push({ id: kC, titulo: `Contrato ${cn}`, sub: m.object || '', tipo: 'pdf', pasta, cam, data: m.startDate, origem: 'Contratos', chave: kC });
+          if (tem('parceria_' + safe)) out.push({ id: 'parceria_' + safe, titulo: `Contrato de parceria${m.partnershipNumber ? ' nº ' + m.partnershipNumber : ''}`, sub: m.partnerName || '', tipo: 'pdf', pasta, cam, data: m.startDate, origem: 'Contratos', chave: 'parceria_' + safe });
+          if (tem('anexo1_' + safe)) out.push({ id: 'anexo1_' + safe, titulo: 'Anexo I – Valores', sub: m.partnerName || '', tipo: 'pdf', pasta, cam, data: m.startDate, origem: 'Contratos', chave: 'anexo1_' + safe });
+          (contractAdditives[cn] || []).forEach(a => {
+            if (tem('ta_' + a.id)) out.push({ id: 'ta_' + a.id, titulo: `Termo aditivo ${a.number || ''}`.trim(), sub: a.object || a.pdfFileName || '', tipo: 'pdf', pasta, cam: [...cam, 'Termos aditivos'], data: a.date, origem: 'Aditivos', chave: 'ta_' + a.id });
+          });
+          contracts.filter(c => c.contractNumber === cn).forEach(c => {
+            const parc = `${c.installment || '?'}/${c.totalInstallments || '?'}`;
+            if (tem(String(c.id))) out.push({ id: String(c.id), titulo: `NF ${c.nfNumber || 's/nº'} – parcela ${parc}`, sub: c.refMonth ? `competência ${c.refMonth.split('-').reverse().join('/')}` : '', tipo: 'pdf', pasta, cam: [...cam, 'Notas fiscais'], data: c.nfDate, origem: 'Parcelas', chave: String(c.id) });
+            if (tem('liq_' + c.id)) out.push({ id: 'liq_' + c.id, titulo: `NL ${c.liquidacao?.numero || ''} – parcela ${parc}`.replace('NL  –', 'NL –'), sub: c.nfNumber ? `referente à NF ${c.nfNumber}` : '', tipo: 'pdf', pasta, cam: [...cam, 'Notas de liquidação'], data: c.liquidacao?.data || c.paymentDate, origem: 'Parcelas', chave: 'liq_' + c.id });
+          });
+        });
+        certidoes.forEach(c => {
+          if (tem('cert_' + c.id)) out.push({ id: 'cert_' + c.id, titulo: c.label || c.type || 'Certidão', sub: c.expiryDate ? `válida até ${docData(c.expiryDate)}` : '', tipo: 'pdf', pasta: 'auto:certidoes', cam: ['Certidões'], data: c.expiryDate, origem: 'Certidões', chave: 'cert_' + c.id });
+        });
+        iaDocs.forEach(d => {
+          const tp = d.tipo || 'outro';
+          out.push({ id: 'ia_' + d.id, titulo: `${d.numero ? 'nº ' + d.numero + ' – ' : ''}${d.titulo || 'Documento'}`, sub: `${IA_TIPOS_DOC[tp] || tp} · ${d.criadoPorNome || d.criadoPor || ''}`, tipo: 'ia', pasta: 'auto:ia:' + tp, cam: ['Documentos da IA', IA_TIPOS_DOC[tp] || tp], data: d.criadoEm, origem: 'Assistente', ia: d });
+        });
+        relProj.forEach(p => {
+          if (p.link) out.push({ id: 'rel_' + p.id, titulo: p.nome || 'Projeto', sub: [p.contrato && 'Contrato ' + p.contrato, p.orgao].filter(Boolean).join(' · '), tipo: 'link', pasta: 'auto:relatorios', cam: ['Relatórios de execução'], data: p.criadoEm || '', origem: 'Relatórios', link: p.link });
+        });
+        docs.forEach(d => {
+          const pasta = d.pastaId ? 'p:' + d.pastaId : (d.contrato ? 'auto:ctr:' + d.contrato : 'raiz');
+          const cam = d.pastaId ? caminhoPasta(d.pastaId) : d.contrato ? ['Contratos', nomeContrato(d.contrato)] : [];
+          out.push({ id: 'doc_' + d.id, titulo: d.titulo || d.arquivoNome || 'Documento', sub: [d.descricao, (d.tags || []).map(t => '#' + t).join(' ')].filter(Boolean).join(' · '), tipo: /pdf/i.test(d.tipoMime || d.arquivoNome || '') ? 'pdf' : 'arquivo', pasta, cam, data: d.dataDocumento || d.criadoEm, origem: 'Repositório', chave: 'doc_' + d.id, doc: d });
+          // vinculado a um contrato e guardado numa pasta: aparece também na pasta do contrato
+          if (d.pastaId && d.contrato) out.push({ ...out[out.length - 1], id: 'docv_' + d.id, pasta: 'auto:ctr:' + d.contrato, cam: ['Contratos', nomeContrato(d.contrato)] });
+        });
+        return out;
+      }, [numerosContrato, contractMeta, contractAdditives, contracts, pdfStorage, certidoes, iaDocs, relProj, docs, pastas]);
+
+      const conta = React.useMemo(() => {
+        const c = {};
+        indice.forEach(it => {
+          c[it.pasta] = (c[it.pasta] || 0) + 1;
+          if (it.pasta.startsWith('auto:ctr:')) c['auto:contratos'] = (c['auto:contratos'] || 0) + 1;
+          if (it.pasta.startsWith('auto:ia:')) c['auto:ia'] = (c['auto:ia'] || 0) + 1;
+        });
+        // pastas do usuário somam as subpastas
+        const soma = id => (c['p:' + id] || 0) + filhosDe(id).reduce((s, f) => s + soma(f.id), 0);
+        pastasUsuario.forEach(p => { c['tot:' + p.id] = soma(p.id); });
+        return c;
+      }, [indice, pastas]);
+
+      /* ── O que mostrar à direita ── */
+      const q = docSemAcento(busca.trim());
+      const naPasta = it => sel === 'raiz' ? it.pasta === 'raiz'
+        : sel === 'auto:contratos' ? it.pasta.startsWith('auto:ctr:')
+        : sel === 'auto:ia' ? it.pasta.startsWith('auto:ia:')
+        : sel.startsWith('p:') ? it.pasta === sel
+        : it.pasta === sel;
+      const itens = indice
+        .filter(it => { if (!q) return naPasta(it); const t = docSemAcento([it.titulo, it.sub, ...(it.cam || []), it.origem].join(' ')); return q.split(/\s+/).every(p => t.includes(p)); })
+        .sort((a, b) => ordem === 'nome' ? a.titulo.localeCompare(b.titulo, 'pt-BR', { numeric: true }) : String(b.data || '').localeCompare(String(a.data || '')));
+      const subpastas = !q && (sel === 'raiz' || sel.startsWith('p:')) ? filhosDe(sel === 'raiz' ? '' : sel.slice(2)) : [];
+      const pastaAtualUsuario = sel.startsWith('p:') ? pastasUsuario.find(p => p.id === sel.slice(2)) : null;
+      const contratoAtual = sel.startsWith('auto:ctr:') ? sel.slice(9) : '';
+      const podeEnviar = sel === 'raiz' || !!pastaAtualUsuario || !!contratoAtual;
+      const tituloSel = sel === 'raiz' ? 'Repositório'
+        : sel === 'auto:contratos' ? 'Contratos' : sel === 'auto:certidoes' ? 'Certidões' : sel === 'auto:ia' ? 'Documentos da IA'
+        : sel === 'auto:relatorios' ? 'Relatórios de execução'
+        : sel.startsWith('auto:ia:') ? (IA_TIPOS_DOC[sel.slice(8)] || sel.slice(8))
+        : contratoAtual ? nomeContrato(contratoAtual)
+        : pastaAtualUsuario ? caminhoPasta(pastaAtualUsuario.id).join(' / ') : '';
+
+      /* ── Ações ── */
+      function abrir(it) {
+        if (it.tipo === 'ia') { setVerIa(it.ia); return; }
+        if (it.tipo === 'link') { window.open(it.link, '_blank', 'noopener'); return; }
+        const src = pdfStorage[it.chave];
+        if (!src) { addToast('Arquivo não encontrado.'); return; }
+        if (it.tipo === 'pdf') { setVerPdf({ src, titulo: it.titulo }); return; }
+        const a = document.createElement('a'); a.href = src; a.download = it.doc?.arquivoNome || it.titulo; a.click();
+      }
+      function baixar(it) {
+        const src = pdfStorage[it.chave]; if (!src) return;
+        const a = document.createElement('a'); a.href = src; a.download = it.doc?.arquivoNome || (it.titulo + '.pdf'); a.click();
+      }
+      async function novaPasta() {
+        const nome = (window.prompt(pastaAtualUsuario ? `Nova subpasta em "${pastaAtualUsuario.nome}":` : 'Nome da nova pasta:') || '').trim();
+        if (!nome) return;
+        await db.collection(COL('doc_pastas')).add({ nome, paiId: pastaAtualUsuario ? pastaAtualUsuario.id : '', ordem: 99, criadoPor: eu, criadoEm: new Date().toISOString() });
+        if (pastaAtualUsuario) setAbertas(a => ({ ...a, ['p:' + pastaAtualUsuario.id]: true }));
+      }
+      async function renomearPasta(p) {
+        const nome = (window.prompt('Novo nome da pasta:', p.nome) || '').trim();
+        if (nome && nome !== p.nome) await db.collection(COL('doc_pastas')).doc(p.id).update({ nome });
+      }
+      async function excluirPasta(p) {
+        if ((conta['tot:' + p.id] || 0) > 0 || filhosDe(p.id).length) { addToast('Esvazie a pasta antes de excluir (mova ou exclua os documentos e subpastas).'); return; }
+        if (!window.confirm(`Excluir a pasta "${p.nome}"?`)) return;
+        await db.collection(COL('doc_pastas')).doc(p.id).delete();
+        setSel(p.paiId ? 'p:' + p.paiId : 'raiz');
+      }
+      async function enviarArquivos(files) {
+        if (!files?.length) return;
+        setEnviando(true);
+        let ok = 0;
+        for (const f of files) {
+          if (f.size > DOC_LIMITE_KB * 1024) { addToast(`"${f.name}" tem ${Math.round(f.size / 1024)} KB — o limite é ${DOC_LIMITE_KB} KB.`); continue; }
+          try {
+            const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(f); });
+            const ref = db.collection(COL('documentos')).doc();
+            await db.collection(COL('pdfs')).doc('doc_' + ref.id).set({ data: dataUrl });
+            await ref.set({
+              titulo: f.name.replace(/\.[^.]+$/, ''), arquivoNome: f.name, tipoMime: f.type || '', tamanhoKB: Math.round(f.size / 1024),
+              pastaId: pastaAtualUsuario ? pastaAtualUsuario.id : '', contrato: contratoAtual || '',
+              descricao: '', tags: [], dataDocumento: '', criadoPor: eu, criadoPorNome: currentUser.name || eu, criadoEm: new Date().toISOString(),
+            });
+            ok++;
+          } catch (e) { addToast(`Erro ao enviar "${f.name}": ${e.message}`); }
+        }
+        setEnviando(false);
+        if (fileRef.current) fileRef.current.value = '';
+        if (ok) addToast(`${ok} documento${ok > 1 ? 's' : ''} adicionado${ok > 1 ? 's' : ''}.`);
+      }
+      async function excluirDoc(d) {
+        if (!window.confirm(`Excluir "${d.titulo || d.arquivoNome}" do repositório?`)) return;
+        await db.collection(COL('documentos')).doc(d.id).delete();
+        await db.collection(COL('pdfs')).doc('doc_' + d.id).delete().catch(() => {});
+        setEditando(null);
+      }
+
+      /* ── Interface ── */
+      const linhaPasta = (id, rotulo, nivel, temFilhos, n) => {
+        const on = sel === id;
+        return (
+          <div key={id} className="flex items-center rounded-md cursor-pointer select-none"
+               style={{ paddingLeft: 6 + nivel * 14, background: on ? '#EEF3FA' : 'transparent' }}
+               onClick={() => { setSel(id); setBusca(''); if (temFilhos) setAbertas(a => ({ ...a, [id]: true })); }}>
+            <span className="w-4 text-[10px] text-slate-400 flex-shrink-0" onClick={e => { if (!temFilhos) return; e.stopPropagation(); setAbertas(a => ({ ...a, [id]: !a[id] })); }}>
+              {temFilhos ? (abertas[id] ? '▾' : '▸') : ''}
+            </span>
+            <span className="flex-1 text-[13px] py-1.5 truncate" style={{ color: on ? BLUE : '#334155', fontWeight: on ? 600 : 400 }}>{rotulo}</span>
+            {n > 0 && <span className="text-[10px] text-slate-400 pr-2">{n}</span>}
+          </div>
+        );
+      };
+      const arvoreUsuario = (paiId, nivel) => filhosDe(paiId).map(p => {
+        const id = 'p:' + p.id, filhos = filhosDe(p.id);
+        return <React.Fragment key={id}>{linhaPasta(id, p.nome, nivel, filhos.length > 0, conta['tot:' + p.id] || 0)}{abertas[id] && arvoreUsuario(p.id, nivel + 1)}</React.Fragment>;
+      });
+
+      return (
+        <div className="flex-1 flex min-w-0" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          {/* Árvore */}
+          <aside className="w-72 flex-shrink-0 border-r bg-white overflow-y-auto" style={{ borderColor: '#E3E8EF' }}>
+            <div className="px-4 pt-5 pb-3">
+              <h1 className="text-lg font-semibold" style={{ color: BLUE }}>Documentos</h1>
+              <p className="text-[11px] text-slate-500">{indice.length} documentos no índice</p>
+            </div>
+            <div className="px-2 pb-4 space-y-3">
+              <div>
+                <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Do sistema · automáticas</p>
+                {linhaPasta('auto:contratos', 'Contratos', 0, true, conta['auto:contratos'] || 0)}
+                {abertas['auto:contratos'] && numerosContrato.map(cn => linhaPasta('auto:ctr:' + cn, nomeContrato(cn), 1, false, conta['auto:ctr:' + cn] || 0))}
+                {linhaPasta('auto:certidoes', 'Certidões', 0, false, conta['auto:certidoes'] || 0)}
+                {linhaPasta('auto:ia', 'Documentos da IA', 0, tiposIa.length > 0, conta['auto:ia'] || 0)}
+                {abertas['auto:ia'] && tiposIa.map(t => linhaPasta('auto:ia:' + t, IA_TIPOS_DOC[t] || t, 1, false, conta['auto:ia:' + t] || 0))}
+                {linhaPasta('auto:relatorios', 'Relatórios de execução', 0, false, conta['auto:relatorios'] || 0)}
+              </div>
+              <div>
+                <div className="flex items-center justify-between px-2 mb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Repositório</p>
+                  <button onClick={() => { setSel('raiz'); novaPasta(); }} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800" title="Nova pasta">+ Pasta</button>
+                </div>
+                {linhaPasta('raiz', 'Sem pasta', 0, false, conta['raiz'] || 0)}
+                {arvoreUsuario('', 0)}
+              </div>
+            </div>
+          </aside>
+
+          {/* Conteúdo */}
+          <section className="flex-1 min-w-0 px-6 py-5 space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar em todos os documentos: título, contrato, NF, órgão, tag…"
+                     className="flex-1 min-w-[260px] text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-slate-400" />
+              <select value={ordem} onChange={e => setOrdem(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-white text-slate-600">
+                <option value="data">Mais recentes</option><option value="nome">Nome</option>
+              </select>
+            </div>
+
+            <div className="flex items-end justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-slate-800 truncate">{q ? `Resultados para "${busca}"` : tituloSel}</p>
+                <p className="text-[11px] text-slate-500">
+                  {itens.length} documento{itens.length !== 1 ? 's' : ''}
+                  {!q && sel.startsWith('auto:') && ' · atualizado automaticamente a partir dos módulos do sistema'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {pastaAtualUsuario && !q && <>
+                  <button onClick={() => renomearPasta(pastaAtualUsuario)} className="text-xs font-semibold text-slate-500 hover:text-slate-800">Renomear</button>
+                  <button onClick={() => excluirPasta(pastaAtualUsuario)} className="text-xs font-semibold text-red-400 hover:text-red-600">Excluir pasta</button>
+                </>}
+                {(sel === 'raiz' || pastaAtualUsuario) && !q && (
+                  <button onClick={novaPasta} className="text-xs font-semibold px-3 py-2 rounded-lg border bg-white text-slate-600 hover:bg-slate-50" style={{ borderColor: '#E3E8EF' }}>
+                    + {pastaAtualUsuario ? 'Subpasta' : 'Pasta'}
+                  </button>
+                )}
+                {podeEnviar && !q && (
+                  <>
+                    <input ref={fileRef} type="file" multiple className="hidden" onChange={e => enviarArquivos([...e.target.files])} />
+                    <button onClick={() => fileRef.current?.click()} disabled={enviando}
+                            className="text-xs font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: BLUE }}>
+                      {enviando ? 'Enviando…' : '+ Adicionar documento'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {subpastas.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {subpastas.map(p => (
+                  <button key={p.id} onClick={() => { setSel('p:' + p.id); setAbertas(a => ({ ...a, [sel]: true })); }}
+                          className="text-left bg-white rounded-lg border px-3 py-2.5 hover:border-slate-300" style={{ borderColor: '#E3E8EF' }}>
+                    <p className="text-sm font-medium text-slate-800 truncate">📁 {p.nome}</p>
+                    <p className="text-[11px] text-slate-400">{conta['tot:' + p.id] || 0} documento{(conta['tot:' + p.id] || 0) !== 1 ? 's' : ''}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="bg-white rounded-xl border overflow-hidden"
+                 style={{ borderColor: '#E3E8EF' }}
+                 onDragOver={e => { if (podeEnviar && !q) e.preventDefault(); }}
+                 onDrop={e => { if (!podeEnviar || q) return; e.preventDefault(); enviarArquivos([...e.dataTransfer.files]); }}>
+              {itens.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-14">
+                  {q ? 'Nada encontrado.' : podeEnviar ? 'Pasta vazia. Clique em "+ Adicionar documento" ou arraste arquivos para cá.' : 'Nenhum documento aqui ainda.'}
+                </p>
+              ) : itens.map(it => (
+                <div key={it.id} className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0 hover:bg-slate-50 group" style={{ borderColor: '#F1F4F8' }}>
+                  <span className="w-9 text-center text-[9px] font-bold rounded py-1 flex-shrink-0" style={{ color: docCorTipo(it.tipo), background: '#F8FAFC' }}>{docIcone(it.tipo)}</span>
+                  <button onClick={() => abrir(it)} className="flex-1 min-w-0 text-left">
+                    <p className="text-sm text-slate-800 truncate">{it.titulo}</p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {(q || sel === 'auto:contratos' || sel === 'auto:ia') && it.cam?.length ? <span className="text-slate-400">{it.cam.join(' / ')} · </span> : null}
+                      {it.sub}
+                    </p>
+                  </button>
+                  <span className="text-[11px] text-slate-400 w-20 text-right flex-shrink-0">{docData(it.data)}</span>
+                  <span className="text-[10px] text-slate-400 w-20 text-right flex-shrink-0 hidden md:block">{it.origem}</span>
+                  <div className="w-24 flex justify-end gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {it.chave && <button onClick={() => baixar(it)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">Baixar</button>}
+                    {it.doc && <button onClick={() => setEditando({ ...it.doc, tagsTxt: (it.doc.tags || []).join(', ') })} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">Editar</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              As pastas automáticas mostram os arquivos já anexados nos módulos (contratos, aditivos, parcelas, certidões, assistente e relatórios): trocou o PDF lá, muda aqui.
+              No repositório, cada arquivo pode ter até {DOC_LIMITE_KB} KB.
+            </p>
+          </section>
+
+          {/* Editar documento do repositório */}
+          {editando && ReactDOM.createPortal(
+            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(15,23,42,.45)' }} onMouseDown={e => e.target === e.currentTarget && setEditando(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-3">
+                <p className="text-sm font-semibold" style={{ color: BLUE }}>Documento</p>
+                {[['titulo', 'Título'], ['descricao', 'Descrição'], ['tagsTxt', 'Tags (separadas por vírgula)']].map(([k, r]) => (
+                  <div key={k}>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{r}</label>
+                    <input value={editando[k] || ''} onChange={e => setEditando(d => ({ ...d, [k]: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400" />
+                  </div>
+                ))}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Data do documento</label>
+                    <input type="date" value={editando.dataDocumento || ''} onChange={e => setEditando(d => ({ ...d, dataDocumento: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Vincular a contrato</label>
+                    <select value={editando.contrato || ''} onChange={e => setEditando(d => ({ ...d, contrato: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="">Nenhum</option>
+                      {numerosContrato.map(cn => <option key={cn} value={cn}>{nomeContrato(cn)}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Pasta</label>
+                  <select value={editando.pastaId || ''} onChange={e => setEditando(d => ({ ...d, pastaId: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Sem pasta{editando.contrato ? ' (fica na pasta do contrato)' : ''}</option>
+                    {pastasUsuario.map(p => ({ p, cam: caminhoPasta(p.id).join(' / ') })).sort((a, b) => a.cam.localeCompare(b.cam)).map(({ p, cam }) => <option key={p.id} value={p.id}>{cam}</option>)}
+                  </select>
+                </div>
+                <p className="text-[11px] text-slate-400">{editando.arquivoNome} · {editando.tamanhoKB} KB · enviado por {editando.criadoPorNome || editando.criadoPor} em {docData(editando.criadoEm)}</p>
+                <div className="flex items-center justify-between pt-2">
+                  <button onClick={() => excluirDoc(editando)} className="text-xs font-semibold text-red-400 hover:text-red-600">Excluir</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditando(null)} className="text-xs font-semibold text-slate-500 px-4 py-2 rounded-lg hover:bg-slate-100">Cancelar</button>
+                    <button onClick={async () => {
+                      const d = editando;
+                      await db.collection(COL('documentos')).doc(d.id).update({
+                        titulo: (d.titulo || '').trim() || d.arquivoNome, descricao: (d.descricao || '').trim(),
+                        tags: String(d.tagsTxt || '').split(',').map(t => t.trim()).filter(Boolean),
+                        dataDocumento: d.dataDocumento || '', contrato: d.contrato || '', pastaId: d.pastaId || '',
+                      });
+                      setEditando(null); addToast('Documento atualizado.');
+                    }} className="text-xs font-semibold text-white px-5 py-2 rounded-lg" style={{ background: BLUE }}>Salvar</button>
+                  </div>
+                </div>
+              </div>
+            </div>, document.body)}
+
+          {verPdf && ReactDOM.createPortal(<PdfViewer open pdfSrc={verPdf.src} title={verPdf.titulo} onClose={() => setVerPdf(null)} />, document.body)}
+          {verIa && ReactDOM.createPortal(
+            <div className="fixed inset-0 z-[300] flex items-start justify-center p-6 overflow-y-auto" style={{ background: 'rgba(15,23,42,.45)' }} onMouseDown={e => e.target === e.currentTarget && setVerIa(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-4">
+                <div className="flex justify-end mb-1"><button onClick={() => setVerIa(null)} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button></div>
+                <IaDocCard doc={verIa} abertoInicial addToast={addToast} currentUser={currentUser} usuarios={users} />
+              </div>
+            </div>, document.body)}
+        </div>
+      );
+    }
+
     /* ── Sub-componentes do Dashboard ───────────────────── */
     function DashKpiCard({ icon, label, value, sub, color, progressBar, onClick, active }) {
       return (
@@ -20433,6 +20827,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       const [showAlertas,          setShowAlertas]          = useState(false);
       const [novaVersao,           setNovaVersao]           = useState(false);
       const [showAgendaPage,       setShowAgendaPage]       = useState(false);
+      const [showDocumentosPage,   setShowDocumentosPage]   = useState(false);
       const [agendaEventos,        setAgendaEventos]        = useState([]);
       const [tarefas,              setTarefas]              = useState([]);
       const [tarefasProntas,       setTarefasProntas]       = useState(false);
@@ -20670,13 +21065,14 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => {
         if (showContractsPage || showInstallmentsPage || showProposalsPage || showGdocPage || showArcanjoPage || showArcanjoGerencial ||
             showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage ||
-            showAdmin || showForm || activeContractNumber) { setShowRelatoriosPage(false); setShowAgendaPage(false); }
+            showAdmin || showForm || activeContractNumber) { setShowRelatoriosPage(false); setShowAgendaPage(false); setShowDocumentosPage(false); }
       }, [showContractsPage, showInstallmentsPage, showProposalsPage, showGdocPage, showArcanjoPage, showArcanjoGerencial,
           showArcanjoAcoes, showProposalBI, showCronogramaPage, showCertidoesPage, showPropEmissao, showLeadsPage,
           showAdmin, showForm, activeContractNumber]);
       // Agenda e Relatórios são abertos pelo mesmo caminho (handleGoHome + flag): um fecha o outro
-      useEffect(() => { if (showRelatoriosPage) setShowAgendaPage(false); }, [showRelatoriosPage]);
-      useEffect(() => { if (showAgendaPage) setShowRelatoriosPage(false); }, [showAgendaPage]);
+      useEffect(() => { if (showRelatoriosPage) { setShowAgendaPage(false); setShowDocumentosPage(false); } }, [showRelatoriosPage]);
+      useEffect(() => { if (showAgendaPage) { setShowRelatoriosPage(false); setShowDocumentosPage(false); } }, [showAgendaPage]);
+      useEffect(() => { if (showDocumentosPage) { setShowRelatoriosPage(false); setShowAgendaPage(false); } }, [showDocumentosPage]);
       const [contractSearch,       setContractSearch]       = useState('');
       const [statsYear,            setStatsYear]            = useState(String(new Date().getFullYear()));
       const [showOverduePanel,     setShowOverduePanel]     = useState(false);
@@ -21075,6 +21471,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       function handleCloseNfList() { setShowNfListView(false); }
       function handleGoHome() {
         setShowAgendaPage(false);
+        setShowDocumentosPage(false);
         setActiveContractNumber(null);
         setShowForm(false);
         setShowContractsList(false);
@@ -21368,10 +21765,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
       useEffect(() => {
         if (showForm || activeContractNumber || showRelatoriosPage || showNfListView || showGdocPage || showProposalsPage || showProposalBI
             || showLeadsPage || showPropEmissao || showCertidoesPage || showCronogramaPage || showInstallmentsPage || showContractsPage
-            || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showAgendaPage) setShowAssistentePage(false);
+            || showAdmin || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showAgendaPage || showDocumentosPage) setShowAssistentePage(false);
       }, [showForm, activeContractNumber, showRelatoriosPage, showNfListView, showGdocPage, showProposalsPage, showProposalBI, showLeadsPage,
           showPropEmissao, showCertidoesPage, showCronogramaPage, showInstallmentsPage, showContractsPage, showAdmin, showArcanjoPage,
-          showArcanjoGerencial, showArcanjoAcoes, showAgendaPage]);
+          showArcanjoGerencial, showArcanjoAcoes, showAgendaPage, showDocumentosPage]);
 
       /* Lembrete de tarefas: ao entrar no sistema e de novo à tarde (a partir das 14h), uma vez por turno.
          Os turnos já mostrados ficam no navegador, por usuário e dia. */
@@ -22094,7 +22491,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                                        leads, orgaos, contacts, propostasEmitidas, users };
       const paginaAtual = showForm ? 'Cadastro de contrato'
         : activeContractNumber ? `Contrato ${activeContractNumber}`
-        : showAgendaPage ? 'Agenda' : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas'
+        : showAgendaPage ? 'Agenda' : showDocumentosPage ? 'Documentos' : showRelatoriosPage ? 'Relatórios de Execução' : showNfListView ? 'Notas fiscais emitidas'
         : showGdocPage ? (SYS.id === 'main' ? 'Gestão do GDoc' : 'GDoc') : showProposalsPage ? 'Propostas' : showProposalBI ? 'BI de Propostas'
         : showLeadsPage ? 'Oportunidades' : showPropEmissao ? 'Emitir Proposta' : showCertidoesPage ? 'Certidões'
         : showCronogramaPage ? 'Cronograma Financeiro' : showInstallmentsPage ? 'Parcelas' : showContractsPage ? 'Contratos'
@@ -22297,6 +22694,12 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={() => { setShowArcanjoAcoes(false); setShowProposalsPage(true); setShowInstallmentsPage(false); setShowContractsPage(false); setShowGdocPage(false); setShowArcanjoPage(false); setShowArcanjoGerencial(false); setShowCronogramaPage(false); setShowCertidoesPage(false); setShowPropEmissao(false); setShowLeadsPage(false); setShowProposalBI(false); setActiveContractNumber(null); setShowForm(false); setShowAdmin(false); }} />
               )}
 
+              {SYS.id === 'main' && !ARCANJO_ONLY.has(currentUser.username) && (
+                <SidebarBtn icon={FileText} label="Documentos"
+                  active={showDocumentosPage}
+                  onClick={() => { handleGoHome(); setShowContractsList(false); setShowNfListView(false); setShowDocumentosPage(true); }} />
+              )}
+
               {/* BI de Propostas: acessado pelo indicador dentro do módulo de Propostas */}
 
               {!ARCANJO_ONLY.has(currentUser.username) && !MENU_OCULTO.has('oportunidades') && (
@@ -22348,10 +22751,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
                   onClick={handleExportArcanjo} />
               )}
 
-              {!ARCANJO_ONLY.has(currentUser.username) && (
-                <SidebarBtn icon={Users} label="Gestores / Contatos"
-                  onClick={() => setShowContacts(true)} />
-              )}
+
             </nav>
 
             {/* Divider bottom */}
@@ -22446,7 +22846,7 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
               </div>
             </header>
 
-          <main className={(showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage || showAgendaPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
+          <main className={(showAssistentePage || showGdocPage || showProposalsPage || showArcanjoPage || showArcanjoGerencial || showArcanjoAcoes || showProposalBI || showCronogramaPage || showCertidoesPage || showPropEmissao || showLeadsPage || showRelatoriosPage || showAgendaPage || showDocumentosPage) ? "flex-1 flex flex-col" : "flex-1 max-w-5xl w-full mx-auto px-6 py-6 space-y-5"}>
 
             {showLembrete && (
               <LembreteTarefas tarefas={tarefas} eventos={agendaEventos} eu={currentUser.username} nome={currentUser.name}
@@ -22921,6 +23321,10 @@ ${alertas.length ? alertas.map(a => `- ${a.referencia}: ${a.dias < 0 ? `vencido 
             {showAssistentePage ? (
               /* ── ASSISTENTE DE IA ── */
               <AssistentePage currentUser={currentUser} dados={dadosIA} addToast={addToast} />
+            ) : showDocumentosPage && SYS.id === 'main' ? (
+              /* ── DOCUMENTOS ── */
+              <DocumentosPage currentUser={currentUser} users={users} contracts={contracts} contractMeta={contractMeta}
+                contractAdditives={contractAdditives} pdfStorage={pdfStorage} certidoes={certidoes} addToast={addToast} />
             ) : showAgendaPage && SYS.id === 'main' ? (
               /* ── AGENDA ── */
               <AgendaPage currentUser={currentUser} users={users} eventos={agendaEventos} tarefas={tarefas} addToast={addToast} />
