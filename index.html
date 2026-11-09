@@ -13775,8 +13775,8 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       );
     }
 
-    /* Exportação Excel do cronograma financeiro */
-    async function exportCronogramaExcel({ contrato, itens, params, calc, aliquotaTotal, prazo, nomeBD, nomeParc }) {
+    /* Exportação Excel do cronograma financeiro — no padrão visual do sistema */
+    async function exportCronogramaExcel({ contrato, itens, params, calc, aliquotaTotal, prazo, nomeBD, nomeParc, dataInicio }) {
       if (!window.ExcelJS) {
         await new Promise((res, rej) => {
           const s = document.createElement('script');
@@ -13789,233 +13789,344 @@ Use string vazia "" para campos não encontrados. Nunca invente valores.` }
       const wb = new ExcelJS.Workbook();
       wb.creator = 'Belém Digital'; wb.created = new Date();
 
-      const AZUL = 'FF1F4E78', AZUL2 = 'FF2E5A94';
-      const MOEDA = 'R$ #,##0.00', PCT = '0.00%';
+      // Paleta do design system (mesmas cores da tela)
+      const C = {
+        navy: 'FF0B2B5E', navyTxt: 'FFC7D2E5', txt: 'FF0F172A', sub: 'FF64748B', mute: 'FF94A3B8',
+        linha: 'FFE2E8F0', fundo: 'FFF8FAFC', branco: 'FFFFFFFF', vermelho: 'FFB91C1C',
+        bruto: 'FF0B2B5E', brutoBg: 'FFEEF2F8',
+        imposto: 'FFC2703F', impostoBg: 'FFFBF1EA',
+        repasse: 'FFA88518', repasseBar: 'FFC9A227', repasseBg: 'FFFBF6E3',
+        bd: 'FF2E7D32', bdBg: 'FFF2F8F4',
+      };
+      const MOEDA = '"R$" #,##0.00;[Red]-"R$" #,##0.00;"–"', PCT = '0.0%';
       const fill = argb => ({ type:'pattern', pattern:'solid', fgColor:{ argb } });
-      const thin = { style:'thin', color:{ argb:'FFD9D9D9' } };
-      const boxAll = { top:thin, left:thin, bottom:thin, right:thin };
+      const fnt = (size, argb = C.txt, extra = {}) => ({ name:'Calibri', size, color:{ argb }, ...extra });
+      const fina = { style:'thin', color:{ argb: C.linha } };
+      const sobLinha = { bottom: fina };
+      const caixa = { top:fina, left:fina, bottom:fina, right:fina };
+      const pctParc = calc.pctParc;
+      const pctBD = cronNum(params.pctBD);
+      const rotulo = m => cronRotuloMes(m, dataInicio);
+      const temData = /^\d{4}-\d{2}/.test(dataInicio || '');
+      const hoje = new Date().toLocaleDateString('pt-BR');
+      const bruto = calc.tot.bruto || 0;
+      const fr = v => bruto > 0 ? v / bruto : 0;
+
+      // Cabeçalho escuro (3 linhas) comum às abas
+      function cabecalho(ws, ultimaCol, titulo) {
+        const area = l => `B${l}:${ultimaCol}${l}`;
+        ws.getRow(1).height = 8;
+        [[2, titulo, fnt(18, C.branco, { bold:true }), 30],
+         [3, contrato.objeto || 'Contrato', fnt(11, C.navyTxt), 18],
+         [4, [contrato.numero && `Contrato nº ${contrato.numero}`, contrato.contratante, `${prazo} meses`,
+              temData && `início em ${rotulo(1)}`, `gerado em ${hoje}`].filter(Boolean).join('   ·   '), fnt(9, C.navyTxt), 18],
+        ].forEach(([l, v, f, h]) => {
+          ws.mergeCells(area(l));
+          const c = ws.getCell(`B${l}`);
+          c.value = v; c.font = f; c.fill = fill(C.navy);
+          c.alignment = { vertical:'middle', horizontal:'left', indent:1, wrapText:l === 3 };
+          ws.getRow(l).height = h;
+        });
+        ws.getRow(5).height = 6;
+        ws.mergeCells(area(5));
+        ws.getCell('B5').fill = fill(C.repasseBar);
+        return 7;
+      }
+      function secao(ws, r, txt, ultimaCol) {
+        ws.mergeCells(`B${r}:${ultimaCol}${r}`);
+        const c = ws.getCell(`B${r}`);
+        c.value = txt.toUpperCase(); c.font = fnt(10, C.navy, { bold:true });
+        c.border = { bottom: { style:'medium', color:{ argb: C.navy } } };
+        ws.getRow(r).height = 20;
+        return r + 1;
+      }
+      function cabTabela(ws, r, titulos, alinh = []) {
+        titulos.forEach((t, i) => {
+          const c = ws.getCell(r, i + 2);
+          c.value = t; c.font = fnt(9, C.sub, { bold:true }); c.fill = fill(C.fundo);
+          c.alignment = { horizontal: alinh[i] || (i === 0 ? 'left' : 'right'), vertical:'middle', wrapText:true };
+          c.border = { top:fina, bottom:fina };
+        });
+        ws.getRow(r).height = 30;
+      }
+      const config = ws => {
+        ws.properties.defaultRowHeight = 18;
+        ws.pageSetup = { paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0, margins:{ left:0.4, right:0.4, top:0.5, bottom:0.5, header:0.2, footer:0.2 } };
+        ws.headerFooter.oddFooter = `&L&8${nomeBD} · Cronograma financeiro&R&8Página &P de &N`;
+      };
 
       /* ───── Aba 1: Resumo ───── */
-      const ws = wb.addWorksheet('Resumo');
-      ws.columns = [
-        { width:4 }, { width:42 }, { width:16 }, { width:10 }, { width:18 }, { width:18 }, { width:14 },
+      const ws = wb.addWorksheet('Resumo', { views:[{ showGridLines:false }] });
+      ws.columns = [{ width:2 }, { width:34 }, { width:22 }, { width:22 }, { width:30 }, { width:2 }];
+      config(ws); ws.pageSetup.orientation = 'portrait';
+      let r = cabecalho(ws, 'E', 'Cronograma Financeiro');
+
+      // Indicadores (4 cartões)
+      const cartoes = [
+        ['VALOR DO CONTRATO', calc.tot.bruto, `NF emitida por ${nomeBD}`, C.bruto, C.brutoBg],
+        [`TRIBUTOS · ${cronPctTxt(aliquotaTotal)}`, calc.tot.imposto, 'recolhidos por quem emite a NF', C.imposto, C.impostoBg],
+        [`REPASSE · ${nomeParc}`.toUpperCase(), calc.tot.repasse, `${cronPctTxt(pctParc)} do ${params.base === 'BRUTO' ? 'bruto' : 'líquido'}`, C.repasse, C.repasseBg],
+        [`FICA COM ${nomeBD}`.toUpperCase(), calc.tot.bd, `margem efetiva ${cronPctTxt(calc.margemEfetiva)}`, C.bd, C.bdBg],
       ];
-      let r = 1;
-      const faixa = (txt, span = 'B:G') => {
-        const row = ws.getRow(r);
-        ws.mergeCells(`${span.split(':')[0]}${r}:${span.split(':')[1]}${r}`);
-        const c = ws.getCell(`B${r}`);
-        c.value = txt;
-        c.fill = fill(AZUL); c.font = { bold:true, size:11, color:{argb:'FFFFFFFF'} };
-        c.alignment = { vertical:'middle', horizontal:'left' };
-        row.height = 20; r++;
-      };
-      const par = (label, valor, fmt) => {
-        ws.getCell(`B${r}`).value = label;
-        ws.getCell(`B${r}`).font = { size:10, color:{argb:'FF555555'} };
-        const c = ws.getCell(`C${r}`);
-        c.value = valor;
-        if (fmt) c.numFmt = fmt;
-        c.font = { bold:true, size:10 };
-        c.alignment = { horizontal:'left' };
-        ws.getCell(`B${r}`).border = boxAll; c.border = boxAll;
+      cartoes.forEach(([rot, v, nota, cor, bg], i) => {
+        const col = i + 2;
+        const a = ws.getCell(r, col), b = ws.getCell(r + 1, col), d = ws.getCell(r + 2, col);
+        a.value = rot; a.font = fnt(8, C.sub, { bold:true });
+        a.border = { top: { style:'thick', color:{ argb: cor } } };
+        b.value = v; b.numFmt = MOEDA; b.font = fnt(15, cor, { bold:true });
+        d.value = nota; d.font = fnt(8, C.sub);
+        [a, b, d].forEach(c => { c.fill = fill(bg); c.alignment = { horizontal:'left', vertical:'middle', indent:1, wrapText:true }; });
+      });
+      ws.getRow(r).height = 22; ws.getRow(r + 1).height = 26; ws.getRow(r + 2).height = 18;
+      r += 4;
+
+      // Para onde vai cada real faturado
+      r = secao(ws, r, 'Divisão do valor do contrato', 'E');
+      cabTabela(ws, r, ['Destino', 'Valor', '% do contrato', 'Participação'], ['left', 'right', 'right', 'left']);
+      ws.getCell(r, 5).alignment = { horizontal:'left', vertical:'middle', indent:1 };
+      r++;
+      const divisao = [
+        [`Faturamento bruto (NF de ${nomeBD})`, calc.tot.bruto, C.bruto, false],
+        [`(−) Tributos (${cronPctTxt(aliquotaTotal)})`, calc.tot.imposto, C.imposto, true],
+        ['(=) Líquido após tributos', calc.tot.liquido, C.sub, false],
+        [`Repasse à ${nomeParc} (${cronPctTxt(pctParc)})`, calc.tot.repasse, C.repasse, true],
+        [`Fica com ${nomeBD} (${cronPctTxt(pctBD)})`, calc.tot.bd, C.bd, true],
+      ];
+      divisao.forEach(([l, v, cor, barra], i) => {
+        const destaque = i === divisao.length - 1;
+        const cl = ws.getCell(r, 2), cv = ws.getCell(r, 3), cp = ws.getCell(r, 4), cb = ws.getCell(r, 5);
+        cl.value = l; cl.font = fnt(10, destaque ? C.txt : C.sub, { bold:destaque });
+        cv.value = v; cv.numFmt = MOEDA; cv.font = fnt(10, destaque ? cor : C.txt, { bold:destaque });
+        cp.value = fr(v); cp.numFmt = PCT; cp.font = fnt(10, C.sub);
+        if (barra) { cb.value = '█'.repeat(Math.max(1, Math.round(fr(v) * 28))); cb.font = fnt(10, cor === C.repasse ? C.repasseBar : cor); }
+        [cl, cv, cp, cb].forEach(c => { c.border = sobLinha; c.alignment = { ...(c.alignment || {}), vertical:'middle' }; });
+        cv.alignment = { horizontal:'right', vertical:'middle' }; cp.alignment = { horizontal:'right', vertical:'middle' };
+        if (destaque) [cl, cv, cp, cb].forEach(c => { c.fill = fill(C.bdBg); });
+        ws.getRow(r).height = 20;
         r++;
-      };
-
-      ws.mergeCells(`B${r}:G${r}`);
-      const tit = ws.getCell(`B${r}`);
-      tit.value = 'CRONOGRAMA FINANCEIRO';
-      tit.fill = fill(AZUL); tit.font = { bold:true, size:16, color:{argb:'FFFFFFFF'} };
-      tit.alignment = { vertical:'middle', horizontal:'center' };
-      ws.getRow(r).height = 30; r += 2;
-
-      faixa('IDENTIFICAÇÃO');
-      par('Objeto', contrato.objeto || '—');
-      par('Contratante', contrato.contratante || '—');
-      par('Nº do contrato', contrato.numero || '—');
-      par('Contratada (emite a NF)', nomeBD);
-      par('Parceira executora', nomeParc);
-      par('Prazo (meses)', prazo);
-      par('Valor global do contrato', calc.tot.bruto, MOEDA);
-      r++;
-
-      faixa('PARÂMETROS DA PARCERIA');
-      par(`% de participação — ${nomeBD}`, cronNum(params.pctBD)/100, PCT);
-      par(`% de repasse — ${nomeParc}`, calc.pctParc/100, PCT);
-      par('Base de cálculo do repasse', params.base === 'BRUTO' ? 'BRUTO (contratada absorve o imposto)' : 'LÍQUIDO (imposto rateado)');
-      (params.tributos || []).forEach(t => par(`Tributo — ${t.nome}`, cronNum(t.aliquota)/100, PCT));
-      par('ALÍQUOTA TOTAL DE IMPOSTOS', aliquotaTotal/100, PCT);
-      ws.getCell(`C${r-1}`).fill = fill('FFFCE4D6');
-      r++;
-
-      faixa('ITENS CONTRATADOS');
-      const hdrItens = ['Item','Descrição','Tipo','Qtde','Valor unitário','Valor total','Mês início'];
-      hdrItens.forEach((h, i) => {
-        const c = ws.getCell(r, i + 1);
-        c.value = h; c.fill = fill(AZUL2);
-        c.font = { bold:true, size:10, color:{argb:'FFFFFFFF'} };
-        c.alignment = { horizontal:'center', vertical:'middle' };
-        c.border = boxAll;
       });
       r++;
-      (itens || []).forEach(it => {
-        const vals = [
-          it.item, it.descricao,
-          it.tipo_recorrencia === 'MENSAL' ? 'Mensal' : 'Único',
-          cronNum(it.quantidade), cronNum(it.valor_unitario), cronNum(it.valor_total), cronNum(it.mes_inicio),
-        ];
+      [['Margem nominal (percentual acordado)', pctBD / 100, C.txt],
+       ['Margem efetiva sobre o bruto (após tributos)', calc.margemEfetiva / 100, C.bd]].forEach(([l, v, cor]) => {
+        const cl = ws.getCell(r, 2), cv = ws.getCell(r, 3);
+        cl.value = l; cl.font = fnt(10, C.sub);
+        cv.value = v; cv.numFmt = '0.00%'; cv.font = fnt(11, cor, { bold:true }); cv.alignment = { horizontal:'right' };
+        cl.border = sobLinha; cv.border = sobLinha;
+        r++;
+      });
+      r++;
+
+      // Itens contratados
+      r = secao(ws, r, 'Itens contratados', 'E');
+      cabTabela(ws, r, ['Descrição', 'Forma de faturamento', 'Valor unitário', 'Valor total'], ['left', 'left', 'right', 'right']); r++;
+      (itens || []).forEach((it, ii) => {
+        const ini = Math.round(cronNum(it.mes_inicio)) || 1;
+        const mensal = it.tipo_recorrencia === 'MENSAL';
+        const dur = mensal ? (Math.round(cronNum(it.meses_duracao)) || Math.round(cronNum(it.quantidade)) || 1) : 1;
+        const forma = mensal ? `Mensal · ${dur}× (${rotulo(ini)} a ${rotulo(ini + dur - 1)})` : `Parcela única · ${rotulo(ini)}`;
+        const vals = [it.descricao || `Item ${it.item || ii + 1}`, forma, cronNum(it.valor_unitario), cronNum(it.valor_total)];
         vals.forEach((v, i) => {
-          const c = ws.getCell(r, i + 1);
-          c.value = v; c.border = boxAll; c.font = { size:10 };
-          if (i === 4 || i === 5) c.numFmt = MOEDA;
-          if (i === 0 || i === 3 || i === 6) c.alignment = { horizontal:'center' };
-          if (i === 5) c.font = { size:10, bold:true, color:{argb:'FF166534'} };
+          const c = ws.getCell(r, i + 2);
+          c.value = v; c.font = fnt(10, i === 1 ? C.sub : C.txt, { bold:i === 3 });
+          c.border = sobLinha;
+          c.alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical:'middle', wrapText:i <= 1 };
+          if (i >= 2) c.numFmt = MOEDA;
         });
         r++;
       });
-      ws.mergeCells(`A${r}:E${r}`);
-      const totLbl = ws.getCell(`A${r}`);
-      totLbl.value = `VALOR GLOBAL DO CONTRATO (${prazo} meses)`;
-      totLbl.font = { bold:true, size:10, color:{argb:'FF3730A3'} };
-      totLbl.fill = fill('FFEEF2FF'); totLbl.border = boxAll;
-      totLbl.alignment = { horizontal:'right' };
-      const totVal = ws.getCell(`F${r}`);
-      totVal.value = (itens || []).reduce((s,it) => s + cronNum(it.valor_total), 0);
-      totVal.numFmt = MOEDA; totVal.font = { bold:true, size:11, color:{argb:'FF3730A3'} };
-      totVal.fill = fill('FFEEF2FF'); totVal.border = boxAll;
-      ws.getCell(`G${r}`).fill = fill('FFEEF2FF'); ws.getCell(`G${r}`).border = boxAll;
-      r += 2;
+      {
+        const cl = ws.getCell(r, 2), cv = ws.getCell(r, 5);
+        ws.mergeCells(`B${r}:D${r}`);
+        cl.value = `Valor global (${prazo} meses)`; cl.font = fnt(10, C.navy, { bold:true });
+        cv.value = (itens || []).reduce((s, it) => s + cronNum(it.valor_total), 0);
+        cv.numFmt = MOEDA; cv.font = fnt(11, C.navy, { bold:true }); cv.alignment = { horizontal:'right' };
+        [cl, cv].forEach(c => { c.fill = fill(C.brutoBg); });
+        ws.getCell(r, 3).fill = fill(C.brutoBg); ws.getCell(r, 4).fill = fill(C.brutoBg);
+        r += 2;
+      }
 
-      faixa('RESUMO DA DIVISÃO');
-      const resumo = [
-        [`Valor bruto do contrato (NF emitida por ${nomeBD})`, calc.tot.bruto,   null],
-        ['(−) Impostos recolhidos',                            -calc.tot.imposto, 'FFFCE4D6'],
-        ['(=) Valor líquido após impostos',                    calc.tot.liquido,  null],
-        [`REPASSE À ${nomeParc.toUpperCase()}`,                calc.tot.repasse,  'FFFFE699'],
-        [`RESULTADO LÍQUIDO — ${nomeBD.toUpperCase()}`,        calc.tot.bd,       'FFE2EFDA'],
+      // Partes e parâmetros
+      r = secao(ws, r, 'Partes e parâmetros', 'E');
+      const pares = [
+        ['Contratante', contrato.contratante || '—'],
+        ['Contratada (emite a NF)', nomeBD],
+        ['Parceira executora', nomeParc],
+        ['Prazo', `${prazo} meses${temData ? ` · ${rotulo(1)} a ${rotulo(prazo)}` : ''}`],
+        [`Participação — ${nomeBD}`, cronPctTxt(pctBD)],
+        [`Repasse — ${nomeParc}`, cronPctTxt(pctParc)],
+        ['Base do repasse', params.base === 'BRUTO' ? 'Sobre o bruto (a contratada absorve o tributo)' : 'Sobre o líquido (tributo rateado entre as partes)'],
+        ...(params.tributos || []).map(t => [`Tributo — ${t.nome}`, cronPctTxt(cronNum(t.aliquota))]),
+        ['Alíquota total de tributos', cronPctTxt(aliquotaTotal)],
       ];
-      resumo.forEach(([l, v, bg]) => {
-        ws.mergeCells(`B${r}:E${r}`);
-        const cl = ws.getCell(`B${r}`); cl.value = l; cl.font = { bold:true, size:10 }; cl.border = boxAll;
-        const cv = ws.getCell(`F${r}`); cv.value = v; cv.numFmt = MOEDA; cv.font = { bold:true, size:11 }; cv.border = boxAll;
-        if (bg) { cl.fill = fill(bg); cv.fill = fill(bg); }
+      pares.forEach(([l, v]) => {
+        ws.mergeCells(`C${r}:E${r}`);
+        const cl = ws.getCell(r, 2), cv = ws.getCell(r, 3);
+        cl.value = l; cl.font = fnt(10, C.sub);
+        cv.value = v; cv.font = fnt(10, C.txt, { bold:true });
+        cl.border = sobLinha; [3, 4, 5].forEach(k => { ws.getCell(r, k).border = sobLinha; });
         r++;
       });
-      ws.mergeCells(`B${r}:E${r}`);
-      const ml = ws.getCell(`B${r}`); ml.value = 'MARGEM NOMINAL (percentual acordado)'; ml.font = { bold:true, size:10 }; ml.border = boxAll;
-      const mv = ws.getCell(`F${r}`); mv.value = cronNum(params.pctBD)/100; mv.numFmt = PCT; mv.font = { bold:true, size:11 }; mv.border = boxAll;
       r++;
       ws.mergeCells(`B${r}:E${r}`);
-      const el = ws.getCell(`B${r}`); el.value = 'MARGEM EFETIVA DA CONTRATADA (sobre o bruto)';
-      el.font = { bold:true, size:10, color:{argb:'FF166534'} }; el.fill = fill('FFC6E0B4'); el.border = boxAll;
-      const ev = ws.getCell(`F${r}`); ev.value = calc.margemEfetiva/100; ev.numFmt = PCT;
-      ev.font = { bold:true, size:12, color:{argb:'FF166534'} }; ev.fill = fill('FFC6E0B4'); ev.border = boxAll;
-      r += 2;
-      ws.mergeCells(`B${r}:G${r}`);
       const nota = ws.getCell(`B${r}`);
-      nota.value = 'As alíquotas tributárias pré-preenchidas são valores de REFERÊNCIA e devem ser confirmadas pela contabilidade.';
-      nota.font = { italic:true, size:9, color:{argb:'FF888888'} };
+      nota.value = 'Valores estimados. As alíquotas são de referência e devem ser confirmadas pela contabilidade. O cronograma mês a mês está na aba "Cronograma mensal".';
+      nota.font = fnt(9, C.mute, { italic:true }); nota.alignment = { wrapText:true, vertical:'top' };
+      ws.getRow(r).height = 28;
 
-      ws.views = [{ state:'frozen', ySplit:2 }];
-      ws.pageSetup = { orientation:'portrait', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9 };
+      /* ───── Aba 2: Cronograma mensal (um mês por linha) ───── */
+      const ws2 = wb.addWorksheet('Cronograma mensal', { views:[{ showGridLines:false, state:'frozen', ySplit:7 }] });
+      ws2.columns = [{ width:2 }, { width:7 }, { width:12 }, { width:17 }, { width:16 }, { width:17 }, { width:17 }, { width:18 }, { width:18 }, { width:11 }, { width:2 }];
+      config(ws2); ws2.pageSetup.orientation = 'landscape';
+      ws2.pageSetup.printTitlesRow = '7:7';
+      let r2 = cabecalho(ws2, 'J', 'Cronograma Mensal de Faturamento e Divisão');
+      ws2.getRow(6).height = 6;
+      cabTabela(ws2, r2, ['Mês', 'Competência', 'Faturamento (NF)', '(−) Tributos', `Repasse · ${nomeParc}`, `Fica com ${nomeBD}`, 'Faturado acumulado', `Acumulado · ${nomeBD}`, '% faturado'],
+        ['center', 'center']);
+      [[5, C.bruto], [6, C.imposto], [7, C.repasse], [8, C.bd]].forEach(([k, cor]) => {
+        ws2.getCell(r2, k - 1).font = fnt(9, cor, { bold:true });
+        ws2.getCell(r2, k - 1).border = { top:fina, bottom: { style:'medium', color:{ argb: cor === C.repasse ? C.repasseBar : cor } } };
+      });
+      r2++;
 
-      /* ───── Aba 2: Cronograma mensal ───── */
-      const ws2 = wb.addWorksheet('Cronograma');
-      ws2.columns = [{ width:34 }, ...Array.from({length:12}, () => ({ width:15 })), { width:18 }];
-      let r2 = 1;
-      ws2.mergeCells(`A${r2}:N${r2}`);
-      const t2 = ws2.getCell(`A${r2}`);
-      t2.value = `CRONOGRAMA FÍSICO-FINANCEIRO — ${contrato.objeto || 'Contrato'}`;
-      t2.fill = fill(AZUL); t2.font = { bold:true, size:14, color:{argb:'FFFFFFFF'} };
-      t2.alignment = { vertical:'middle', horizontal:'center' };
-      ws2.getRow(r2).height = 26; r2 += 2;
-
-      const CORES_ITEM_X = ['FF2563EB','FF7C3AED','FF0891B2','FFC2410C','FFBE185D','FF0F766E','FFA16207','FF4338CA'];
-      const linhasX = [
-        { k:'bruto',     l:'TOTAL BRUTO (NF emitida)',        bg:'FFEFF6FF', cor:'FF1E3A8A' },
-        { k:'imposto',   l:'(−) Impostos recolhidos',         bg:'FFFCE4D6', cor:'FF9A3412', neg:true },
-        { k:'liquido',   l:'(=) LÍQUIDO APÓS IMPOSTOS',       bg:'FFF1F5F9', cor:'FF334155' },
-        { k:'repasse',   l:`REPASSE À ${nomeParc.toUpperCase()}`, bg:'FFFFE699', cor:'FF92400E' },
-        { k:'bd',        l:`${nomeBD.toUpperCase()} (retido)`, bg:'FFE2EFDA', cor:'FF166534' },
-        { k:'acum',      l:`ACUMULADO — ${nomeBD.toUpperCase()}`, bg:'FFD9ECC7', cor:'FF14532D', acum:true },
-        { k:'acumBruto', l:'ACUMULADO — TOTAL FATURADO',      bg:'FFC6E0B4', cor:'FF14532D', acum:true },
-      ];
-      const nBlocos = Math.ceil(prazo / 12);
-      for (let b = 0; b < nBlocos; b++) {
-        const ini = b*12 + 1, fim = Math.min(prazo, (b+1)*12);
-        const cols = calc.meses.slice(ini-1, fim);
-
-        ws2.mergeCells(`A${r2}:N${r2}`);
-        const fx = ws2.getCell(`A${r2}`);
-        fx.value = `ANO ${b+1} — MESES ${ini} A ${fim}`;
-        fx.fill = fill(AZUL2); fx.font = { bold:true, size:11, color:{argb:'FFFFFFFF'} };
-        ws2.getRow(r2).height = 18; r2++;
-
-        const hc = ws2.getCell(r2, 1);
-        hc.value = 'LINHA'; hc.fill = fill(AZUL2);
-        hc.font = { bold:true, size:9, color:{argb:'FFFFFFFF'} }; hc.border = boxAll;
-        cols.forEach((c, i) => {
-          const cc = ws2.getCell(r2, i + 2);
-          cc.value = `MÊS ${String(c.m).padStart(2,'0')}`;
-          cc.fill = fill(AZUL2); cc.font = { bold:true, size:9, color:{argb:'FFFFFFFF'} };
-          cc.alignment = { horizontal:'center' }; cc.border = boxAll;
+      const COLS = ['bruto', 'imposto', 'repasse', 'bd'];
+      const somaFaixa = (col, a, b) => ({ formula: `SUM(${col}${a}:${col}${b})` });
+      const linhaTotal = (rot, a, b, meses, forte) => {
+        const t = meses.reduce((s, m) => { COLS.forEach(k => { s[k] += m[k]; }); return s; }, { bruto:0, imposto:0, repasse:0, bd:0 });
+        ws2.mergeCells(`B${r2}:C${r2}`);
+        const cl = ws2.getCell(r2, 2);
+        cl.value = rot; cl.font = fnt(10, forte ? C.branco : C.navy, { bold:true }); cl.alignment = { horizontal:'left', vertical:'middle', indent:1 };
+        COLS.forEach((k, i) => {
+          const L = String.fromCharCode(68 + i); // D..G
+          const c = ws2.getCell(r2, 4 + i);
+          c.value = { ...somaFaixa(L, a, b), result: t[k] }; c.numFmt = MOEDA;
+          c.font = fnt(10, forte ? C.branco : C.navy, { bold:true }); c.alignment = { horizontal:'right', vertical:'middle' };
         });
-        const tc = ws2.getCell(r2, 14);
-        tc.value = 'TOTAL'; tc.fill = fill(AZUL); tc.font = { bold:true, size:9, color:{argb:'FFFFFFFF'} };
-        tc.alignment = { horizontal:'center' }; tc.border = boxAll;
+        const u = meses[meses.length - 1];
+        const ch = ws2.getCell(r2, 8), ci = ws2.getCell(r2, 9), cj = ws2.getCell(r2, 10);
+        ch.value = u ? u.acumBruto : 0; ci.value = u ? u.acum : 0; cj.value = u ? fr(u.acumBruto) : 0;
+        ch.numFmt = MOEDA; ci.numFmt = MOEDA; cj.numFmt = PCT;
+        [ch, ci, cj].forEach(c => { c.font = fnt(10, forte ? C.branco : C.navy, { bold:true }); c.alignment = { horizontal:'right', vertical:'middle' }; });
+        for (let k = 2; k <= 10; k++) {
+          const c = ws2.getCell(r2, k);
+          c.fill = fill(forte ? C.navy : C.brutoBg);
+          c.border = { top: { style:'thin', color:{ argb: C.navy } }, bottom: { style:'thin', color:{ argb: C.navy } } };
+        }
+        ws2.getRow(r2).height = 22;
         r2++;
+      };
 
-        linhasX.forEach(ln => {
-          const cl = ws2.getCell(r2, 1);
-          cl.value = ln.l; cl.fill = fill(ln.bg);
-          cl.font = { bold:true, size:9, color:{argb:ln.cor} }; cl.border = boxAll;
-          cols.forEach((c, i) => {
-            const cc = ws2.getCell(r2, i + 2);
-            cc.value = ln.neg ? -c[ln.k] : c[ln.k];
-            cc.numFmt = MOEDA; cc.font = { size:9, color:{argb:ln.cor} }; cc.border = boxAll;
+      const anos = Math.ceil(calc.meses.length / 12);
+      const linhasTotais = [];
+      for (let b = 0; b < anos; b++) {
+        const bloco = calc.meses.slice(b * 12, b * 12 + 12);
+        const a = r2;
+        bloco.forEach((m, i) => {
+          const fora = m.m > prazo;
+          const vals = [m.m, rotulo(m.m) + (fora ? ' *' : ''), m.bruto, m.imposto, m.repasse, m.bd, m.acumBruto, m.acum, fr(m.acumBruto)];
+          vals.forEach((v, k) => {
+            const c = ws2.getCell(r2, k + 2);
+            c.value = v;
+            c.border = sobLinha;
+            c.alignment = { horizontal: k < 2 ? 'center' : 'right', vertical:'middle' };
+            if (k >= 2 && k <= 7) c.numFmt = MOEDA;
+            if (k === 8) c.numFmt = PCT;
+            const cor = fora ? C.vermelho : k === 0 ? C.mute : k === 1 ? C.txt : k === 2 ? C.bruto : k === 3 ? C.imposto : k === 4 ? C.repasse : k === 5 ? C.bd : C.sub;
+            c.font = fnt(10, cor, { bold: k === 2 || k === 5 });
+            if (i % 2 === 1) c.fill = fill(C.fundo);
           });
-          const soma = ln.acum
-            ? (cols.length ? cols[cols.length-1][ln.k] : 0)
-            : cols.reduce((s,c) => s + c[ln.k], 0);
-          const ct = ws2.getCell(r2, 14);
-          ct.value = ln.neg ? -soma : soma;
-          ct.numFmt = MOEDA; ct.fill = fill(ln.bg);
-          ct.font = { bold:true, size:10, color:{argb:ln.cor} }; ct.border = boxAll;
           r2++;
-
-          // Composição do faturamento bruto por item — mesma quebra que "ver os itens" na tela
-          if (ln.k === 'bruto' && itens && itens.length > 0) {
-            itens.forEach((it, ii) => {
-              const temNoBloco = cols.some(c => (c.det?.[ii] || 0) > 0);
-              if (!temNoBloco) return;
-              const corItem = CORES_ITEM_X[ii % CORES_ITEM_X.length];
-              const sufixo = it.tipo_recorrencia === 'MENSAL'
-                ? ` (mensal · ${cronBRL(it.valor_unitario)}/mês)`
-                : ` (parcela única · mês ${it.mes_inicio})`;
-              const cIt = ws2.getCell(r2, 1);
-              cIt.value = '   ' + (it.descricao || `Item ${ii+1}`) + sufixo;
-              cIt.font = { italic:true, size:8, color:{argb:corItem} };
-              cIt.alignment = { indent:1 };
-              cIt.border = boxAll;
-              let somaItem = 0;
-              cols.forEach((c, i) => {
-                const v = c.det?.[ii] || 0;
-                somaItem += v;
-                const cc = ws2.getCell(r2, i + 2);
-                cc.value = v || null;
-                cc.numFmt = MOEDA; cc.font = { italic:true, size:8, color:{argb:corItem} }; cc.border = boxAll;
-              });
-              const ctIt = ws2.getCell(r2, 14);
-              ctIt.value = somaItem;
-              ctIt.numFmt = MOEDA; ctIt.font = { italic:true, bold:true, size:8, color:{argb:corItem} }; ctIt.border = boxAll;
-              r2++;
-            });
-          }
         });
-        r2++;
+        if (anos > 1) {
+          linhaTotal(`Subtotal ano ${b + 1}`, a, r2 - 1, bloco, false);
+          linhasTotais.push([a, r2 - 2]);
+        } else {
+          linhasTotais.push([a, r2 - 1]);
+        }
       }
-      ws2.views = [{ state:'frozen', xSplit:1, ySplit:2 }];
-      ws2.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9 };
+      // Total geral: soma só as linhas de meses (sem os subtotais)
+      {
+        const t = calc.tot;
+        ws2.mergeCells(`B${r2}:C${r2}`);
+        const cl = ws2.getCell(r2, 2);
+        cl.value = 'TOTAL DO CONTRATO'; cl.font = fnt(10, C.branco, { bold:true }); cl.alignment = { horizontal:'left', vertical:'middle', indent:1 };
+        COLS.forEach((k, i) => {
+          const L = String.fromCharCode(68 + i);
+          const c = ws2.getCell(r2, 4 + i);
+          c.value = { formula: linhasTotais.map(([a, b]) => `SUM(${L}${a}:${L}${b})`).join('+'), result: t[k] };
+          c.numFmt = MOEDA; c.font = fnt(11, C.branco, { bold:true }); c.alignment = { horizontal:'right', vertical:'middle' };
+        });
+        const ch = ws2.getCell(r2, 8), ci = ws2.getCell(r2, 9), cj = ws2.getCell(r2, 10);
+        ch.value = t.bruto; ci.value = t.bd; cj.value = 1;
+        ch.numFmt = MOEDA; ci.numFmt = MOEDA; cj.numFmt = PCT;
+        [ch, ci, cj].forEach(c => { c.font = fnt(11, C.branco, { bold:true }); c.alignment = { horizontal:'right', vertical:'middle' }; });
+        for (let k = 2; k <= 10; k++) ws2.getCell(r2, k).fill = fill(C.navy);
+        ws2.getRow(r2).height = 24;
+        r2++;
+        // Percentual de cada destino
+        ws2.mergeCells(`B${r2}:C${r2}`);
+        const pl = ws2.getCell(r2, 2);
+        pl.value = '% do contrato'; pl.font = fnt(9, C.sub, { bold:true }); pl.alignment = { horizontal:'left', indent:1 };
+        COLS.forEach((k, i) => {
+          const c = ws2.getCell(r2, 4 + i);
+          c.value = fr(t[k]); c.numFmt = PCT; c.alignment = { horizontal:'right' };
+          c.font = fnt(9, [C.bruto, C.imposto, C.repasse, C.bd][i], { bold:true });
+        });
+        r2 += 2;
+      }
+      const notas = [
+        'Como ler: cada linha é um mês de faturamento. Faturamento (NF) = Tributos + Repasse + o que fica com a contratada.',
+        `Repasse calculado sobre o ${params.base === 'BRUTO' ? 'valor bruto' : 'valor líquido (após tributos)'}. Valores estimados, sujeitos à confirmação contábil.`,
+        ...(calc.mesesAlemDoPrazo > 0 ? [`* Meses em vermelho ultrapassam o prazo de ${prazo} meses do contrato (itens que terminam depois do prazo).`] : []),
+        ...(!temData ? ['Informe a data de início no cronograma para que a competência apareça como mês/ano.'] : []),
+      ];
+      notas.forEach(n => {
+        ws2.mergeCells(`B${r2}:J${r2}`);
+        const c = ws2.getCell(`B${r2}`);
+        c.value = n; c.font = fnt(9, C.mute, { italic:true });
+        r2++;
+      });
+
+      /* ───── Aba 3: Faturamento por item ───── */
+      const lista = (itens || []).map((it, ii) => ({ it, ii })).filter(({ ii }) => calc.meses.some(m => (m.det?.[ii] || 0) > 0));
+      if (lista.length > 0) {
+        const nCols = lista.length;
+        const ultima = String.fromCharCode(68 + nCols); // B Mês, C Competência, D.. itens, depois Total
+        const ws3 = wb.addWorksheet('Faturamento por item', { views:[{ showGridLines:false, state:'frozen', xSplit:3, ySplit:7 }] });
+        ws3.columns = [{ width:2 }, { width:7 }, { width:12 }, ...lista.map(() => ({ width:22 })), { width:18 }, { width:2 }];
+        config(ws3); ws3.pageSetup.orientation = nCols > 4 ? 'landscape' : 'portrait';
+        let r3 = cabecalho(ws3, ultima, 'Faturamento por Item');
+        cabTabela(ws3, r3, ['Mês', 'Competência', ...lista.map(({ it, ii }) => it.descricao || `Item ${ii + 1}`), 'Total do mês'], ['center', 'center']);
+        r3++;
+        const a = r3;
+        calc.meses.forEach((m, i) => {
+          const vals = [m.m, rotulo(m.m), ...lista.map(({ ii }) => m.det?.[ii] || 0)];
+          vals.forEach((v, k) => {
+            const c = ws3.getCell(r3, k + 2);
+            c.value = v; c.border = sobLinha;
+            c.alignment = { horizontal: k < 2 ? 'center' : 'right' };
+            c.font = fnt(10, m.m > prazo ? C.vermelho : k === 0 ? C.mute : C.txt);
+            if (k >= 2) c.numFmt = MOEDA;
+            if (i % 2 === 1) c.fill = fill(C.fundo);
+          });
+          const ct = ws3.getCell(r3, nCols + 4);
+          ct.value = { formula: `SUM(D${r3}:${String.fromCharCode(67 + nCols)}${r3})`, result: m.bruto };
+          ct.numFmt = MOEDA; ct.font = fnt(10, C.bruto, { bold:true }); ct.alignment = { horizontal:'right' }; ct.border = sobLinha;
+          if (i % 2 === 1) ct.fill = fill(C.fundo);
+          r3++;
+        });
+        ws3.mergeCells(`B${r3}:C${r3}`);
+        const tl = ws3.getCell(r3, 2);
+        tl.value = 'TOTAL'; tl.font = fnt(10, C.branco, { bold:true }); tl.alignment = { horizontal:'left', vertical:'middle', indent:1 };
+        for (let k = 0; k <= nCols; k++) {
+          const L = String.fromCharCode(68 + k);
+          const c = ws3.getCell(r3, 4 + k);
+          const res = k < nCols ? calc.meses.reduce((s, m) => s + (m.det?.[lista[k].ii] || 0), 0) : calc.tot.bruto;
+          c.value = { formula: `SUM(${L}${a}:${L}${r3 - 1})`, result: res };
+          c.numFmt = MOEDA; c.font = fnt(10, C.branco, { bold:true }); c.alignment = { horizontal:'right' };
+        }
+        for (let k = 2; k <= nCols + 4; k++) ws3.getCell(r3, k).fill = fill(C.navy);
+        ws3.getRow(r3).height = 22;
+      }
 
       const buf = await wb.xlsx.writeBuffer();
       const nomeArq = `Cronograma - ${(contrato.objeto || 'contrato').replace(/[\\/:*?"<>|]/g,'').slice(0,60)}.xlsx`;
@@ -14279,6 +14390,7 @@ Todos os valores monetários devem ser números (sem "R$" e sem separador de mil
             prazo:    Math.max(1, Math.round(cronNum(draft.contrato.prazo_meses)) || 1),
             nomeBD:   draft.contrato.contratada_emissora_nf || 'Contratada',
             nomeParc: draft.contrato.parceiro_executor || 'Parceira',
+            dataInicio: draft.contrato.data_inicio || '',
           });
           addToast('Planilha exportada com sucesso!');
         } catch(e) {
