@@ -1141,8 +1141,10 @@
       return 'on-time';
     }
     function contractStatus(c) {
+      // Paga somente depois da última etapa (NL anexada pela extensão do GDoc ou manualmente)
       if (c.currentStep > TOTAL_STEPS) return 'completed'; // paga
       if (c.currentStep === TOTAL_STEPS) return 'waiting';  // aguardando pagamento
+      if (c.currentStep === 1) return 'pending';           // NF ainda não emitida
       return slaStatus(c.nfDate, c.currentStep, false);
     }
 
